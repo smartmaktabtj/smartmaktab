@@ -13,6 +13,6 @@ module.exports = {
   extraMetadata: { version },
   directories: { output: 'unsigned-release' },
   files: ['main.cjs','preload.cjs','content.cjs','content-ipc.cjs','content-config.json','web/**/*'],
-  win: { target: ['nsis'], icon: 'web/pwa-512.png', signExecutable: false, artifactName: 'SmartMaktab-${version}-Windows-x64-UNSIGNED.${ext}' },
+  win: { target: ['nsis'], icon: 'web/pwa-512.png', signExecutable: false, artifactName: 'SmartMaktab-${version}-Windows-${arch}-UNSIGNED.${ext}' },
   nsis: { oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true },
 };

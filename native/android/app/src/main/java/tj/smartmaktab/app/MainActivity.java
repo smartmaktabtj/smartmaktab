@@ -114,9 +114,9 @@ public final class MainActivity extends Activity {
  }
  private void confirmWindows(boolean tg){
   if(windowsBusy)return;windowsTg=tg;windowsBusy=true;
-  AlertDialog prompt=new AlertDialog.Builder(this).setTitle(tr("Скачать для Windows x64","Боргирӣ барои Windows x64"))
-   .setMessage(tr("На телефон будет скачан установщик .exe без цифровой подписи. Windows может предупредить или заблокировать его. После загрузки выберите папку на телефоне (например, «Загрузки»), чтобы перенести файл на ПК по USB.",
-    "Насбкунандаи .exe бе имзои рақамӣ ба телефон боргирӣ мешавад. Windows метавонад огоҳ кунад ё насбро манъ кунад. Пас аз боргирӣ ҷузвдони телефонро интихоб кунед, то файлро тавассути USB ба компютер гузаронед."))
+  AlertDialog prompt=new AlertDialog.Builder(this).setTitle(tr("Скачать для Windows","Боргирӣ барои Windows"))
+   .setMessage(tr("На телефон будет скачан универсальный установщик .exe без цифровой подписи. При установке он сам выберет 32- или 64-битную версию под ваш Windows. Windows может предупредить или заблокировать его. После загрузки выберите папку на телефоне (например, «Загрузки»), чтобы перенести файл на ПК по USB.",
+    "Насбкунандаи универсалии .exe бе имзои рақамӣ ба телефон боргирӣ мешавад. Ҳангоми насб он худаш нусхаи 32- ё 64-битиро барои Windows-и шумо интихоб мекунад. Windows метавонад огоҳ кунад ё насбро манъ кунад. Пас аз боргирӣ ҷузвдони телефонро интихоб кунед, то файлро тавассути USB ба компютер гузаронед."))
    .setPositiveButton(tr("Скачать","Боргирӣ"),(d,w)->downloadWindows())
    .setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->windowsBusy=false).create();
   prompt.setOnCancelListener(d->windowsBusy=false);prompt.show();

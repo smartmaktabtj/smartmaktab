@@ -15,4 +15,4 @@ if(env.WINDOWS_SIGNING_MODE==='azure'){
  signature={signtoolOptions:{publisherName:env.WINDOWS_SIGN_PUBLISHER,signingHashAlgorithms:['sha256']}};
 }else throw new Error('WINDOWS_SIGNING_MODE must be azure or pfx; unsigned builds disabled');
 module.exports={appId:'tj.smartmaktab.app',productName:'SmartMaktab',forceCodeSigning:true,extraMetadata:{version},directories:{output:'release'},files:['main.cjs','preload.cjs','content.cjs','content-ipc.cjs','content-config.json','web/**/*'],
- win:{target:['nsis'],icon:'web/pwa-512.png',artifactName:'SmartMaktab-${version}-Windows-x64.${ext}',...signature},nsis:{oneClick:false,perMachine:false,allowToChangeInstallationDirectory:true}};
+ win:{target:['nsis'],icon:'web/pwa-512.png',artifactName:'SmartMaktab-${version}-Windows-${arch}.${ext}',...signature},nsis:{oneClick:false,perMachine:false,allowToChangeInstallationDirectory:true}};

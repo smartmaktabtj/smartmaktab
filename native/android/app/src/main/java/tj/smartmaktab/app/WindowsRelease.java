@@ -28,15 +28,17 @@ final class WindowsRelease {
   for(int i=0;i<releases.length();i++){
    JSONObject release=releases.optJSONObject(i);if(release==null||release.optBoolean("draft")||release.optBoolean("prerelease"))continue;
    String tag=release.optString("tag_name");Matcher match=TAG.matcher(tag);if(!match.matches())continue;
-   String version=match.group(1),name="SmartMaktab-"+version+"-Windows-x64-UNSIGNED.exe";
+   String version=match.group(1),name="SmartMaktab-"+version+"-Windows-Setup-UNSIGNED.exe",name64="SmartMaktab-"+version+"-Windows-x64-UNSIGNED.exe",name32="SmartMaktab-"+version+"-Windows-ia32-UNSIGNED.exe";
    JSONArray assets=release.optJSONArray("assets");if(assets==null)continue;
-   long size=-1;boolean checksum=false;
+   long size=-1;boolean checksum=false,has64=false,has32=false;
    for(int n=0;n<assets.length();n++){
     JSONObject asset=assets.optJSONObject(n);if(asset==null||!"uploaded".equals(asset.optString("state")))continue;
     if(name.equals(asset.optString("name")))size=asset.optLong("size",-1);
+    if(name64.equals(asset.optString("name")))has64=true;
+    if(name32.equals(asset.optString("name")))has32=true;
     if("SHA256SUMS.txt".equals(asset.optString("name")))checksum=true;
    }
-   if(!checksum||size<1||size>MAX_SIZE)continue;
+   if(!checksum||!has64||!has32||size<1||size>MAX_SIZE)continue;
    if(best==null||compare(version,best.version)>0)best=new WindowsRelease(repo,tag,version,name,size);
   }
   return best;
@@ -78,11 +80,15 @@ final class WindowsRelease {
   }finally{conn.disconnect();}
  }
  static String expectedHash(String body,String name) throws IOException {
-  Matcher match=Pattern.compile("\\A([a-fA-F0-9]{64})  "+Pattern.quote(name)+"\\r?\\n?\\z").matcher(body);
-  if(!match.matches())throw new IOException("checksum format");return match.group(1).toLowerCase(Locale.ROOT);
+  for(String raw:body.split("\\r?\\n")){
+   String line=raw.trim();if(line.isEmpty())continue;
+   Matcher match=Pattern.compile("^([a-fA-F0-9]{64})  "+Pattern.quote(name)+"$").matcher(line);
+   if(match.matches())return match.group(1).toLowerCase(Locale.ROOT);
+  }
+  throw new IOException("checksum format");
  }
  void fetch(File destination) throws Exception {
-  String hash=expectedHash(read(checksums,false,1024),name);
+  String hash=expectedHash(read(checksums,false,4096),name);
   HttpsURLConnection conn=open(exe,false);
   try(InputStream in=conn.getInputStream();OutputStream out=new BufferedOutputStream(new FileOutputStream(destination))){
    MessageDigest digest=MessageDigest.getInstance("SHA-256");

@@ -1,4 +1,4 @@
-name: SmartMaktab — Windows x64 для распространения (без подписи)
+name: SmartMaktab — Windows для распространения (без подписи)
 on:
   workflow_dispatch:
     inputs:
@@ -61,25 +61,61 @@ jobs:
           npm --prefix native/windows ci --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location native/windows
-          npx --no-install electron-builder --config unsigned-builder.cjs --win nsis --x64 --publish never
+          npx --no-install electron-builder --config unsigned-builder.cjs --win nsis --x64 --ia32 --publish never
           exit $LASTEXITCODE
-      - name: Verify unsigned installer and record hash
+      - name: Verify unsigned installers and record hashes
         shell: pwsh
         run: |
           $out = 'native/windows/unsigned-release'
-          $files = @(Get-ChildItem $out -File -Filter '*-Windows-x64-UNSIGNED.exe')
-          if ($files.Count -ne 1) { throw 'Expected exactly one named unsigned installer' }
-          $expected = "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-x64-UNSIGNED.exe"
-          if ($files[0].Length -lt 1 -or $files[0].Length -gt 400MB) { throw 'Installer exceeds the Android download size limit' }
-          if ($files[0].Name -cne $expected) { throw 'Installer filename does not match the selected version' }
-          if ((Get-AuthenticodeSignature -FilePath $files[0].FullName).Status -ne 'NotSigned') { throw 'Unexpected installer signature status' }
-          $hash = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($files[0].Name)" | Set-Content "$out/SHA256SUMS.txt" -Encoding utf8NoBOM
+          $expectedNames = @(
+            "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-x64-UNSIGNED.exe",
+            "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-ia32-UNSIGNED.exe"
+          )
+          $lines = @()
+          foreach ($expected in $expectedNames) {
+            $file = Get-Item (Join-Path $out $expected) -ErrorAction SilentlyContinue
+            if ($null -eq $file) { throw "Missing installer $expected" }
+            if ($file.Length -lt 1 -or $file.Length -gt 400MB) { throw "Installer exceeds the Android download size limit: $expected" }
+            if ((Get-AuthenticodeSignature -FilePath $file.FullName).Status -ne 'NotSigned') { throw "Unexpected installer signature status: $expected" }
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $lines += "$hash  $expected"
+          }
+          $lines | Set-Content "$out/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - name: Build universal setup (auto 32/64-bit)
+        shell: pwsh
+        run: |
+          $out = 'native/windows/unsigned-release'
+          $uni = Join-Path $PWD 'universal-setup'
+          New-Item -ItemType Directory -Force -Path $uni | Out-Null
+          Copy-Item (Join-Path $out "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-x64-UNSIGNED.exe") (Join-Path $uni 'x64.exe')
+          Copy-Item (Join-Path $out "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-ia32-UNSIGNED.exe") (Join-Path $uni 'ia32.exe')
+          $setupName = "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-Setup-UNSIGNED.exe"
+          $setupPath = Join-Path $out $setupName
+          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue)?.Source
+          if (-not $makensis) {
+            $cached = Get-ChildItem "$env:LOCALAPPDATA\electron-builder\Cache" -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cached) { $makensis = $cached.FullName }
+          }
+          if (-not $makensis) {
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'NSIS is required for the universal setup' }
+            $makensis = (Get-Command makensis -ErrorAction SilentlyContinue)?.Source
+          }
+          if (-not $makensis) { throw 'makensis not found' }
+          & $makensis "/DX64_EXE=$(Join-Path $uni 'x64.exe')" "/DIA32_EXE=$(Join-Path $uni 'ia32.exe')" "/DOUT_FILE=$setupPath" 'native/windows/universal-installer.nsi'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Get-Item $setupPath
+          if ($setup.Length -lt 1 -or $setup.Length -gt 400MB) { throw 'Universal setup exceeds the Android download size limit' }
+          if ((Get-AuthenticodeSignature -FilePath $setup.FullName).Status -ne 'NotSigned') { throw 'Unexpected universal setup signature status' }
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Add-Content "$out/SHA256SUMS.txt" "$hash  $setupName" -Encoding utf8NoBOM
       - uses: actions/upload-artifact@v4
         with:
-          name: SmartMaktab-Windows-x64-UNSIGNED-${{ inputs.windows_version }}
+          name: SmartMaktab-Windows-UNSIGNED-${{ inputs.windows_version }}
           path: |
+            native/windows/unsigned-release/*-Windows-Setup-UNSIGNED.exe
             native/windows/unsigned-release/*-Windows-x64-UNSIGNED.exe
+            native/windows/unsigned-release/*-Windows-ia32-UNSIGNED.exe
             native/windows/unsigned-release/SHA256SUMS.txt
           retention-days: 14
           if-no-files-found: error
@@ -92,7 +128,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: SmartMaktab-Windows-x64-UNSIGNED-${{ inputs.windows_version }}
+          name: SmartMaktab-Windows-UNSIGNED-${{ inputs.windows_version }}
           path: release-files
       - name: Publish a versioned Windows release
         working-directory: release-files
@@ -106,10 +142,19 @@ jobs:
           set -euo pipefail
           [[ "$VERSION" =~ ^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$ ]]
           tag="windows-unsigned-v$VERSION"
-          exe="SmartMaktab-$VERSION-Windows-x64-UNSIGNED.exe"
-          test -s "$exe"
-          test "$(sha256sum -- "$exe")" = "$(tr -d '\r' < SHA256SUMS.txt)"
-          gh release create "$tag" "$exe" SHA256SUMS.txt \
-            --target "$COMMIT" --title "SmartMaktab Windows x64 $VERSION — без подписи" \
+          setup="SmartMaktab-$VERSION-Windows-Setup-UNSIGNED.exe"
+          exe64="SmartMaktab-$VERSION-Windows-x64-UNSIGNED.exe"
+          exe32="SmartMaktab-$VERSION-Windows-ia32-UNSIGNED.exe"
+          test -s "$setup"
+          test -s "$exe64"
+          test -s "$exe32"
+          grep -F "  $setup" SHA256SUMS.txt >/dev/null
+          grep -F "  $exe64" SHA256SUMS.txt >/dev/null
+          grep -F "  $exe32" SHA256SUMS.txt >/dev/null
+          test "$(sha256sum -- "$setup" | cut -d' ' -f1)" = "$(grep -F "  $setup" SHA256SUMS.txt | cut -d' ' -f1)"
+          test "$(sha256sum -- "$exe64" | cut -d' ' -f1)" = "$(grep -F "  $exe64" SHA256SUMS.txt | cut -d' ' -f1)"
+          test "$(sha256sum -- "$exe32" | cut -d' ' -f1)" = "$(grep -F "  $exe32" SHA256SUMS.txt | cut -d' ' -f1)"
+          gh release create "$tag" "$setup" "$exe64" "$exe32" SHA256SUMS.txt \
+            --target "$COMMIT" --title "SmartMaktab Windows $VERSION — без подписи (универсальный установщик)" \
             --latest=false \
-            --notes 'Публичная сборка Windows x64. Установщик не подписан Authenticode. SmartScreen или политики организации могут заблокировать установку. Контрольная сумма SHA-256 в SHA256SUMS.txt. Для обновления материалов используйте подписанные пакеты .smupdate.'
+            --notes 'Главный файл: SmartMaktab-*-Windows-Setup-UNSIGNED.exe — универсальный установщик Windows 7/8.1/10/11. При установке сам определяет 32- или 64-битную Windows и ставит нужную версию. Отдельные x64 и ia32 тоже в релизе. Установщики не подписаны Authenticode. SmartScreen или политики организации могут заблокировать установку. Windows 7: нужен SP1 и обновления SHA-2 (KB3033920). Контрольные суммы SHA-256 в SHA256SUMS.txt. Для обновления материалов используйте подписанные пакеты .smupdate.' 
