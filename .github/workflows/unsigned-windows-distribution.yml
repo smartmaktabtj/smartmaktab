@@ -155,9 +155,13 @@ jobs:
           test "$(sha256sum -- "$setup" | cut -d' ' -f1)" = "$(grep -F "  $setup" SHA256SUMS.txt | cut -d' ' -f1)"
           test "$(sha256sum -- "$exe64" | cut -d' ' -f1)" = "$(grep -F "  $exe64" SHA256SUMS.txt | cut -d' ' -f1)"
           test "$(sha256sum -- "$exe32" | cut -d' ' -f1)" = "$(grep -F "  $exe32" SHA256SUMS.txt | cut -d' ' -f1)"
-          # Delete existing release/tag if present (allows re-running with same version)
-          gh release delete "$tag" --yes 2>/dev/null || true
-          git push origin ":$tag" 2>/dev/null || true
+          # Check if release exists and delete it
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists, deleting..."
+            gh release delete "$tag" --yes --cleanup-tag || true
+            sleep 2
+          fi
+          # Create new release
           gh release create "$tag" "$setup" "$exe64" "$exe32" SHA256SUMS.txt \
             --target "$COMMIT" --title "SmartMaktab Windows $VERSION — без подписи (универсальный установщик)" \
             --latest=false \
