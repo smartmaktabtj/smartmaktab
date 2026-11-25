@@ -140,3 +140,22 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
   white-space:normal;
   word-wrap:break-word;
 }
+.sm-license-grace{
+  margin-bottom:12px;
+  border-left:4px solid #b86a14;
+}
+.sm-license-lock{
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(12,24,18,.94);
+  color:#f4f7f5;
+  display:grid;
+  place-content:center;
+  gap:12px;
+  padding:24px;
+  text-align:center;
+}
+.sm-license-lock h2{margin:0;color:#fff;}
+.sm-license-lock p{margin:0;max-width:520px;}
+.sm-license-lock .control{justify-content:center;}

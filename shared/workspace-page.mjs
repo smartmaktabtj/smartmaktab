@@ -2,6 +2,8 @@ import {mountWindowsContent} from './windows-content-ui.mjs';
 import {setupNativeFiles,setupNativePrograms} from './native-shell.mjs';
 import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
+import {setupDocxTemplates} from './docx-templates-ui.mjs';
+import {setupCloudWorkspace} from './cloud-workspace-ui.mjs';
 import {cabinetFormAction,printCabinetSheet} from './cabinet-runtime.mjs';
 const $=id=>document.getElementById(id);
 export function setupWorkspace({configured,school}){
@@ -20,9 +22,9 @@ export function setupWorkspace({configured,school}){
  const teacher=!!$('teacherSubjects');if(teacher){drawer.append($('teacherSubjects'));if(materials)docs.append(materials);for(const a of $('cabinetRailNav').querySelectorAll('a[href="#teacherSubjects"],a[href="#workspaceMaterials"]'))a.hidden=true;}
  if($('teacherBookPanel'))editor.after($('teacherBookPanel'));
  $('cabinetLang').before(toggle);setupNativeFiles($('cabinetLang'));setupNativePrograms($('cabinetLang'));
- setupSchoolForms(article,docs,school);
+ setupSchoolForms(article,docs,school);setupDocxTemplates(article,docs,school);setupCloudWorkspace(article,docs,school);
  const views=initWorkspaceViews(article);mountWindowsContent(article,views);
- for(const id of ['workspaceSettings','workspaceDraft','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate'])$(id)?.classList.add('sm-screen');
+ for(const id of ['workspaceSettings','workspaceDraft','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate','docxTemplatesPanel','cloudWorkspacePanel'])$(id)?.classList.add('sm-screen');
  const entries={workspaceDocs:['Документы','Ҳуҷҷатҳо','▤'],workspaceMaterials:['Материалы','Мавод','◇'],teacherSubjects:['Классы и предметы','Синфҳо ва фанҳо','⊞'],teacherDocumentPanel:['План урока','Нақшаи дарс','▤'],directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],adviserSchools:['Школы','Мактабҳо','▦'],adviserDocuments:['Документы направления','Ҳуҷҷатҳои самт','▤']};
  if(teacher){delete entries.teacherSubjects;delete entries.workspaceMaterials;}
  for(const [id,values] of Object.entries(entries))views.shortcut(id,...values);
