@@ -107,4 +107,28 @@ final class WindowsRelease {
   }
   return count;
  }
+ void fetchWithProgress(File destination,ProgressCallback cb) throws Exception {
+  String hash=expectedHash(read(checksums,false,4096),name);
+  HttpsURLConnection conn=open(exe,false);
+  long total=conn.getContentLengthLong();
+  try(InputStream in=conn.getInputStream();OutputStream out=new BufferedOutputStream(new FileOutputStream(destination))){
+   MessageDigest digest=MessageDigest.getInstance("SHA-256");
+   long count=copyWithProgress(in,out,size,digest,total,cb);
+   String actual=String.format(Locale.ROOT,"%064x",new BigInteger(1,digest.digest()));
+   if(count!=size||!actual.equals(hash))throw new IOException("installer integrity");
+  }finally{conn.disconnect();}
+ }
+ private static long copyWithProgress(InputStream in,OutputStream out,long max,MessageDigest digest,long total,ProgressCallback cb) throws IOException {
+  long count=0,deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(8);
+  byte[] buffer=new byte[65536];
+  for(int n;(n=in.read(buffer))!=-1;){
+   if(Thread.currentThread().isInterrupted()||System.nanoTime()-deadline>=0)throw new InterruptedIOException();
+   count+=n;if(count>max)throw new IOException("download limit");
+   out.write(buffer,0,n);if(digest!=null)digest.update(buffer,0,n);
+   if(cb!=null)cb.onProgress(count,total);
+  }
+  return count;
+ }
+ interface ProgressCallback{void onProgress(long bytes,long total);}
+
 }

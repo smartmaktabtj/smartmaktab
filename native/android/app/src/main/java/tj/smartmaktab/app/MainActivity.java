@@ -133,16 +133,48 @@ public final class MainActivity extends Activity {
  }
  private void downloadWindows(){
   windowsCancelled=false;
+  android.widget.LinearLayout layout=new android.widget.LinearLayout(this);
+  layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+  layout.setPadding(32,24,32,24);
+  android.widget.TextView msg=new android.widget.TextView(this);
+  msg.setText(tr("Поиск файла...","Ҷустуҷӯи файл..."));
+  msg.setPadding(0,0,0,16);
+  android.widget.ProgressBar bar=new android.widget.ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+  bar.setMax(100);bar.setProgress(0);
+  android.widget.TextView pct=new android.widget.TextView(this);
+  pct.setText("0%");
+  layout.addView(msg);layout.addView(bar);layout.addView(pct);
   windowsProgress=new AlertDialog.Builder(this).setTitle(tr("Загрузка SmartMaktab для Windows","Боргирии SmartMaktab барои Windows"))
-    .setMessage(tr("Скачиваем и проверяем файл. Оставьте приложение открытым.","Файл боргирӣ ва санҷида мешавад. Барномаро кушода нигоҳ доред."))
+    .setView(layout)
     .setCancelable(false).setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->{windowsCancelled=true;if(windowsWorker!=null)windowsWorker.interrupt();}).show();
   windowsWorker=new Thread(()->{
    File dest=null;WindowsRelease release=null;int outcome=0;
+   android.widget.ProgressBar pBar=null;android.widget.TextView pMsg=null;android.widget.TextView pPct=null;
+   if(windowsProgress!=null){
+    android.view.View v=windowsProgress.getWindow()!=null?windowsProgress.getWindow().getDecorView():null;
+    if(v!=null){
+     android.widget.LinearLayout ll=(android.widget.LinearLayout)((android.view.ViewGroup)v).getChildAt(0);
+     if(ll!=null&&ll.getChildCount()>=3){
+      pMsg=(android.widget.TextView)ll.getChildAt(0);
+      pBar=(android.widget.ProgressBar)ll.getChildAt(1);
+      pPct=(android.widget.TextView)ll.getChildAt(2);
+     }
+    }
+   }
+   final android.widget.ProgressBar fpBar=pBar;final android.widget.TextView fpMsg=pMsg;final android.widget.TextView fpPct=pPct;
    try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
     String repo=input.readLine();if(repo==null)throw new IOException("repository");
     release=WindowsRelease.find(repo);
     if(release==null)outcome=1;
-    else{if(getCacheDir().getUsableSpace()<release.size+16L*1024*1024)throw new IOException("space");dest=File.createTempFile("smartmaktab-windows-",".part",getCacheDir());release.fetch(dest);}
+    else{
+     if(getCacheDir().getUsableSpace()<release.size+16L*1024*1024)throw new IOException("space");
+     runOnUiThread(()->{if(fpMsg!=null)fpMsg.setText(tr("Скачиваем...","Боргирӣ..."));if(fpBar!=null)fpBar.setProgress(10);if(fpPct!=null)fpPct.setText("10%");});
+     dest=File.createTempFile("smartmaktab-windows-",".part",getCacheDir());
+     release.fetchWithProgress(dest,(bytes,total)->runOnUiThread(()->{
+      if(total>0&&fpBar!=null){int pct2=(int)(bytes*100/total);fpBar.setProgress(pct2);if(fpPct!=null)fpPct.setText(pct2+"%");}
+      if(fpMsg!=null)fpMsg.setText(tr("Скачано "+(bytes/1024/1024)+" МБ из "+(total/1024/1024)+" МБ","Боргирӣ шуд "+(bytes/1024/1024)+" МБ аз "+(total/1024/1024)+" МБ"));
+     }));
+    }
    }catch(Exception error){outcome=2;}
    if(Thread.currentThread().isInterrupted())outcome=3;
    final File result=dest;final WindowsRelease selected=release;final int status=outcome;
