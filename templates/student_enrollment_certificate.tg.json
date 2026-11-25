@@ -1,0 +1,95 @@
+{
+  "template_id": "student_enrollment_certificate",
+  "version": 1,
+  "language": "tg",
+  "status": "draft_unapproved",
+  "title_tg": "Маълумотнома дар бораи таҳсил",
+  "title_ru": "Справка об обучении (о том, что ученик обучается в школе)",
+  "template_file": "student_enrollment_certificate.tg.docx",
+  "suggested_roles": ["директор", "делопроизводитель"],
+  "fields": [
+    {
+      "key": "district_name",
+      "label_tg": "Номи ноҳия",
+      "label_ru": "Название района",
+      "type": "text",
+      "required": true,
+      "source": "school_context",
+      "when_empty": "block_generation",
+      "test_value": "Намуна"
+    },
+    {
+      "key": "school_address",
+      "label_tg": "Суроғаи муассиса",
+      "label_ru": "Адрес школы",
+      "type": "text",
+      "required": false,
+      "source": "school_context",
+      "when_empty": "omit_line",
+      "test_value": "н.Намуна, деҳаи Тестӣ, тел: +992 000 000 000"
+    },
+    {
+      "key": "document_number",
+      "label_tg": "Рақами ҳуҷҷат",
+      "label_ru": "Номер документа",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "test_value": "12345"
+    },
+    {
+      "key": "issue_date",
+      "label_tg": "Санаи додани ҳуҷҷат",
+      "label_ru": "Дата выдачи документа",
+      "type": "date",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "print_format": "dd.mm.yyyy",
+      "test_value": "01.09.2026"
+    },
+    {
+      "key": "student_full_name",
+      "label_tg": "Ному насаби хонанда",
+      "label_ru": "ФИО ученика",
+      "type": "text",
+      "required": true,
+      "source": "selected_student",
+      "when_empty": "block_generation",
+      "test_value": "Тестӣ Донишҷӯ"
+    },
+    {
+      "key": "school_name",
+      "label_tg": "Номи муассисаи таҳсилотӣ",
+      "label_ru": "Название школы",
+      "type": "text",
+      "required": true,
+      "source": "school_context",
+      "when_empty": "block_generation",
+      "test_value": "муассисаи таҳсилоти миёнаи умумии №999-и ноҳияи Намуна"
+    },
+    {
+      "key": "class_code",
+      "label_tg": "Синф",
+      "label_ru": "Класс",
+      "type": "class_code",
+      "required": true,
+      "source": "selected_student",
+      "when_empty": "block_generation",
+      "test_value": "5А"
+    },
+    {
+      "key": "director_full_name",
+      "label_tg": "Ному насаби директор",
+      "label_ru": "ФИО директора",
+      "type": "text",
+      "required": false,
+      "source": "school_staff",
+      "when_empty": "leave_blank",
+      "test_value": "Тестӣ Роҳбар"
+    }
+  ],
+  "source_reference": "Обезличенный чистый бланк «Маълумотнома» (справка об обучении) на таджикском языке из папки «Маълумотномаҳо». Персональные и институциональные данные исходника (ФИО, телефон, адрес, номер школы, ФИО директора) исключены.",
+  "notes_for_integration": "Из образца взяты: шапка (министерство, район, адрес), реквизиты (номер, дата), заголовок «Маълумотнома», текст справки, строка «ба ҷои лозима пешниҳод карда мешавад», строка подписи директора. На согласование: точный формат даты печати, обязательность адреса и ФИО директора, подтверждение обучения оформлено фразой «Бо ҳамин маълумотнома тасдиқ мешавад, ки … таҳсил мекунад.»; даты начала и окончания обучения (study_start_date, study_end_date) удалены из DOCX и JSON как ненужные для этой справки. Проверки: каждый {{ключ}} DOCX описан в fields и наоборот; реальные данные в шаблон не перенесены; маркеры целые. Правило: SmartMaktab заполняет справку только из данных текущей школы, ученика этой школы и разрешённой роли; смена школы не переносит ученика и реквизиты предыдущей школы; доступ к реальным данным позднее проверяется на сервере SmartMaktab, наличие шаблона само по себе доступа не даёт. Не проверено визуально (нет Word/LibreOffice): перенос длинного имени в печатной форме."
+}

@@ -1,0 +1,39 @@
+{
+  "name": "smartmaktab-dev",
+  "version": "0.7.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild dev/client.mjs --bundle --minify --format=esm --target=es2022 --outfile=dev/client.bundle.js",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node --test tests/browser.smoke.mjs",
+    "test:live": "node scripts/dev-smoke.mjs",
+    "test:browser:live": "node --test tests/browser.live.mjs",
+    "test:approval:live": "node scripts/approval-smoke.mjs",
+    "test:approval:browser": "node --test tests/approval.browser.live.mjs",
+    "test:outbox:browser": "node --test tests/outbox.browser.live.mjs",
+    "test:follow:browser": "node --test tests/follow.browser.live.mjs",
+    "test:cabinets:browser": "node --test tests/cabinets.browser.mjs",
+    "test:library:browser": "node --test tests/library.browser.mjs",
+    "test:director:browser": "node --test tests/director.browser.mjs",
+    "build:startup": "python3 scripts/build_startup.py",
+    "test:startup:browser": "node --test tests/startup.browser.mjs",
+    "build:role-profiles": "python3 scripts/build_role_profiles.py",
+    "test:role-profiles:browser": "node --test tests/role-profiles.browser.mjs",
+    "test:file-viewer:browser": "node --test tests/file-viewer.browser.mjs",
+    "test:brand-splash:browser": "node --test tests/brand-splash.browser.mjs",
+    "test:school-forms:browser": "node --test tests/school-forms.browser.mjs",
+    "test:update-operations:browser": "node --test tests/update-operations.browser.mjs",
+    "test:portable:browser": "node --test tests/portable-release.browser.mjs",
+    "test:kitobkhona-reader:browser": "node --test tests/kitobkhona-reader.browser.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.100.1",
+    "fflate": "^0.8.2",
+    "pdfjs-dist": "5.4.624"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.6.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.65.1"
+  }
+}

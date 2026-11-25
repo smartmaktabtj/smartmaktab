@@ -1,0 +1,98 @@
+import {fillRoleFields,chooseInitialSchool} from './onboarding-fixtures.mjs';
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {readFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+async function viewer(browser,path){
+ const page=await browser.newPage({viewport:{width:750,height:820}});
+ page.setDefaultTimeout(6500);
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/*',route=>route.abort());
+ await page.setContent('<iframe id="viewer" sandbox="allow-scripts" style="width:100%;height:770px;border:0"></iframe>');
+ await page.locator('#viewer').evaluate((frame,html)=>{frame.srcdoc=html;},await readFile(new URL(`../${path}`,import.meta.url),'utf8'));
+ return {page,frame:page.frameLocator('#viewer'),errors};
+}
+test('standalone director buttons work with external assets and native form submission blocked',async()=>{
+ const browser=await chromium.launch();
+ try{
+  const {frame,errors}=await viewer(browser,'cabinets/school/director.html');
+  await frame.locator('#cabinetLang').selectOption('ru');
+  assert.equal(await frame.locator('#institutionPicker').isVisible(),false);
+  for(const [id,value] of Object.entries({directorFirst:'Демо',directorLast:'Образец',directorBirth:'1980',directorEduYears:'20',directorLeadYears:'10',directorUniversity:'Демо-вуз',directorSpecialty:'Демо-специальность'}))await frame.locator(`#${id}`).fill(value);
+  await frame.locator('#directorDiploma').selectOption('master');
+  await frame.locator('#directorCategory').selectOption('first');
+  await frame.locator('#directorPersonnelSave').click();
+  await frame.locator('#institutionSearch').fill('88');
+  await frame.locator('#confirmInstitution').click();
+  assert.equal(await frame.locator('#selectedSchool').textContent(),'МТМУ № 88');
+  const toggle=frame.locator('#cabinetRailToggle');
+  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
+  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+  await frame.locator('#directorType').selectOption('school');
+  await frame.locator('#directorShifts').selectOption('one');
+  await frame.locator('#directorProfile').getByRole('button',{name:'Сохранить профиль'}).click();
+  await frame.locator('#directorYear').fill('2026');
+  await frame.locator('#directorGoal').fill('Учебный план');
+  await frame.locator('#directorDirection').selectOption('learning');
+  await frame.locator('#directorOwner').selectOption('director');
+  await frame.locator('#directorTitle').fill('Первый отчёт');
+  await frame.locator('#directorDue').fill('2026-09');
+  await frame.locator('#directorAdd').click();
+  await frame.locator('#directorGenerate').click();
+  await frame.locator('#directorSheet').waitFor();
+  await frame.locator('#directorPrint').click();
+  assert.match(await frame.locator('#cabinetViewerHint').textContent(),/Печатная версия/);
+  await frame.locator('#directorPrint').click();
+  assert.equal(await frame.locator('#cabinetViewerHint').count(),0);
+  assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
+
+test('standalone start opens the primary job, remembers selected schools, and switches to the extra job',async()=>{
+ const browser=await chromium.launch();
+ try{
+  const {frame,errors}=await viewer(browser,'index.html');
+  await frame.locator('#lang').selectOption('ru');
+  await frame.getByRole('button',{name:'Ночной режим'}).click();
+  assert.equal(await frame.locator('html').getAttribute('data-theme'),'dark');
+  await frame.locator('[data-level=school]').click();
+  await frame.locator('#primaryChoices input[value=school-teacher]').check();
+  await frame.locator('#toExtras').click();
+  await frame.locator('#extraChoices input[value=school-library-head]').check();
+  await frame.locator('#toProfile').click();
+  await frame.locator('#firstName').fill('Демо');await frame.locator('#lastName').fill('Учитель');
+  await fillRoleFields(frame.locator('[data-step="4"]'),{teacherClass:'5'});
+  await frame.locator('#toReview').click();
+  await frame.locator('[data-review-role=school-library-head] [data-field=last]').fill('Библиотека');
+  await fillRoleFields(frame.locator('[data-review-role=school-library-head]'));
+  await frame.locator('#finish').click();
+  await frame.locator('#extraSchoolBlock summary').click();
+  await frame.locator('[data-school-for=school-library-head]').selectOption('demo-8');
+  await chooseInitialSchool(frame);
+  const cabinet=frame.frameLocator('#offlineFrameSlot iframe');
+  await cabinet.getByRole('heading',{name:'Муаллим / Омӯзгор',exact:true}).waitFor();
+  assert.equal(await cabinet.locator('html').getAttribute('data-theme'),'dark');
+  assert.match(await cabinet.locator('#profileClasses').textContent(),/^5 · /);
+  await cabinet.locator('#workspaceSettingsToggle').click();
+  await cabinet.locator('#teacherSchoolSearch').fill('88');
+  await cabinet.locator('#teacherSchoolChecks input[value=demo-88]').check();
+  await cabinet.locator('#teacherSaveWorkplaces').click();
+  await cabinet.locator('#teacherSchoolLinks a').click();
+  assert.equal(await cabinet.locator('#selectedSchool').textContent(),'МТМУ № 88');
+  await cabinet.locator('#workspaceSwitch').selectOption('school-library-head');
+  await cabinet.getByRole('heading',{name:'Мудири китобхона',exact:true}).waitFor();
+  assert.equal(await cabinet.locator('html').getAttribute('data-theme'),'dark');
+  await cabinet.getByRole('button',{name:'Дневной режим'}).click();
+  assert.equal(await cabinet.locator('#workspaceSchool').textContent(),'МТМУ № 8');
+  await cabinet.locator('#workspaceSettingsToggle').click();
+  assert.equal(await cabinet.locator('[data-intake-field=last]').inputValue(),'Библиотека');
+  await cabinet.locator('#librarySummary').waitFor();
+  await cabinet.locator('#workspaceSwitch').selectOption('school-teacher');
+  assert.equal(await cabinet.locator('#selectedSchool').textContent(),'МТМУ № 1');
+  await frame.locator('#offlineBack').click();
+  await frame.locator('#begin').waitFor();
+  assert.equal(await frame.locator('html').getAttribute('data-theme'),'light');
+  assert.equal(await frame.locator('#startupShell a').count(),1);
+  assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});

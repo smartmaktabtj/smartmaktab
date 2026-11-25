@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' version '8.13.2' }
+final env = System.getenv()
+for (String key : ['SM_ANDROID_STORE_FILE','ANDROID_KEYSTORE_PASSWORD','ANDROID_KEY_ALIAS','ANDROID_KEY_PASSWORD','SM_RELEASE_VERSION','SM_ANDROID_VERSION_CODE']) {
+    if (!env[key]?.trim()) throw new GradleException("Missing ${key}; unsigned packages are disabled")
+}
+if (!(env.SM_RELEASE_VERSION ==~ /\d+\.\d+\.\d+/)) throw new GradleException('Use version X.Y.Z')
+if (!(env.SM_ANDROID_VERSION_CODE ==~ /[1-9][0-9]{0,9}/) || Long.parseLong(env.SM_ANDROID_VERSION_CODE) > 2100000000L) throw new GradleException('Invalid Android versionCode')
+if (!file(env.SM_ANDROID_STORE_FILE).isFile()) throw new GradleException('Missing release keystore')
+android {
+    namespace 'tj.smartmaktab.app'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig {
+        applicationId 'tj.smartmaktab.app'
+        minSdk 24
+        targetSdk 36
+        versionCode Integer.parseInt(env.SM_ANDROID_VERSION_CODE)
+        versionName env.SM_RELEASE_VERSION
+    }
+    signingConfigs {
+        release {
+            storeFile file(env.SM_ANDROID_STORE_FILE)
+            storePassword env.ANDROID_KEYSTORE_PASSWORD
+            keyAlias env.ANDROID_KEY_ALIAS
+            keyPassword env.ANDROID_KEY_PASSWORD
+            storeType 'JKS'
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release; debuggable false; minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+androidComponents { beforeVariants(selector().withBuildType('debug')) { variant -> variant.enable = false } }
+dependencies { implementation 'androidx.webkit:webkit:1.14.0' }

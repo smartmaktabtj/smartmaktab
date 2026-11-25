@@ -1,0 +1,20 @@
+node_modules/
+dev/supabase-config.json
+.env
+.env.*
+supabase/.temp/
+
+# Native release inputs/outputs; keep secrets outside this repository.
+*.jks
+*.keystore
+*.pfx
+*.p12
+*.pem
+*.key
+native/windows/web/
+native/windows/release/
+native/android/.gradle/
+native/android/**/build/
+native/android/app/src/main/assets/web/
+native/android/local.properties
+native/android/release/

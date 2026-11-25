@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="tg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co http://127.0.0.1:54321 http://localhost:54321; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>SmartMaktab · Supabase Dev</title>
+<link rel="stylesheet" href="./style.css">
+<script type="module" src="./client.bundle.js"></script>
+</head>
+<body><main>
+<header><strong>SmartMaktab <span>DEV</span></strong><select id="language" aria-label="Забон / Язык"><option value="tg">Тоҷикӣ</option><option value="ru">Русский</option></select></header>
+<section>
+<h1 data-text="heading">Муҳити озмоишии Supabase</h1>
+<p class="notice" data-text="warning">Танҳо додаҳои сохта. Танҳо хондан. / Только синтетические данные. Только чтение.</p>
+<p id="status" role="status" aria-live="polite">Танзимот санҷида мешавад… / Проверка конфигурации…</p>
+<form id="login" hidden>
+<label><span data-text="email">Почтаи электронӣ</span><input id="email" type="email" autocomplete="username" required maxlength="254"></label>
+<label><span data-text="password">Рамз</span><input id="password" type="password" autocomplete="current-password" required></label>
+<button data-text="signIn">Ворид шудан</button>
+</form>
+<div id="workspace" hidden>
+<div class="actions"><button id="reload" data-text="reload">Навсозӣ</button><button id="logout" data-text="logout">Баромадан</button></div>
+<label><span data-text="org">Муассиса</span><select id="org" disabled></select></label>
+<p id="recordStatus" role="status"></p><ul id="records"></ul>
+<section id="approvalPanel" class="approval-panel" aria-labelledby="approvalHeading" hidden>
+<h2 id="approvalHeading"></h2>
+<p id="approvalMode" class="notice"></p>
+<p id="approvalContext"></p>
+<p id="approvalFollowStatus" class="approval-follow-status" hidden></p>
+<p id="approvalStatus" role="status" aria-live="polite"></p>
+<div class="actions"><button id="approvalRefresh" type="button"></button></div>
+<form id="approvalForm" hidden>
+<label for="approvalTitle"><span id="approvalTitleLabel"></span><input id="approvalTitle" maxlength="240" required autocomplete="off"></label>
+<div class="approval-controls">
+<button id="approvalSubmit" type="submit"></button>
+<button id="approvalDefer" type="button" class="secondary" hidden></button>
+<button id="approvalDiscard" type="button" class="secondary" hidden></button>
+</div>
+<p id="outboxHelp" class="outbox-help" hidden></p>
+</form>
+<ul id="approvalQueue" class="approval-queue"></ul>
+</section>
+</div>
+</section>
+</main></body></html>
