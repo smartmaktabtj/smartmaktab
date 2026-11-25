@@ -1,7 +1,33 @@
 import { getCloudConfig } from './cloud-config.mjs';
 
-export function createCloudClient({ config = getCloudConfig(), fetchImpl = globalThis.fetch } = {}) {
-  let session = null;
+export function createCloudClient({
+  config = getCloudConfig(),
+  fetchImpl = globalThis.fetch,
+  storage = null,
+  storageKey = 'smartmaktab.cloud.session.v1',
+} = {}) {
+  function readStoredSession() {
+    if (!storage?.getItem) return null;
+    try {
+      const raw = storage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed.access_token === 'string' && parsed.access_token ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  let session = readStoredSession();
+
+  function persistSession(next) {
+    session = next && typeof next.access_token === 'string' && next.access_token ? next : null;
+    if (!storage) return;
+    try {
+      if (session) storage.setItem(storageKey, JSON.stringify(session));
+      else storage.removeItem?.(storageKey);
+    } catch {}
+  }
 
   function headers(extra = {}, includeAuth = true) {
     const h = {
@@ -34,23 +60,59 @@ export function createCloudClient({ config = getCloudConfig(), fetchImpl = globa
       body: JSON.stringify({ email: String(email || '').trim(), password: String(password || '') }),
     });
     const data = await parseJson(res);
-    session = data;
+    persistSession(data);
     return data;
   }
 
-  async function signOut() {
-    if (!session?.access_token) {
-      session = null;
-      return;
+  async function refreshSession() {
+    if (!session?.refresh_token) return null;
+    const res = await fetchImpl(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: headers({}, false),
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    });
+    const data = await parseJson(res);
+    persistSession(data);
+    return data;
+  }
+
+  async function ensureFreshSession() {
+    if (!session?.access_token) return;
+    const expiresAtSec = Number(session.expires_at);
+    if (Number.isFinite(expiresAtSec) && expiresAtSec * 1000 - Date.now() < 60_000 && session.refresh_token) {
+      try {
+        await refreshSession();
+      } catch {
+        persistSession(null);
+      }
     }
+  }
+
+  async function authedFetch(url, init) {
+    await ensureFreshSession();
+    if (!session?.access_token) throw new Error('Not signed in');
+    let res = await fetchImpl(url, { ...init, headers: headers(init?.headers || {}) });
+    if (res.status === 401 && session?.refresh_token) {
+      try {
+        await refreshSession();
+        res = await fetchImpl(url, { ...init, headers: headers(init?.headers || {}) });
+      } catch {
+        persistSession(null);
+      }
+    }
+    return parseJson(res);
+  }
+
+  async function signOut() {
+    const token = session?.access_token;
+    persistSession(null);
+    if (!token) return;
     try {
       await fetchImpl(`${config.url}/auth/v1/logout?scope=local`, {
         method: 'POST',
-        headers: headers(),
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
-    } finally {
-      session = null;
-    }
+    } catch {}
   }
 
   async function requestPasswordRecovery(email, redirectTo = '') {
@@ -65,38 +127,30 @@ export function createCloudClient({ config = getCloudConfig(), fetchImpl = globa
   }
 
   async function updatePassword(newPassword) {
-    if (!session?.access_token) throw new Error('Not signed in');
-    const res = await fetchImpl(`${config.url}/auth/v1/user`, {
+    return authedFetch(`${config.url}/auth/v1/user`, {
       method: 'PUT',
-      headers: headers(),
       body: JSON.stringify({ password: String(newPassword || '') }),
     });
-    return parseJson(res);
   }
 
   async function rpc(fnName, params = {}) {
-    if (!session?.access_token) throw new Error('Not signed in');
-    const res = await fetchImpl(`${config.url}/rest/v1/rpc/${fnName}`, {
+    return authedFetch(`${config.url}/rest/v1/rpc/${fnName}`, {
       method: 'POST',
-      headers: headers(),
       body: JSON.stringify(params),
     });
-    return parseJson(res);
   }
 
   async function select(table, queryString = '') {
-    if (!session?.access_token) throw new Error('Not signed in');
-    const res = await fetchImpl(`${config.url}/rest/v1/${table}${queryString ? `?${queryString}` : ''}`, {
+    return authedFetch(`${config.url}/rest/v1/${table}${queryString ? `?${queryString}` : ''}`, {
       method: 'GET',
-      headers: headers(),
     });
-    return parseJson(res);
   }
 
   return {
     get config() { return config; },
     get session() { return session; },
-    setSession(next) { session = next; },
+    setSession(next) { persistSession(next); },
+    refreshSession,
     signIn,
     signOut,
     requestPasswordRecovery,

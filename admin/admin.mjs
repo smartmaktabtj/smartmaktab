@@ -130,7 +130,11 @@ const copy = {
 const $ = id => document.getElementById(id);
 let lang = 'tg';
 const t = key => copy[lang][key] || key;
-const client = createCloudClient({ config: getCloudConfig() });
+const client = createCloudClient({
+  config: getCloudConfig(),
+  storage: globalThis.localStorage,
+  storageKey: 'smartmaktab.admin.session.v1',
+});
 
 let activeTab = 'orgs';
 let orgs = [];
@@ -266,6 +270,7 @@ function renderTables() {
   if (planBody) {
     planBody.replaceChildren(...(plans.length ? plans.map(pl => {
       const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
       const td1 = document.createElement('td');
       td1.textContent = `${pl.code} · ${lang === 'tg' ? pl.title_tg : pl.title_ru}`;
       const td2 = document.createElement('td');
@@ -273,6 +278,14 @@ function renderTables() {
       const td3 = document.createElement('td');
       td3.textContent = `${pl.recipient_phone} (${(pl.supported_providers || []).join(', ')})`;
       tr.append(td1, td2, td3);
+      tr.addEventListener('click', () => {
+        $('planCode').value = pl.code;
+        $('planTitleTg').value = pl.title_tg;
+        $('planTitleRu').value = pl.title_ru;
+        $('planPrice').value = String(pl.price_tjs);
+        $('planDays').value = String(pl.duration_days);
+        $('planPhone').value = pl.recipient_phone;
+      });
       return tr;
     }) : [emptyRow(3)]));
     if (plans[0] && !$('planTitleTg').value) {
@@ -294,7 +307,8 @@ function renderTables() {
     const hashEl = document.createElement('small');
     const txPart = p.transaction_id ? ` · TX:${p.transaction_id}` : '';
     const recPart = p.recipient_account ? ` · ->${p.recipient_account}` : '';
-    hashEl.textContent = `${p.status}${txPart}${recPart} · ${p.receipt_hash.slice(0, 10)}…`;
+    const okPart = p.status_confirmed ? ' · ✓' : '';
+    hashEl.textContent = `${p.status}${txPart}${recPart}${okPart} · ${p.receipt_hash.slice(0, 10)}…`;
     const ocrEl = document.createElement('div');
     ocrEl.textContent = p.ocr_text ? p.ocr_text.slice(0, 160) : '—';
     td2.append(hashEl, ocrEl);
@@ -492,32 +506,34 @@ $('planForm').addEventListener('submit', async e => {
 });
 
 (async function restoreUrlOrSession() {
+  let authType = '';
   if (location.hash && location.hash.includes('access_token=')) {
     const params = new URLSearchParams(location.hash.slice(1));
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
-    const type = params.get('type');
+    authType = params.get('type') || '';
     if (accessToken) {
       client.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
       history.replaceState(null, '', location.pathname + location.search);
-      try {
-        const ctx = await client.getWorkspaceContext();
-        if (ctx?.is_super_admin) {
-          $('admLoginCard').hidden = true;
-          $('admWorkspace').hidden = false;
-          $('signOutBtn').hidden = false;
-          $('reloadBtn').hidden = false;
-          if (type === 'recovery' || type === 'magiclink') $('admPasswordCard').hidden = false;
-          setStatus(t('signedIn'));
-          await refreshAll();
-        } else {
-          await client.signOut();
-          setStatus(t('needSuperAdmin'), 'error');
-        }
-      } catch (err) {
-        setStatus(err.message, 'error');
-      }
     }
+  }
+  if (!client.session?.access_token) return;
+  try {
+    const ctx = await client.getWorkspaceContext();
+    if (ctx?.is_super_admin) {
+      $('admLoginCard').hidden = true;
+      $('admWorkspace').hidden = false;
+      $('signOutBtn').hidden = false;
+      $('reloadBtn').hidden = false;
+      if (authType === 'recovery' || authType === 'magiclink') $('admPasswordCard').hidden = false;
+      setStatus(t('signedIn'));
+      await refreshAll();
+    } else {
+      await client.signOut();
+      setStatus(t('needSuperAdmin'), 'error');
+    }
+  } catch {
+    await client.signOut();
   }
 })();
 

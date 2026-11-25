@@ -6,6 +6,7 @@ import {
   readCachedLicense,
 } from '../shared/license-guard.mjs';
 import {
+  DEFAULT_PAYMENT_TARIFF,
   hashReceiptBytes,
   parseReceiptText,
   submitReceiptForVerification,
@@ -17,6 +18,7 @@ import {
   deleteCachedBook,
 } from '../shared/book-cache.mjs';
 import { createCloudClient } from '../shared/cloud-client.mjs';
+import { getCloudConfig } from '../shared/cloud-config.mjs';
 
 function makeMemoryStorage() {
   const map = new Map();
@@ -105,6 +107,11 @@ test('receipt parser, SHA-256 hash, and Edge Function submission format correctl
   assert.equal(amonatParsed.detectedDate, '10.11.2026');
   assert.equal(amonatParsed.statusConfirmed, true);
 
+  const yoParsed = parseReceiptText('Душанбе Сити Номер операции: 2248620183 Счёт получателя: +992 90 797 22 95 Сумма операции: 10.00 ОПЕРАЦИЯ ВЫПОЛНЕНА');
+  assert.equal(yoParsed.detectedProvider, 'dcity');
+  assert.equal(yoParsed.detectedRecipient, '992907972295');
+  assert.equal(yoParsed.detectedAmount, 10);
+
   let called = null;
   const result = await submitReceiptForVerification({
     accessToken: 'jwt-test',
@@ -157,4 +164,107 @@ test('cloud client authenticates and invokes RPCs with publishable key only', as
   assert.equal(ctx.is_super_admin, true);
   assert.equal(requests[1].headers.apikey, 'sb_publishable_demo');
   assert.equal(requests[1].headers.Authorization, 'Bearer tok-123');
+});
+
+test('cloud client persists session in storage and refreshes expired tokens automatically', async () => {
+  const storage = makeMemoryStorage();
+  let calls = 0;
+  const fetchMock = async url => {
+    calls++;
+    if (url.endsWith('/auth/v1/token?grant_type=password')) {
+      return new Response(JSON.stringify({ access_token: 'old-tok', refresh_token: 'ref-1', expires_at: 1 }), { status: 200 });
+    }
+    if (url.endsWith('/auth/v1/token?grant_type=refresh_token')) {
+      return new Response(JSON.stringify({ access_token: 'new-tok', refresh_token: 'ref-2', expires_at: Math.floor(Date.now() / 1000) + 3600 }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  const client1 = createCloudClient({
+    config: { url: 'https://example.supabase.co', publishableKey: 'sb_publishable_demo' },
+    fetchImpl: fetchMock,
+    storage,
+    storageKey: 'test.session',
+  });
+  await client1.signIn('a@b.tj', 'pass');
+  assert.ok(storage.getItem('test.session'));
+
+  const client2 = createCloudClient({
+    config: { url: 'https://example.supabase.co', publishableKey: 'sb_publishable_demo' },
+    fetchImpl: fetchMock,
+    storage,
+    storageKey: 'test.session',
+  });
+  await client2.getWorkspaceContext();
+  assert.equal(client2.session.access_token, 'new-tok');
+  assert.ok(calls >= 3);
+  await client2.signOut();
+  assert.equal(storage.getItem('test.session'), null);
+});
+
+test('cloud UI and license helpers survive sandboxed frames without localStorage access', async () => {
+  const prevDoc = globalThis.document;
+  const prevWin = globalThis.window;
+  const prevLoc = globalThis.location;
+  const prevOpt = globalThis.Option;
+  const prevDesc = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  try {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() { throw new Error('SecurityError: sandboxed'); },
+    });
+    const makeEl = tag => {
+      const el = {
+        tagName: tag.toUpperCase(),
+        children: [],
+        dataset: {},
+        options: [],
+        hidden: false,
+        _className: '',
+        set className(v) { this._className = v; },
+        get className() { return this._className; },
+        style: {},
+        setAttribute() {},
+        addEventListener() {},
+        prepend(...n) { this.children.unshift(...n); },
+        append(...n) {
+          for (const x of n) {
+            this.children.push(x);
+            if (this.tagName === 'SELECT' && x?.value !== undefined) this.options.push(x);
+          }
+        },
+        after() {},
+        replaceChildren(...n) {
+          this.children = [...n];
+          if (this.tagName === 'SELECT') this.options = [...n];
+        },
+      };
+      return el;
+    };
+    const docs = makeEl('section');
+    const article = makeEl('article');
+    article.dataset.cabinetId = 'school-director';
+    globalThis.Option = function Option(text, value) { return { textContent: text, value, text }; };
+    globalThis.window = { origin: 'null' };
+    globalThis.location = { protocol: 'about:', href: 'about:srcdoc' };
+    globalThis.document = {
+      documentElement: { lang: 'tg' },
+      createElement: makeEl,
+      getElementById: id => (id === 'workspaceDocs' ? docs : null),
+      querySelector: () => null,
+      addEventListener() {},
+    };
+    const { setupCloudWorkspace } = await import('../shared/cloud-workspace-ui.mjs');
+    const cfg = getCloudConfig();
+    assert.equal(cfg.projectRef, 'waorfkkavzzpbrsvjjln');
+    assert.equal(DEFAULT_PAYMENT_TARIFF.code, 'trial_10');
+    setupCloudWorkspace(article, docs, () => ({ id: 'demo-88', name: 'МТМУ № 88' }));
+    assert.equal(docs.children.length, 1);
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
+    globalThis.location = prevLoc;
+    globalThis.Option = prevOpt;
+    if (prevDesc) Object.defineProperty(globalThis, 'localStorage', prevDesc);
+    else delete globalThis.localStorage;
+  }
 });

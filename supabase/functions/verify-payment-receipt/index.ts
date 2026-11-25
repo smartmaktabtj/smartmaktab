@@ -39,7 +39,7 @@ function parseReceiptText(text: string) {
     /(?:номер\s+операции|номер\s+транзакции|чек\s*№?|trx|tx|id|квитанц\w*|рақам\w*|операц\w*)[\s:#№-]*([a-z0-9-]{5,32})/i,
   );
   const recipientMatch = normalized.match(
-    /(?:счет\s+получателя|счет\s+зачисления|получатель|қабулкунанда|гиранда)\s*:+\s*(\+?[\d\s()-]{9,18})/i,
+    /(?:сч[её]т\s+получателя|сч[её]т\s+зачисления|получатель|номер\s+телефона|телефон|қабулкунанда|гиранда)\s*:+\s*(\+?[\d\s()-]{9,18})/i,
   );
   const detected_recipient = normalizeRecipient(recipientMatch?.[1] || '');
   const status_confirmed = /успешн\w*|операция\s+выполнена|исполнен\w*|муваффақ\w*|иҷро\s+шуд|бомуваффақият/i.test(normalized);

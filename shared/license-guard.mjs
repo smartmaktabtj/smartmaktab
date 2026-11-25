@@ -54,9 +54,19 @@ export function evaluateLicenseState(record, nowMs = Date.now()) {
   return { status: 'locked', allowed: false, reason: 'grace_expired', daysLeft: 0, graceDaysLeft: 0, clockTampered: false };
 }
 
-export function cacheVerifiedLicense(orgId, serverStatus, storage = globalThis.localStorage, nowMs = Date.now()) {
+function safeStorage(storage) {
+  if (storage !== undefined) return storage;
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function cacheVerifiedLicense(orgId, serverStatus, storage, nowMs = Date.now()) {
   if (!orgId || !serverStatus) return null;
-  const all = readAllLicenseCache(storage);
+  const store = safeStorage(storage);
+  const all = readAllLicenseCache(store);
   const prev = all[orgId];
   const serverNowMs = serverStatus.server_now ? Date.parse(serverStatus.server_now) : nowMs;
   const entry = {
@@ -71,41 +81,44 @@ export function cacheVerifiedLicense(orgId, serverStatus, storage = globalThis.l
     maxSeenNowMs: Math.max(prev?.maxSeenNowMs || 0, serverNowMs || nowMs, nowMs),
   };
   all[orgId] = entry;
-  storage?.setItem?.(CACHE_KEY, JSON.stringify(all));
+  try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
   return entry;
 }
 
-function readAllLicenseCache(storage = globalThis.localStorage) {
+function readAllLicenseCache(storage) {
   try {
-    const raw = storage?.getItem?.(CACHE_KEY);
+    const store = safeStorage(storage);
+    const raw = store?.getItem?.(CACHE_KEY);
     return raw ? JSON.parse(raw) || {} : {};
   } catch {
     return {};
   }
 }
 
-export function readCachedLicense(orgId, storage = globalThis.localStorage, nowMs = Date.now()) {
+export function readCachedLicense(orgId, storage, nowMs = Date.now()) {
   if (!orgId) return null;
-  const all = readAllLicenseCache(storage);
+  const store = safeStorage(storage);
+  const all = readAllLicenseCache(store);
   const entry = all[orgId] || null;
   if (entry && nowMs > (entry.maxSeenNowMs || 0)) {
     entry.maxSeenNowMs = nowMs;
-    try { storage?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
+    try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
   }
   return entry;
 }
 
-export function clearCachedLicense(orgId, storage = globalThis.localStorage) {
+export function clearCachedLicense(orgId, storage) {
   if (!orgId) return;
-  const all = readAllLicenseCache(storage);
+  const store = safeStorage(storage);
+  const all = readAllLicenseCache(store);
   delete all[orgId];
-  storage?.setItem?.(CACHE_KEY, JSON.stringify(all));
+  try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
 }
 
-export function mountLicenseGate(container, { orgId, storage = globalThis.localStorage, onVerifyOnline, onOpenPayment } = {}) {
+export function mountLicenseGate(container, { orgId, storage, onVerifyOnline, onOpenPayment } = {}) {
   const tg = () => document.documentElement.lang !== 'ru';
   const t = k => copy[k][tg() ? 0 : 1];
-  const record = readCachedLicense(orgId, storage);
+  const record = readCachedLicense(orgId, safeStorage(storage));
   const state = evaluateLicenseState(record);
   container.replaceChildren();
   container.hidden = state.allowed && state.status !== 'grace';

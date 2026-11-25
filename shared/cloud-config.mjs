@@ -7,9 +7,19 @@ export const DEFAULT_CLOUD_CONFIG = Object.freeze({
 
 const STORAGE_KEY = 'sm:cloud-config-override';
 
-export function getCloudConfig(storage = globalThis.localStorage) {
+function safeStorage(storage) {
+  if (storage !== undefined) return storage;
   try {
-    const raw = storage?.getItem?.(STORAGE_KEY);
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function getCloudConfig(storage) {
+  try {
+    const store = safeStorage(storage);
+    const raw = store?.getItem?.(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed?.url && parsed?.publishableKey && /^https:\/\//.test(parsed.url)) {
@@ -20,9 +30,10 @@ export function getCloudConfig(storage = globalThis.localStorage) {
   return { ...DEFAULT_CLOUD_CONFIG };
 }
 
-export function setCloudConfigOverride(config, storage = globalThis.localStorage) {
+export function setCloudConfigOverride(config, storage) {
+  const store = safeStorage(storage);
   if (!config) {
-    storage?.removeItem?.(STORAGE_KEY);
+    store?.removeItem?.(STORAGE_KEY);
     return;
   }
   const url = String(config.url || '').trim().replace(/\/+$/, '');
@@ -30,5 +41,5 @@ export function setCloudConfigOverride(config, storage = globalThis.localStorage
   if (!/^https:\/\/[a-z0-9.-]+$/i.test(url) || !/^sb_publishable_[\w-]+$/.test(publishableKey)) {
     throw new Error('Invalid public Supabase configuration');
   }
-  storage?.setItem?.(STORAGE_KEY, JSON.stringify({ url, publishableKey, projectRef: config.projectRef || '' }));
+  store?.setItem?.(STORAGE_KEY, JSON.stringify({ url, publishableKey, projectRef: config.projectRef || '' }));
 }
