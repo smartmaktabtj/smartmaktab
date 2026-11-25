@@ -23,6 +23,18 @@ def preflight():
     except ValueError: fail('ANDROID_KEYSTORE_BASE64 must encode a JKS file')
     return der,pin,fmt
 
+def verify_keystore_certificate(store, pin):
+    # keytool can emit a JKS warning on stderr. Hash only the binary DER written to -file.
+    cert_file=store.with_suffix('.cer')
+    cmd=['keytool','-exportcert','-storetype','JKS','-keystore',str(store),'-alias',env['ANDROID_KEY_ALIAS'],'-storepass:env','ANDROID_KEYSTORE_PASSWORD','-file',str(cert_file)]
+    try:
+        subprocess.run(cmd,check=True,capture_output=True)
+        cert=cert_file.read_bytes()
+    except (OSError,subprocess.CalledProcessError):
+        fail('Could not export Android certificate; check ANDROID_KEY_ALIAS and ANDROID_KEYSTORE_PASSWORD')
+    if hashlib.sha256(cert).hexdigest()!=pin:
+        fail('Keystore does not match ANDROID_CERT_SHA256; use the certificate fingerprint from the same key archive')
+
 if __name__=='__main__':
     data,pin,fmt=preflight()
     if sys.argv[1:]==['preflight']: print('Release signing inputs present.');raise SystemExit(0)
@@ -30,8 +42,7 @@ if __name__=='__main__':
     import tempfile
     with tempfile.TemporaryDirectory(prefix='smartmaktab-sign-') as tmp:
         store=Path(tmp)/'release.jks';store.write_bytes(data);store.chmod(0o600)
-        cert=run('keytool','-exportcert','-keystore',str(store),'-alias',env['ANDROID_KEY_ALIAS'],'-storepass:env','ANDROID_KEYSTORE_PASSWORD')
-        if hashlib.sha256(cert).hexdigest()!=pin: fail('Keystore does not match pinned Android certificate')
+        verify_keystore_certificate(store,pin)
         gs=dict(env,SM_ANDROID_STORE_FILE=str(store));gs.pop('ANDROID_KEYSTORE_BASE64',None)
         task='assembleRelease' if fmt=='APK' else 'bundleRelease'
         subprocess.run(['gradle','--no-daemon',f':app:{task}'],cwd=root,env=gs,check=True)
