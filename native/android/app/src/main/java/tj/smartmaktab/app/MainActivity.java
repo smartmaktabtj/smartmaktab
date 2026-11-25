@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.*;
 import android.provider.DocumentsContract;
 import android.util.Base64;
+import android.util.TypedValue;
 import android.view.*;
 import android.webkit.*;
 import android.widget.*;
@@ -23,10 +24,12 @@ public final class MainActivity extends Activity {
  private static final int PICK=30, SAVE=31, OPEN=32, SHARE=33, MEDIA=34, SAVE_WINDOWS=35, SAVE_CONTENT_UPDATE=36;
  private WebView view;private ValueCallback<Uri[]> picker;private PermissionRequest media;private String[] mediaResources;
  private File draft;private OutputStream draftOut;private long written,expected;private String fileName,fileMime;private JavaScriptReplyProxy finalReply;
- private File windowsFile;private Thread windowsWorker;private AlertDialog windowsProgress;private boolean windowsBusy,windowsTg,windowsCancelled;
- private File contentUpdateFile;private Thread contentUpdateWorker;private AlertDialog contentUpdateProgress;private boolean contentUpdateBusy,contentUpdateTg,contentUpdateCancelled;
+ private File windowsFile;private Thread windowsWorker;private TransferDialog windowsProgress;private WindowsRelease.CancelHandle windowsCancel;private boolean windowsBusy;
+ private File contentUpdateFile;private Thread contentUpdateWorker;private TransferDialog contentUpdateProgress;private WindowsRelease.CancelHandle contentUpdateCancel;private boolean contentUpdateBusy;
+ private Thread assetUpdateWorker;private TransferDialog assetUpdateProgress;private WindowsRelease.CancelHandle assetUpdateCancel;private boolean assetUpdateBusy;
+ private boolean uiTg;
  private AssetCache assetCache;
- private String tr(String ru,String tg){return windowsTg?tg:ru;}
+ private String tr(String ru,String tg){return uiTg?tg:ru;}
  private boolean own(Uri u){return u!=null&&"https".equals(u.getScheme())&&HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private boolean book(Uri u){return u!=null&&"https".equals(u.getScheme())&&"raw.githubusercontent.com".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/sharipovip/books/");}
  private static String mime(String s){if(s.endsWith(".html"))return "text/html";if(s.endsWith(".js")||s.endsWith(".mjs"))return "text/javascript";if(s.endsWith(".json")||s.endsWith(".webmanifest"))return "application/json";if(s.endsWith(".png"))return "image/png";if(s.endsWith(".svg"))return "image/svg+xml";return "application/octet-stream";}
@@ -122,8 +125,68 @@ public final class MainActivity extends Activity {
    boolean ok=results.length==permissions.length&&results.length>0;for(int r:results)ok &= r==PackageManager.PERMISSION_GRANTED;
    if(ok&&own(Uri.parse(view.getUrl())))pending.grant(resources);else pending.deny();}
  }
+
+ private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
+
+ private static String formatBytes(long bytes){
+  if(bytes<0)return "—";
+  if(bytes<1024)return bytes+" Б";
+  if(bytes<1024*1024)return String.format(Locale.US,"%.1f КБ",bytes/1024.0);
+  return String.format(Locale.US,"%.1f МБ",bytes/(1024.0*1024.0));
+ }
+
+ private final class TransferDialog {
+  final AlertDialog dialog;
+  final TextView status;
+  final ProgressBar bar;
+  final TextView detail;
+  TransferDialog(String title,String initialMessage,Runnable onCancel){
+   LinearLayout layout=new LinearLayout(MainActivity.this);
+   layout.setOrientation(LinearLayout.VERTICAL);
+   layout.setPadding(dp(22),dp(16),dp(22),dp(8));
+   status=new TextView(MainActivity.this);
+   status.setTextSize(TypedValue.COMPLEX_UNIT_SP,15);
+   status.setTextColor(Color.rgb(24,55,44));
+   status.setLineSpacing(0f,1.25f);
+   status.setText(initialMessage);
+   status.setPadding(0,0,0,dp(14));
+   bar=new ProgressBar(MainActivity.this,null,android.R.attr.progressBarStyleHorizontal);
+   bar.setIndeterminate(true);
+   bar.setMax(100);
+   bar.setProgress(0);
+   LinearLayout.LayoutParams barParams=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+   barParams.bottomMargin=dp(8);
+   bar.setLayoutParams(barParams);
+   detail=new TextView(MainActivity.this);
+   detail.setTextSize(TypedValue.COMPLEX_UNIT_SP,13);
+   detail.setTextColor(Color.rgb(74,99,88));
+   detail.setText("");
+   layout.addView(status);layout.addView(bar);layout.addView(detail);
+   dialog=new AlertDialog.Builder(MainActivity.this)
+    .setTitle(title)
+    .setView(layout)
+    .setCancelable(false)
+    .setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->onCancel.run())
+    .show();
+  }
+  void setProgress(String msg,int percent,String detailText){
+   runOnUiThread(()->{
+    if(isDestroyed()||isFinishing()||!dialog.isShowing())return;
+    bar.setIndeterminate(false);
+    bar.setProgress(Math.max(0,Math.min(100,percent)));
+    if(msg!=null)status.setText(msg);
+    detail.setText(detailText!=null?detailText:(percent+"%"));
+   });
+  }
+  void dismiss(){
+   if(dialog.isShowing())dialog.dismiss();
+  }
+ }
+
+ private boolean anyTransferBusy(){return windowsBusy||contentUpdateBusy||assetUpdateBusy;}
+
  private void confirmWindows(boolean tg){
-  if(windowsBusy)return;windowsTg=tg;windowsBusy=true;
+  if(anyTransferBusy())return;uiTg=tg;windowsBusy=true;
   AlertDialog prompt=new AlertDialog.Builder(this).setTitle(tr("Скачать для Windows","Боргирӣ барои Windows"))
    .setMessage(tr("На телефон будет скачан универсальный установщик .exe без цифровой подписи. При установке он сам выберет 32- или 64-битную версию под ваш Windows. Windows может предупредить или заблокировать его. После загрузки выберите папку на телефоне (например, «Загрузки»), чтобы перенести файл на ПК по USB.",
     "Насбкунандаи универсалии .exe бе имзои рақамӣ ба телефон боргирӣ мешавад. Ҳангоми насб он худаш нусхаи 32- ё 64-битиро барои Windows-и шумо интихоб мекунад. Windows метавонад огоҳ кунад ё насбро манъ кунад. Пас аз боргирӣ ҷузвдони телефонро интихоб кунед, то файлро тавассути USB ба компютер гузаронед."))
@@ -132,60 +195,63 @@ public final class MainActivity extends Activity {
   prompt.setOnCancelListener(d->windowsBusy=false);prompt.show();
  }
  private void downloadWindows(){
-  windowsCancelled=false;
-  android.widget.LinearLayout layout=new android.widget.LinearLayout(this);
-  layout.setOrientation(android.widget.LinearLayout.VERTICAL);
-  layout.setPadding(32,24,32,24);
-  android.widget.TextView msg=new android.widget.TextView(this);
-  msg.setText(tr("Поиск файла...","Ҷустуҷӯи файл..."));
-  msg.setPadding(0,0,0,16);
-  android.widget.ProgressBar bar=new android.widget.ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
-  bar.setMax(100);bar.setProgress(0);
-  android.widget.TextView pct=new android.widget.TextView(this);
-  pct.setText("0%");
-  layout.addView(msg);layout.addView(bar);layout.addView(pct);
-  windowsProgress=new AlertDialog.Builder(this).setTitle(tr("Загрузка SmartMaktab для Windows","Боргирии SmartMaktab барои Windows"))
-    .setView(layout)
-    .setCancelable(false).setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->{windowsCancelled=true;if(windowsWorker!=null)windowsWorker.interrupt();}).show();
+  final WindowsRelease.CancelHandle cancel=new WindowsRelease.CancelHandle();
+  windowsCancel=cancel;
+  final TransferDialog dlg=new TransferDialog(
+   tr("Загрузка SmartMaktab для Windows","Боргирии SmartMaktab барои Windows"),
+   tr("Поиск файла для Windows на GitHub...\nНе закрывайте программу.","Ҷустуҷӯи файл барои Windows дар GitHub...\nБарномаро кушода нигоҳ доред."),
+   ()->{cancel.cancel();if(windowsWorker!=null)windowsWorker.interrupt();}
+  );
+  windowsProgress=dlg;
   windowsWorker=new Thread(()->{
    File dest=null;WindowsRelease release=null;int outcome=0;
-   android.widget.ProgressBar pBar=null;android.widget.TextView pMsg=null;android.widget.TextView pPct=null;
-   if(windowsProgress!=null){
-    android.view.View v=windowsProgress.getWindow()!=null?windowsProgress.getWindow().getDecorView():null;
-    if(v!=null){
-     android.widget.LinearLayout ll=(android.widget.LinearLayout)((android.view.ViewGroup)v).getChildAt(0);
-     if(ll!=null&&ll.getChildCount()>=3){
-      pMsg=(android.widget.TextView)ll.getChildAt(0);
-      pBar=(android.widget.ProgressBar)ll.getChildAt(1);
-      pPct=(android.widget.TextView)ll.getChildAt(2);
-     }
-    }
-   }
-   final android.widget.ProgressBar fpBar=pBar;final android.widget.TextView fpMsg=pMsg;final android.widget.TextView fpPct=pPct;
+   final long[] throttle={0L,-1L};
    try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
     String repo=input.readLine();if(repo==null)throw new IOException("repository");
-    release=WindowsRelease.find(repo);
+    release=WindowsRelease.find(repo,cancel);
     if(release==null)outcome=1;
     else{
      if(getCacheDir().getUsableSpace()<release.size+16L*1024*1024)throw new IOException("space");
-     runOnUiThread(()->{if(fpMsg!=null)fpMsg.setText(tr("Скачиваем...","Боргирӣ..."));if(fpBar!=null)fpBar.setProgress(10);if(fpPct!=null)fpPct.setText("10%");});
+     final String foundName=release.name;
+     final long foundSize=release.size;
+     dlg.setProgress(
+      tr("Файл найден: "+foundName+" ("+formatBytes(foundSize)+").\nПодготовка загрузки... Не закрывайте программу.",
+         "Файл ёфт шуд: "+foundName+" ("+formatBytes(foundSize)+").\nОмодагӣ ба боргирӣ... Барномаро кушода нигоҳ доред."),
+      0,
+      "0% · 0 Б / "+formatBytes(foundSize)
+     );
      dest=File.createTempFile("smartmaktab-windows-",".part",getCacheDir());
-     release.fetchWithProgress(dest,(bytes,total)->runOnUiThread(()->{
-      if(total>0&&fpBar!=null){int pct2=(int)(bytes*100/total);fpBar.setProgress(pct2);if(fpPct!=null)fpPct.setText(pct2+"%");}
-      if(fpMsg!=null)fpMsg.setText(tr("Скачано "+(bytes/1024/1024)+" МБ из "+(total/1024/1024)+" МБ","Боргирӣ шуд "+(bytes/1024/1024)+" МБ аз "+(total/1024/1024)+" МБ"));
-     }));
+     final String dlMsg=tr(
+      "Файл найден: "+foundName+" ("+formatBytes(foundSize)+").\nСкачивается... Не закрывайте программу.",
+      "Файл ёфт шуд: "+foundName+" ("+formatBytes(foundSize)+").\nБоргирӣ мешавад... Барномаро кушода нигоҳ доред."
+     );
+     release.fetchWithProgress(dest,(bytes,total)->{
+      long effectiveTotal=total>0?total:foundSize;
+      int pct=effectiveTotal>0?(int)Math.min(100L,(bytes*100L)/effectiveTotal):0;
+      long now=SystemClock.uptimeMillis();
+      if(bytes==0||bytes>=effectiveTotal||pct!=throttle[1]||(now-throttle[0])>=120L){
+       throttle[0]=now;throttle[1]=pct;
+       String msg=bytes>=effectiveTotal
+        ?tr("Проверка файла (SHA-256)...\nНе закрывайте программу.","Санҷиши файл (SHA-256)...\nБарномаро кушода нигоҳ доред.")
+        :dlMsg;
+       dlg.setProgress(msg,pct,pct+"% · "+formatBytes(bytes)+" / "+formatBytes(effectiveTotal));
+      }
+     },cancel);
     }
-   }catch(Exception error){outcome=2;}
-   if(Thread.currentThread().isInterrupted())outcome=3;
+   }catch(Exception error){outcome=cancel.isCancelled()?3:2;}
+   if(cancel.isCancelled())outcome=3;
    final File result=dest;final WindowsRelease selected=release;final int status=outcome;
    runOnUiThread(()->{
     if(this.isDestroyed()){if(result!=null)result.delete();return;}
-    boolean cancelled=windowsCancelled;windowsWorker=null;
-    if(windowsProgress!=null){windowsProgress.dismiss();windowsProgress=null;}
+    boolean cancelled=cancel.cancelled;
+    if(windowsCancel==cancel){windowsWorker=null;windowsCancel=null;}
+    if(windowsProgress==dlg)windowsProgress=null;
+    dlg.dismiss();
     if(cancelled||status!=0||result==null||selected==null){
      if(result!=null)result.delete();windowsBusy=false;
      if(!cancelled&&status==1)windowsToast(tr("Версия для Windows ещё не опубликована.","Нусхаи Windows ҳанӯз нашр нашудааст."));
      else if(!cancelled&&status!=3)windowsToast(tr("Не удалось скачать или проверить файл. Проверьте интернет и свободное место.","Боргирӣ ё санҷиши файл ноком шуд. Интернет ва ҷойи холиро санҷед."));
+     else if(cancelled)windowsToast(tr("Загрузка отменена.","Боргирӣ бекор карда шуд."));
      return;
     }
     windowsFile=result;
@@ -225,9 +291,22 @@ public final class MainActivity extends Activity {
   if(!needed.isEmpty())requestPermissions(needed.toArray(new String[0]),100);
  }
 
- @Override protected void onDestroy(){if(windowsWorker!=null)windowsWorker.interrupt();if(windowsProgress!=null)windowsProgress.dismiss();if(windowsFile!=null)windowsFile.delete();if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();if(contentUpdateProgress!=null)contentUpdateProgress.dismiss();if(contentUpdateFile!=null)contentUpdateFile.delete();clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();}
+ @Override protected void onDestroy(){
+  if(windowsCancel!=null)windowsCancel.cancel();
+  if(windowsWorker!=null)windowsWorker.interrupt();
+  if(windowsProgress!=null)windowsProgress.dismiss();
+  if(windowsFile!=null)windowsFile.delete();
+  if(contentUpdateCancel!=null)contentUpdateCancel.cancel();
+  if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();
+  if(contentUpdateProgress!=null)contentUpdateProgress.dismiss();
+  if(contentUpdateFile!=null)contentUpdateFile.delete();
+  if(assetUpdateCancel!=null)assetUpdateCancel.cancel();
+  if(assetUpdateWorker!=null)assetUpdateWorker.interrupt();
+  if(assetUpdateProgress!=null)assetUpdateProgress.dismiss();
+  clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();
+ }
  private void confirmContentUpdate(boolean tg){
-  if(contentUpdateBusy)return;contentUpdateTg=tg;contentUpdateBusy=true;
+  if(anyTransferBusy())return;uiTg=tg;contentUpdateBusy=true;
   AlertDialog prompt=new AlertDialog.Builder(this).setTitle(tr("Скачать обновление материалов","Боргирии навсозии мавод"))
    .setMessage(tr("Телефон найдёт последний подписанный файл обновления материалов (.smupdate) на GitHub, скачает и проверит его. После загрузки выберите папку на телефоне (например, «Загрузки»), затем перенесите файл на ПК по USB и нажмите в SmartMaktab «Проверить обновления».\n\n1. Подключите телефон к ПК кабелем.\n2. В шторке уведомлений откройте «Подключение USB» и выберите «Передача файлов».\n3. На ПК в папке телефона (обычно internal_storage/Download) скопируйте файл .smupdate на рабочий стол.\n4. На ПК откройте SmartMaktab и нажмите «Проверить обновления» — файл найдётся и применится сам.",
     "Телефон охирин файли имзодор (.smupdate)-ро аз GitHub пайдо мекунад, боргирӣ ва месанҷад. Пас аз боргирӣ ҷузвдонро интихоб кунед, сипас файлро тавассути USB ба компютер гузаронед ва дар SmartMaktab тугмаи «Навсозиҳоро тафтиш кунед»-ро пахш кунед.\n\n1. Телефонро тавассути кабел ба компютер пайваст кунед.\n2. Дар менюи огоҳинома «USB»-ро кушоед ва «Интиқоли файл»-ро интихоб кунед.\n3. Дар компютер аз ҷузвдони телефон (internal_storage/Download) файл .smupdate-ро ба мизи кор нусхабардорӣ кунед.\n4. Дар компютер SmartMaktab-ро кушоед ва «Навсозиҳоро тафтиш кунед»-ро пахш кунед — файл худаш пайдо ва татбиқ мешавад."))
@@ -236,28 +315,55 @@ public final class MainActivity extends Activity {
   prompt.setOnCancelListener(d->contentUpdateBusy=false);prompt.show();
  }
  private void downloadContentUpdate(){
-  contentUpdateCancelled=false;
-  contentUpdateProgress=new AlertDialog.Builder(this).setTitle(tr("Поиск обновления материалов","Ҷустуҷӯи навсозии мавод"))
-    .setMessage(tr("Скачиваем и проверяем файл. Оставьте приложение открытым.","Файл боргирӣ ва санҷида мешавад. Барномаро кушода нигоҳ доред."))
-    .setCancelable(false).setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->{contentUpdateCancelled=true;if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();}).show();
+  final WindowsRelease.CancelHandle cancel=new WindowsRelease.CancelHandle();
+  contentUpdateCancel=cancel;
+  final TransferDialog dlg=new TransferDialog(
+   tr("Обновление материалов","Навсозии мавод"),
+   tr("Поиск файла обновления (.smupdate) на GitHub...\nНе закрывайте программу.","Ҷустуҷӯи файли навсозӣ (.smupdate) дар GitHub...\nБарномаро кушода нигоҳ доред."),
+   ()->{cancel.cancel();if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();}
+  );
+  contentUpdateProgress=dlg;
   contentUpdateWorker=new Thread(()->{
    File dest=null;ContentUpdate update=null;int outcome=0;
+   final long[] throttle={0L,-1L};
    try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
     String repo=input.readLine();if(repo==null)throw new IOException("repository");
-    update=ContentUpdate.find(repo);
+    update=ContentUpdate.find(repo,cancel);
     if(update==null)outcome=1;
-    else{if(getCacheDir().getUsableSpace()<update.size+16L*1024*1024)throw new IOException("space");dest=File.createTempFile("smartmaktab-content-",".part",getCacheDir());update.fetch(dest);}
-   }catch(Exception error){outcome=2;}
-   if(Thread.currentThread().isInterrupted())outcome=3;
+    else{
+     if(getCacheDir().getUsableSpace()<update.size+16L*1024*1024)throw new IOException("space");
+     final String foundName=update.name;
+     final long foundSize=update.size;
+     final String dlMsg=tr(
+      "Файл найден: "+foundName+" ("+formatBytes(foundSize)+").\nСкачивается... Не закрывайте программу.",
+      "Файл ёфт шуд: "+foundName+" ("+formatBytes(foundSize)+").\nБоргирӣ мешавад... Барномаро кушода нигоҳ доред."
+     );
+     dlg.setProgress(dlMsg,0,"0% · 0 Б / "+formatBytes(foundSize));
+     dest=File.createTempFile("smartmaktab-content-",".part",getCacheDir());
+     update.fetchWithProgress(dest,(bytes,total)->{
+      long effectiveTotal=total>0?total:foundSize;
+      int pct=effectiveTotal>0?(int)Math.min(100L,(bytes*100L)/effectiveTotal):0;
+      long now=SystemClock.uptimeMillis();
+      if(bytes==0||bytes>=effectiveTotal||pct!=throttle[1]||(now-throttle[0])>=80L){
+       throttle[0]=now;throttle[1]=pct;
+       dlg.setProgress(dlMsg,pct,pct+"% · "+formatBytes(bytes)+" / "+formatBytes(effectiveTotal));
+      }
+     },cancel);
+    }
+   }catch(Exception error){outcome=cancel.isCancelled()?3:2;}
+   if(cancel.isCancelled())outcome=3;
    final File result=dest;final ContentUpdate selected=update;final int status=outcome;
    runOnUiThread(()->{
     if(this.isDestroyed()){if(result!=null)result.delete();return;}
-    boolean cancelled=contentUpdateCancelled;contentUpdateWorker=null;
-    if(contentUpdateProgress!=null){contentUpdateProgress.dismiss();contentUpdateProgress=null;}
+    boolean cancelled=cancel.cancelled;
+    if(contentUpdateCancel==cancel){contentUpdateWorker=null;contentUpdateCancel=null;}
+    if(contentUpdateProgress==dlg)contentUpdateProgress=null;
+    dlg.dismiss();
     if(cancelled||status!=0||result==null||selected==null){
      if(result!=null)result.delete();contentUpdateBusy=false;
-     if(!cancelled&&status==1)contentToast(tr("Обновлений ещё нет. Файл ещё не опубликован.","Навсозӣ ҳанӯз нест. Файл ҳанӯз нашр нашудааст."));
+     if(!cancelled&&status==1)contentToast(tr("Обновлений материалов ещё нет. Файл .smupdate ещё не опубликован.","Навсозии мавод ҳанӯз нест. Файли .smupdate ҳанӯз нашр нашудааст."));
      else if(!cancelled&&status!=3)contentToast(tr("Не удалось скачать или проверить файл. Проверьте интернет и свободное место.","Боргирӣ ё санҷиши файл ноком шуд. Интернет ва ҷойи холиро санҷед."));
+     else if(cancelled)contentToast(tr("Загрузка отменена.","Боргирӣ бекор карда шуд."));
      return;
     }
     contentUpdateFile=result;
@@ -293,24 +399,88 @@ public final class MainActivity extends Activity {
  private void contentToast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
 
  private void checkAssetUpdate(boolean tg){
-  if(contentUpdateBusy)return;contentUpdateTg=tg;contentUpdateBusy=true;
-  new AlertDialog.Builder(this).setTitle(tr("Проверка обновления","Тафтиши навсозӣ"))
-   .setMessage(tr("Проверяем наличие новой версии. Оставьте приложение открытым.","Навсозӣ санҷида мешавад. Барномаро кушода нигоҳ доред."))
-   .setCancelable(false).show();
-  new Thread(()->{
-   boolean updated=false;
+  if(anyTransferBusy())return;uiTg=tg;assetUpdateBusy=true;
+  final WindowsRelease.CancelHandle cancel=new WindowsRelease.CancelHandle();
+  assetUpdateCancel=cancel;
+  final TransferDialog dlg=new TransferDialog(
+   tr("Обновление приложения","Навсозии барнома"),
+   tr("Поиск обновления приложения на GitHub...\nНе закрывайте программу.","Ҷустуҷӯи навсозии барнома дар GitHub...\nБарномаро кушода нигоҳ доред."),
+   ()->{cancel.cancel();if(assetUpdateWorker!=null)assetUpdateWorker.interrupt();}
+  );
+  assetUpdateProgress=dlg;
+  assetUpdateWorker=new Thread(()->{
+   AssetCache.UpdateStatus result=AssetCache.UpdateStatus.NETWORK_ERROR;
+   final String[] foundName={""};
+   final long[] throttle={0L,-1L};
    try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
     String repo=input.readLine();if(repo==null)throw new IOException("repository");
-    updated=assetCache.updateAssets(repo,(msg,percent)->runOnUiThread(()->{}));
-   }catch(Exception error){updated=false;}
-   final boolean result=updated;
+    result=assetCache.updateAssets(repo,new AssetCache.ProgressListener(){
+     @Override public void onFileFound(String name,long totalBytes){
+      foundName[0]=name;
+      dlg.setProgress(
+       tr("Файл найден: "+name+" ("+formatBytes(totalBytes)+").\nСкачивается... Не закрывайте программу.",
+          "Файл ёфт шуд: "+name+" ("+formatBytes(totalBytes)+").\nБоргирӣ мешавад... Барномаро кушода нигоҳ доред."),
+       0,
+       totalBytes>0?("0% · 0 Б / "+formatBytes(totalBytes)):"0%"
+      );
+     }
+     @Override public void onProgress(long downloadedBytes,long totalBytes,int percent,String stage){
+      long now=SystemClock.uptimeMillis();
+      if("unpacking".equals(stage)){
+       dlg.setProgress(
+        tr("Распаковка обновления...\nНе закрывайте программу.","Кушодани навсозӣ...\nБарномаро кушода нигоҳ доред."),
+        percent,percent+"%"
+       );
+       return;
+      }
+      if("done".equals(stage)){
+       dlg.setProgress(
+        tr("Обновление установлено!","Навсозӣ насб шуд!"),100,"100%"
+       );
+       return;
+      }
+      if(percent!=throttle[1]||(now-throttle[0])>=100L){
+       throttle[0]=now;throttle[1]=percent;
+       String dlMsg=tr(
+        "Файл найден: "+foundName[0]+(totalBytes>0?" ("+formatBytes(totalBytes)+")":"")+".\nСкачивается... Не закрывайте программу.",
+        "Файл ёфт шуд: "+foundName[0]+(totalBytes>0?" ("+formatBytes(totalBytes)+")":"")+".\nБоргирӣ мешавад... Барномаро кушода нигоҳ доред."
+       );
+       String detail=totalBytes>0?(percent+"% · "+formatBytes(downloadedBytes)+" / "+formatBytes(totalBytes)):(percent+"% · "+formatBytes(downloadedBytes));
+       dlg.setProgress(dlMsg,percent,detail);
+      }
+     }
+    },cancel);
+   }catch(Exception error){
+    result=cancel.isCancelled()?AssetCache.UpdateStatus.CANCELLED:AssetCache.UpdateStatus.NETWORK_ERROR;
+   }
+   if(cancel.cancelled)result=AssetCache.UpdateStatus.CANCELLED;
+   final AssetCache.UpdateStatus finalStatus=result;
    runOnUiThread(()->{
-    contentUpdateBusy=false;
+    if(isDestroyed())return;
+    if(assetUpdateCancel==cancel){assetUpdateWorker=null;assetUpdateCancel=null;}
+    if(assetUpdateProgress==dlg)assetUpdateProgress=null;
+    assetUpdateBusy=false;
+    dlg.dismiss();
+    if(finalStatus==AssetCache.UpdateStatus.CANCELLED){
+     contentToast(tr("Обновление отменено.","Навсозӣ бекор карда шуд."));
+     return;
+    }
+    if(finalStatus==AssetCache.UpdateStatus.UPDATED){
+     new AlertDialog.Builder(this).setTitle(tr("Обновление установлено","Навсозӣ насб шуд"))
+      .setMessage(tr("Приложение обновлено. Перезапустить сейчас, чтобы применить изменения?","Барнома навсозӣ шуд. Барои татбиқи тағйирот ҳозир аз нав оғоз кунем?"))
+      .setPositiveButton(tr("Перезапустить","Аз нав оғоз"),(d,w)->{view.clearCache(true);recreate();})
+      .setNegativeButton(tr("Позже","Баъдтар"),(d,w)->{})
+      .show();
+     return;
+    }
+    String msg=finalStatus==AssetCache.UpdateStatus.UP_TO_DATE
+     ?tr("Новых обновлений не найдено. У вас актуальная версия.","Навсозии нав ёфт нашуд. Шумо нусхаи охиринро доред.")
+     :tr("Не удалось проверить обновления. Проверьте интернет.","Тафтиши навсозӣ ноком шуд. Интернетро санҷед.");
     new AlertDialog.Builder(this).setTitle(tr("Обновление","Навсозӣ"))
-     .setMessage(result?tr("Приложение обновлено. Перезапустите его.","Барнома навсозӣ шуд. Онро аз нав оғоз кунед."):tr("Обновлений не найдено или нет интернета.","Навсозӣ ёфт нашуд ё интернет нест."))
-     .setPositiveButton("OK",(d,w)->{if(result)finish();}).show();
+     .setMessage(msg)
+     .setPositiveButton("OK",(d,w)->{}).show();
    });
-  },"asset-update").start();
+  },"asset-update");assetUpdateWorker.start();
  }
 
 }

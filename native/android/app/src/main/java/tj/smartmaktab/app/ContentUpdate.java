@@ -4,7 +4,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import javax.net.ssl.HttpsURLConnection;
 
 /** Finds and downloads the newest signed .smupdate pack from GitHub Releases. Windows verifies it. */
@@ -13,8 +12,11 @@ final class ContentUpdate {
  final String name,url; final long size;
  private ContentUpdate(String name,String url,long size){this.name=name;this.url=url;this.size=size;}
  static ContentUpdate find(String repo) throws Exception {
+  return find(repo,null);
+ }
+ static ContentUpdate find(String repo,WindowsRelease.CancelHandle cancel) throws Exception {
   if(!WindowsRelease.REPOSITORY.matcher(repo).matches()||repo.endsWith("/.")||repo.endsWith("/.."))throw new IOException("repository");
-  String body=WindowsRelease.read("https://api.github.com/repos/"+repo+"/releases?per_page=100",true,4*1024*1024);
+  String body=WindowsRelease.read("https://api.github.com/repos/"+repo+"/releases?per_page=100",true,4*1024*1024,cancel);
   JSONArray releases=new JSONArray(body);
   ContentUpdate best=null;String bestUpdated="";
   for(int i=0;i<releases.length();i++){
@@ -33,11 +35,22 @@ final class ContentUpdate {
   return best;
  }
  void fetch(File destination) throws Exception {
-  HttpsURLConnection conn=WindowsRelease.open(url,false);
+  fetchWithProgress(destination,null,null);
+ }
+ void fetchWithProgress(File destination,WindowsRelease.ProgressCallback cb,WindowsRelease.CancelHandle cancel) throws Exception {
+  HttpsURLConnection conn=WindowsRelease.open(url,false,cancel);
+  long connLen=conn.getContentLengthLong();
+  long total=connLen>0?connLen:size;
+  if(cb!=null)cb.onProgress(0,total);
   try(InputStream in=conn.getInputStream();OutputStream out=new BufferedOutputStream(new FileOutputStream(destination))){
-   long count=0;byte[] buffer=new byte[65536];
-   for(int n;(n=in.read(buffer))!=-1;){count+=n;if(count>size)throw new IOException("download limit");out.write(buffer,0,n);}
+   long count=0;byte[] buffer=new byte[16384];
+   for(int n;(n=in.read(buffer))!=-1;){
+    if((cancel!=null&&cancel.isCancelled())||Thread.currentThread().isInterrupted())throw new InterruptedIOException();
+    count+=n;if(count>size)throw new IOException("download limit");
+    out.write(buffer,0,n);
+    if(cb!=null)cb.onProgress(count,total);
+   }
    if(count!=size)throw new IOException("download size");
-  }finally{conn.disconnect();}
+  }finally{if(cancel!=null)cancel.clear(conn);conn.disconnect();}
  }
 }

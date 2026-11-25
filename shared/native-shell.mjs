@@ -19,22 +19,43 @@ export async function nativeSave(blob,name){
  }catch(error){if(!pending)await send({action:'abort'}).catch(()=>{});throw error;}
  finally{saving=false;}
 }
+function attachDropdown(details,menu){
+ const position=()=>{
+  if(!details.open)return;
+  menu.style.transform='';
+  const rect=menu.getBoundingClientRect();
+  const pad=10,maxRight=document.documentElement.clientWidth-pad;
+  let dx=0;
+  if(rect.left<pad)dx=pad-rect.left;
+  else if(rect.right>maxRight)dx=maxRight-rect.right;
+  if(dx)menu.style.transform=`translateX(${Math.round(dx)}px)`;
+ };
+ details.addEventListener('toggle',()=>{
+  if(!details.open)return;
+  for(const other of document.querySelectorAll('details.sm-native-files[open]'))if(other!==details)other.open=false;
+  position();
+ });
+ window.addEventListener('resize',position);
+ document.addEventListener('click',event=>{if(details.open&&!details.contains(event.target))details.open=false;});
+}
 export function setupNativeFiles(anchor){
  if((!bridge&&!globalThis.SmartMaktabWindows)||!anchor)return;
  const details=document.createElement('details'),header=document.createElement('summary'),menu=document.createElement('div');details.className='sm-native-files';header.className='theme-toggle';details.append(header,menu);
  const open=document.createElement('button'),share=document.createElement('button');open.type=share.type='button';open.className=share.className='button alt';menu.append(open);if(bridge)menu.append(share);anchor.before(details);
+ attachDropdown(details,menu);
  function refresh(){const tg=document.documentElement.lang==='tg';header.textContent=tg?'Файлҳо':'Файлы';open.textContent=tg?'Кушодан дар барномаи дигар':'Открыть в другой программе';share.textContent=tg?'Мубодила':'Поделиться';}
  open.addEventListener('click',()=>{details.open=false;if(bridge)void send({action:'openFile'}).catch(()=>{});else void globalThis.SmartMaktabWindows.openFile().catch(()=>{});});
  share.addEventListener('click',()=>{details.open=false;void send({action:'shareFile'}).catch(()=>{});});refresh();document.addEventListener('cabinet:language',refresh);
 }
 
-if(bridge)globalThis.smartMaktabBack=()=>!document.dispatchEvent(new Event('sm:native-back',{cancelable:true}));
+if(bridge)globalThis.smartMaktabBack=()=>{const openMenu=document.querySelector('details.sm-native-files[open]');if(openMenu){openMenu.open=false;return true;}return !document.dispatchEvent(new Event('sm:native-back',{cancelable:true}));};
 
 export function setupNativePrograms(anchor){
  if(!bridge||!anchor)return;
  const details=document.createElement('details'),header=document.createElement('summary'),menu=document.createElement('div'),appUpdate=document.createElement('button'),update=document.createElement('button'),download=document.createElement('button');
  details.className='sm-native-files';header.className='theme-toggle';appUpdate.type='button';appUpdate.className='button alt';update.type='button';update.className='button alt';download.type='button';download.className='button alt';
  menu.append(appUpdate,update,download);details.append(header,menu);anchor.before(details);
+ attachDropdown(details,menu);
  const language=()=>document.documentElement.lang==='tg'?'tg':'ru';
  function refresh(){const tg=language()==='tg';header.textContent=tg?'Барномаҳо':'Программы';appUpdate.textContent=tg?'Навсозии барнома':'Обновление приложения';update.textContent=tg?'Навсозии мавод':'Обновление материалов';download.textContent=tg?'Боргирӣ барои Windows (.exe)':'Скачать для Windows (.exe)';}
  appUpdate.addEventListener('click',()=>{details.open=false;void send({action:'checkAssetUpdate',lang:language()}).catch(()=>{});});

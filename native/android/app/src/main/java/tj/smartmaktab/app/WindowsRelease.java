@@ -17,6 +17,20 @@ final class WindowsRelease {
  private static final Pattern TAG=Pattern.compile("windows-unsigned-v((0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8}))");
  private static final long MAX_SIZE=400L*1024*1024;
  final String version,name,exe,checksums; final long size;
+
+ static final class CancelHandle {
+  volatile boolean cancelled;
+  private volatile HttpsURLConnection activeConn;
+  void track(HttpsURLConnection conn){activeConn=conn;if(cancelled&&conn!=null)conn.disconnect();}
+  void clear(HttpsURLConnection conn){if(activeConn==conn)activeConn=null;}
+  boolean isCancelled(){return cancelled||Thread.currentThread().isInterrupted();}
+  void cancel(){
+   cancelled=true;
+   HttpsURLConnection conn=activeConn;
+   if(conn!=null)new Thread(()->{try{conn.disconnect();}catch(Exception ignored){}},"smartmaktab-cancel").start();
+  }
+ }
+
  private WindowsRelease(String repo,String tag,String version,String name,long size){
   this.version=version;this.name=name;this.size=size;
   String prefix="https://github.com/"+repo+"/releases/download/"+tag+"/";
@@ -54,30 +68,41 @@ final class WindowsRelease {
   return api?host.equals("api.github.com"):host.equals("github.com")||host.equals("release-assets.githubusercontent.com")||host.equals("objects.githubusercontent.com")||host.equals("github-releases.githubusercontent.com");
  }
  static HttpsURLConnection open(String address,boolean api) throws IOException {
+  return open(address,api,null);
+ }
+ static HttpsURLConnection open(String address,boolean api,CancelHandle cancel) throws IOException {
   URL url=new URL(address);
   for(int i=0;i<6;i++){
+   if((cancel!=null&&cancel.isCancelled())||Thread.currentThread().isInterrupted())throw new InterruptedIOException();
    if(!allowed(url,api))throw new IOException("download origin");
    HttpsURLConnection conn=(HttpsURLConnection)url.openConnection();conn.setInstanceFollowRedirects(false);
    conn.setConnectTimeout(15000);conn.setReadTimeout(25000);conn.setRequestProperty("User-Agent","SmartMaktab-Android");
    if(api){conn.setRequestProperty("Accept","application/vnd.github+json");conn.setRequestProperty("X-GitHub-Api-Version","2022-11-28");}
+   if(cancel!=null)cancel.track(conn);
    try{
     int code=conn.getResponseCode();if(code==200)return conn;
     String location=conn.getHeaderField("Location");
-    if((code==301||code==302||code==303||code==307||code==308)&&location!=null){url=new URL(url,location);conn.disconnect();continue;}
+    if((code==301||code==302||code==303||code==307||code==308)&&location!=null){url=new URL(url,location);if(cancel!=null)cancel.clear(conn);conn.disconnect();continue;}
     throw new IOException("HTTP "+code);
-   }catch(IOException error){conn.disconnect();throw error;}
+   }catch(IOException error){if(cancel!=null)cancel.clear(conn);conn.disconnect();throw error;}
   }
   throw new IOException("redirect limit");
  }
  static WindowsRelease find(String repo) throws Exception {
+  return find(repo,null);
+ }
+ static WindowsRelease find(String repo,CancelHandle cancel) throws Exception {
   if(!REPOSITORY.matcher(repo).matches()||repo.endsWith("/.")||repo.endsWith("/.."))throw new IOException("repository");
-  return select(repo,new JSONArray(read("https://api.github.com/repos/"+repo+"/releases?per_page=100",true,4*1024*1024)));
+  return select(repo,new JSONArray(read("https://api.github.com/repos/"+repo+"/releases?per_page=100",true,4*1024*1024,cancel)));
  }
  static String read(String url,boolean api,int max) throws IOException {
-  HttpsURLConnection conn=open(url,api);
+  return read(url,api,max,null);
+ }
+ static String read(String url,boolean api,int max,CancelHandle cancel) throws IOException {
+  HttpsURLConnection conn=open(url,api,cancel);
   try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
-   copy(in,out,max,null);return new String(out.toByteArray(),StandardCharsets.UTF_8);
-  }finally{conn.disconnect();}
+   copy(in,out,max,null,cancel);return new String(out.toByteArray(),StandardCharsets.UTF_8);
+  }finally{if(cancel!=null)cancel.clear(conn);conn.disconnect();}
  }
  static String expectedHash(String body,String name) throws IOException {
   for(String raw:body.split("\\r?\\n")){
@@ -88,41 +113,32 @@ final class WindowsRelease {
   throw new IOException("checksum format");
  }
  void fetch(File destination) throws Exception {
-  String hash=expectedHash(read(checksums,false,4096),name);
-  HttpsURLConnection conn=open(exe,false);
-  try(InputStream in=conn.getInputStream();OutputStream out=new BufferedOutputStream(new FileOutputStream(destination))){
-   MessageDigest digest=MessageDigest.getInstance("SHA-256");
-   long count=copy(in,out,size,digest);
-   String actual=String.format(Locale.ROOT,"%064x",new BigInteger(1,digest.digest()));
-   if(count!=size||!actual.equals(hash))throw new IOException("installer integrity");
-  }finally{conn.disconnect();}
- }
- private static long copy(InputStream in,OutputStream out,long max,MessageDigest digest) throws IOException {
-  long count=0,deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(8);
-  byte[] buffer=new byte[65536];
-  for(int n;(n=in.read(buffer))!=-1;){
-   if(Thread.currentThread().isInterrupted()||System.nanoTime()-deadline>=0)throw new InterruptedIOException();
-   count+=n;if(count>max)throw new IOException("download limit");
-   out.write(buffer,0,n);if(digest!=null)digest.update(buffer,0,n);
-  }
-  return count;
+  fetchWithProgress(destination,null,null);
  }
  void fetchWithProgress(File destination,ProgressCallback cb) throws Exception {
-  String hash=expectedHash(read(checksums,false,4096),name);
-  HttpsURLConnection conn=open(exe,false);
-  long total=conn.getContentLengthLong();
+  fetchWithProgress(destination,cb,null);
+ }
+ void fetchWithProgress(File destination,ProgressCallback cb,CancelHandle cancel) throws Exception {
+  String hash=expectedHash(read(checksums,false,4096,cancel),name);
+  HttpsURLConnection conn=open(exe,false,cancel);
+  long connLen=conn.getContentLengthLong();
+  long total=connLen>0?connLen:size;
+  if(cb!=null)cb.onProgress(0,total);
   try(InputStream in=conn.getInputStream();OutputStream out=new BufferedOutputStream(new FileOutputStream(destination))){
    MessageDigest digest=MessageDigest.getInstance("SHA-256");
-   long count=copyWithProgress(in,out,size,digest,total,cb);
+   long count=copyWithProgress(in,out,size,digest,total,cb,cancel);
    String actual=String.format(Locale.ROOT,"%064x",new BigInteger(1,digest.digest()));
    if(count!=size||!actual.equals(hash))throw new IOException("installer integrity");
-  }finally{conn.disconnect();}
+  }finally{if(cancel!=null)cancel.clear(conn);conn.disconnect();}
  }
- private static long copyWithProgress(InputStream in,OutputStream out,long max,MessageDigest digest,long total,ProgressCallback cb) throws IOException {
-  long count=0,deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(8);
+ private static long copy(InputStream in,OutputStream out,long max,MessageDigest digest,CancelHandle cancel) throws IOException {
+  return copyWithProgress(in,out,max,digest,max,null,cancel);
+ }
+ private static long copyWithProgress(InputStream in,OutputStream out,long max,MessageDigest digest,long total,ProgressCallback cb,CancelHandle cancel) throws IOException {
+  long count=0,deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MINUTES.toNanos(30);
   byte[] buffer=new byte[65536];
   for(int n;(n=in.read(buffer))!=-1;){
-   if(Thread.currentThread().isInterrupted()||System.nanoTime()-deadline>=0)throw new InterruptedIOException();
+   if((cancel!=null&&cancel.isCancelled())||Thread.currentThread().isInterrupted()||System.nanoTime()-deadline>=0)throw new InterruptedIOException();
    count+=n;if(count>max)throw new IOException("download limit");
    out.write(buffer,0,n);if(digest!=null)digest.update(buffer,0,n);
    if(cb!=null)cb.onProgress(count,total);
@@ -130,5 +146,4 @@ final class WindowsRelease {
   return count;
  }
  interface ProgressCallback{void onProgress(long bytes,long total);}
-
 }

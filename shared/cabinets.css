@@ -109,26 +109,30 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
 #cabinetRailNav a[hidden]{display:none!important}
 .aliya-phone-head{height:calc(58px + env(safe-area-inset-top,0px))}.aliya-book-context progress{appearance:none;-webkit-appearance:none;background:var(--reader-line);overflow:hidden}.aliya-book-context progress::-webkit-progress-bar{background:var(--reader-line);border-radius:4px}.aliya-book-context progress::-webkit-progress-value{background:var(--reader-gold);border-radius:4px}.aliya-book-context progress::-moz-progress-bar{background:var(--reader-gold)}.aliya-phone-inner .aliya-result{margin-inline:0}.aliya-empty .aliya-mark{width:17px;flex-basis:17px;height:17px}.aliya-empty .aliya-mark svg{width:15px;height:15px}
 
-/* Hide side menu on mobile */
-@media(max-width:768px){.sm-native-files{display:none!important}}
 /* Menu dropdown positioning */
 .sm-native-files{position:relative}
+.sm-native-files>summary{cursor:pointer;list-style:none}
+.sm-native-files>summary::-webkit-details-marker{display:none}
 .sm-native-files[open]>div{
   position:absolute;
-  right:0;
-  top:100%;
-  margin-top:4px;
+  inset-inline-end:0;
+  inset-block-start:calc(100% + 5px);
   background:var(--paper,#fff);
   border:1px solid var(--line,#c9ded1);
   border-radius:12px;
   padding:8px;
   min-width:220px;
-  max-width:90vw;
-  box-shadow:0 4px 12px rgba(0,0,0,.15);
+  width:max-content;
+  max-width:calc(100vw - 20px);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
   z-index:1000;
   display:flex;
   flex-direction:column;
   gap:6px;
+}
+[data-theme="dark"] .sm-native-files[open]>div{
+  background:#1b2a24;
+  border-color:var(--line,#425e51);
 }
 .sm-native-files[open]>div button{
   width:100%;
