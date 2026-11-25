@@ -31,7 +31,7 @@ const copy = {
   ocrText: ['Матни чек (OCR / дастӣ)', 'Текст чека (OCR / вручную)'],
   sendReceipt: ['Ирсоли чек барои тафтиш', 'Отправить чек на проверку'],
   receiptSent: ['Чек барои тасдиқ бо муваффақият ирсол шуд.', 'Чек успешно отправлен на проверку.'],
-  receiptDup: ['Ин чек аллакай қаблан ирсол шудааст.', 'Этот чек уже был отправлен ранее.'],
+  receiptDup: ['Ин чек ё рақами амалиёт аллакай қаблан ирсол шудааст.', 'Этот чек или номер операции уже был отправлен ранее.'],
   savedCloud: ['Сабт ба абр ирсол шуд.', 'Запись сохранена в облако.'],
   recordsEmpty: ['Сабтҳои абрӣ ёфт нашуданд.', 'Облачные записи не найдены.'],
   authError: ['Хатои воридшавӣ ё шабака.', 'Ошибка входа или сети.'],
@@ -115,6 +115,13 @@ export function setupCloudWorkspace(article, group, school) {
 
   const receiptForm = make('form', 'school-fields');
   const recTitle = make('h3');
+  const reqBox = make('div', 'notice school-field-wide');
+  const reqTitle = make('strong');
+  const reqDetail = make('p', 'small');
+  const copyPhoneBtn = make('button', 'button alt');
+  copyPhoneBtn.type = 'button';
+  reqBox.append(reqTitle, reqDetail, copyPhoneBtn);
+
   const fileWrap = make('label', 'field');
   const fileLbl = make('span');
   const fileInput = make('input');
@@ -125,7 +132,7 @@ export function setupCloudWorkspace(article, group, school) {
   const provWrap = make('label', 'field');
   const provLbl = make('span');
   const provSelect = make('select');
-  for (const code of ['manual', 'alif', 'dcity', 'eskhata', 'spitamen', 'amonat']) {
+  for (const code of ['amonat', 'dcity', 'alif', 'eskhata', 'spitamen', 'manual']) {
     provSelect.append(new Option(code, code));
   }
   provWrap.append(provLbl, provSelect);
@@ -136,9 +143,10 @@ export function setupCloudWorkspace(article, group, school) {
   amtInput.type = 'number';
   amtInput.step = '0.01';
   amtInput.min = '0';
+  amtInput.value = String(DEFAULT_PAYMENT_TARIFF.priceTjs);
   amtWrap.append(amtLbl, amtInput);
 
-  const ocrWrap = make('label', 'field');
+  const ocrWrap = make('label', 'field school-field-wide');
   const ocrLbl = make('span');
   const ocrInput = make('textarea');
   ocrInput.rows = 3;
@@ -146,7 +154,7 @@ export function setupCloudWorkspace(article, group, school) {
 
   const sendReceiptBtn = make('button', 'button');
   sendReceiptBtn.type = 'submit';
-  receiptForm.append(recTitle, fileWrap, provWrap, amtWrap, ocrWrap, sendReceiptBtn);
+  receiptForm.append(recTitle, reqBox, fileWrap, provWrap, amtWrap, ocrWrap, sendReceiptBtn);
 
   sessionBox.append(orgWrap, licLine, actionRow, cloudList, receiptForm);
   panel.append(head, note, status, loginForm, sessionBox);
@@ -155,6 +163,13 @@ export function setupCloudWorkspace(article, group, school) {
   let ctx = null;
   let selectedOrgId = '';
   let statusMessage = t('signedOut');
+  let activePlan = {
+    code: DEFAULT_PAYMENT_TARIFF.code,
+    price_tjs: DEFAULT_PAYMENT_TARIFF.priceTjs,
+    duration_days: DEFAULT_PAYMENT_TARIFF.durationDays,
+    recipient_phone: DEFAULT_PAYMENT_TARIFF.recipientPhone,
+    recipient_account: DEFAULT_PAYMENT_TARIFF.recipientAccount,
+  };
   let receiptBytes = null;
   let receiptBase64 = '';
   let receiptConfidence = null;
@@ -217,6 +232,15 @@ export function setupCloudWorkspace(article, group, school) {
     syncUpBtn.textContent = t('syncUp');
     syncDownBtn.textContent = t('syncDown');
     recTitle.textContent = t('receiptHeading');
+    reqTitle.textContent = t('payRequisites');
+    reqDetail.textContent = tg()
+      ? `Рақам / Ҳамён: ${activePlan.recipient_phone} · Маблағ: ${activePlan.price_tjs} TJS (${activePlan.duration_days} рӯз)`
+      : `Номер / Кошелёк: ${activePlan.recipient_phone} · Тариф: ${activePlan.price_tjs} TJS (${activePlan.duration_days} дн.)`;
+    copyPhoneBtn.textContent = t('copyPhone');
+    for (const opt of provSelect.options) {
+      const pair = providerLabels[opt.value];
+      if (pair) opt.textContent = pair[tg() ? 0 : 1];
+    }
     fileLbl.textContent = t('receiptFile');
     provLbl.textContent = t('provider');
     amtLbl.textContent = t('amount');
@@ -225,6 +249,12 @@ export function setupCloudWorkspace(article, group, school) {
     status.textContent = statusMessage;
     refreshGate();
   }
+
+  copyPhoneBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard?.writeText(activePlan.recipient_phone); } catch {}
+    statusMessage = `${t('copiedPhone')} ${activePlan.recipient_phone}`;
+    renderLabels();
+  });
 
   trigger.addEventListener('click', () => {
     panel.hidden = false;
@@ -252,6 +282,15 @@ export function setupCloudWorkspace(article, group, school) {
       loginForm.hidden = true;
       sessionBox.hidden = false;
       statusMessage = memberships.length ? `${t('signedIn')} (${ctx.user_id})` : t('noOrg');
+      try {
+        const plans = await client.getPaymentPlans();
+        if (plans?.length) {
+          activePlan = plans[0];
+          if (!amtInput.value || amtInput.value === String(DEFAULT_PAYMENT_TARIFF.priceTjs)) {
+            amtInput.value = String(activePlan.price_tjs);
+          }
+        }
+      } catch {}
       renderLabels();
       if (selectedOrgId) {
         await checkLicenseOnline();
@@ -311,7 +350,8 @@ export function setupCloudWorkspace(article, group, school) {
         ocrInput.value = ocr.text;
         receiptConfidence = ocr.confidence;
         const parsed = parseReceiptText(ocr.text);
-        if (parsed.detectedAmount !== null && !amtInput.value) amtInput.value = String(parsed.detectedAmount);
+        if (parsed.detectedProvider) provSelect.value = parsed.detectedProvider;
+        if (parsed.detectedAmount !== null) amtInput.value = String(parsed.detectedAmount);
       }
     }
   });
@@ -332,11 +372,14 @@ export function setupCloudWorkspace(article, group, school) {
         amountDeclared: amtInput.value ? Number(amtInput.value) : null,
         ocrText: ocrInput.value,
         ocrConfidence: receiptConfidence,
+        planCode: activePlan.code,
       });
       statusMessage = t('receiptSent');
       receiptForm.reset();
+      amtInput.value = String(activePlan.price_tjs);
       receiptBytes = null;
       receiptBase64 = '';
+      await checkLicenseOnline();
       renderLabels();
     } catch (err) {
       statusMessage = err?.code === 'duplicate_receipt' ? t('receiptDup') : err.message;

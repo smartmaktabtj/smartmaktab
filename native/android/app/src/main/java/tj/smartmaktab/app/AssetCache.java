@@ -130,7 +130,24 @@ final class AssetCache {
 
    if ((cancel != null && cancel.isCancelled()) || Thread.currentThread().isInterrupted()) return UpdateStatus.CANCELLED;
    if (listener != null) listener.onProgress(downloaded, total, 95, "unpacking");
-   unzip(tempFile, cacheRoot, cancel);
+   File stageDir = new File(cacheRoot.getParentFile(), CACHE_DIR + "_stage");
+   deleteTree(stageDir);
+   stageDir.mkdirs();
+   try {
+    unzip(tempFile, stageDir, cancel);
+    if (!new File(stageDir, "index.html").isFile()) throw new IOException("missing index.html");
+    File backupDir = new File(cacheRoot.getParentFile(), CACHE_DIR + "_old");
+    deleteTree(backupDir);
+    if (cacheRoot.exists() && !cacheRoot.renameTo(backupDir)) {
+     unzip(tempFile, cacheRoot, cancel);
+    } else if (!stageDir.renameTo(cacheRoot)) {
+     if (backupDir.exists()) backupDir.renameTo(cacheRoot);
+     throw new IOException("swap_failed");
+    }
+    deleteTree(backupDir);
+   } finally {
+    deleteTree(stageDir);
+   }
    tempFile.delete();
    tempFile = null;
    saveVersion(bestVer);
@@ -144,6 +161,15 @@ final class AssetCache {
   } finally {
    if (tempFile != null && tempFile.exists()) tempFile.delete();
   }
+ }
+
+ private static void deleteTree(File target) {
+  if (target == null || !target.exists()) return;
+  if (target.isDirectory()) {
+   File[] children = target.listFiles();
+   if (children != null) for (File child : children) deleteTree(child);
+  }
+  target.delete();
  }
 
  private void unzip(File zip, File destDir, WindowsRelease.CancelHandle cancel) throws IOException {

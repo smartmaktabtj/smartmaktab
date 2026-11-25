@@ -4,7 +4,7 @@ import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
 import {setupDocxTemplates} from './docx-templates-ui.mjs';
 import {setupCloudWorkspace} from './cloud-workspace-ui.mjs';
-import {cabinetFormAction,printCabinetSheet} from './cabinet-runtime.mjs';
+import {cabinetFormAction,printCabinetSheet,clearActiveResume,appRoot,openCabinetView} from './cabinet-runtime.mjs';
 const $=id=>document.getElementById(id);
 export function setupWorkspace({configured,school}){
  const overview=$('workspaceOverview');if(!overview)return;
@@ -15,7 +15,8 @@ export function setupWorkspace({configured,school}){
  const drawer=document.createElement('section');drawer.className='section no-print workspace-settings';drawer.id='workspaceSettings';
  const heading=document.createElement('h2');heading.id='workspaceSettingsTitle';heading.tabIndex=-1;drawer.setAttribute('aria-labelledby',heading.id);
  const settingsHeader=document.createElement('div');settingsHeader.className='pill-row';
- const close=document.createElement('button');close.type='button';close.className='button alt';close.id='closeWorkspaceSettings';settingsHeader.append(heading,close);drawer.append(settingsHeader);
+ const switchRole=document.createElement('button');switchRole.type='button';switchRole.className='button alt';switchRole.id='switchWorkspaceRole';
+ const close=document.createElement('button');close.type='button';close.className='button alt';close.id='closeWorkspaceSettings';settingsHeader.append(heading,switchRole,close);drawer.append(settingsHeader);
  const ids=['roleIntake','directorPersonnel','institutionPicker','directorInstitution','directorCourses','directorProfilePanel','teacherWorkplaceScope','teacherWorkplaces','teacherProfilePanel','libraryWorkplaceScope','libraryProfilePanel'];
  for(const id of ids){const element=$(id);if(element)drawer.append(element);}
  const hero=article.querySelector('.hero');hero.after(overview,drawer,docs,editor);
@@ -38,7 +39,7 @@ export function setupWorkspace({configured,school}){
  function sync(){
   const templateTitle=docs.querySelector('[data-template-heading]');if(templateTitle)templateTitle.textContent=label('Образцы · не утверждены','Намунаҳо · тасдиқ нашудаанд');
   const title=label('Настройки','Танзимот');toggle.textContent=`⚙ ${title}`;toggle.setAttribute('aria-label',title);
-  toggle.setAttribute('aria-expanded',String(views.current()==='workspaceSettings'));heading.textContent=title;close.textContent=label('Закрыть','Пӯшидан');
+  toggle.setAttribute('aria-expanded',String(views.current()==='workspaceSettings'));heading.textContent=title;switchRole.textContent=label('Сменить должность','Иваз кардани вазифа');close.textContent=label('Закрыть','Пӯшидан');
   $('workspaceSchool').textContent=school()?.name??label('Не выбрано','Интихоб нашудааст');
   if(chosen)$('workspaceDraftTitle').textContent=chosen.querySelector('strong').textContent;
   if(snapshot){$('workspaceSheetTitle').textContent=chosen.querySelector('strong').textContent;$('workspaceSheetSchool').textContent=snapshot.school;}
@@ -46,6 +47,13 @@ export function setupWorkspace({configured,school}){
  }
  function setSettings(open){if(open)views.open('workspaceSettings',toggle);else views.close('workspaceSettings');sync();}
  toggle.addEventListener('click',()=>setSettings(views.current()!=='workspaceSettings'));close.addEventListener('click',()=>setSettings(false));
+ switchRole.addEventListener('click',()=>{
+  clearActiveResume();
+  const dest=new URL('index.html',appRoot);
+  dest.searchParams.set('setup','1');
+  dest.searchParams.set('lang',tg()?'tg':'ru');
+  openCabinetView(dest);
+ });
  const navState=new MutationObserver(sync);navState.observe(article,{attributes:true,attributeFilter:['data-sm-screen']});
  const form=$('workspaceDraftForm');form.inert=false;
  const cards=[...docs.querySelectorAll('[data-doc-template]')];

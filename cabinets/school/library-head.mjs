@@ -1,6 +1,6 @@
 import {openWorkspaceView} from '../../shared/workspace-view.mjs';
 import {setupLibraryLoans} from './library-loans.mjs';
-import {tabStorage,cabinetFormAction,printCabinetSheet} from '../../shared/cabinet-runtime.mjs';
+import {tabStorage,persistentStore,cabinetFormAction,printCabinetSheet} from '../../shared/cabinet-runtime.mjs';
 import {selectedDemoSchool as school} from '../../shared/cabinets.mjs';
 import {maxLibraryActivities,validateLibraryProfile,validateLibraryActivity,makeLibrarySnapshot} from './library-data.mjs';
 const $=id=>document.getElementById(id);
@@ -21,7 +21,21 @@ $('libraryProfile').inert=false;
 const checks=[...$('libraryProfile').querySelectorAll('input[type=checkbox]')];
 let profile=null;
 if(storageKey)try{profile=validateLibraryProfile(JSON.parse(tabStorage.getItem(storageKey)));}catch{}
-let editing=!profile,profileNote='',planNote='',items=[],snapshot=null;
+const planDraftKey=()=>school?`smartmaktab.demo.library-plan.v1.${school.id}`:null;
+function loadPlanDraft(){
+  const dk=planDraftKey();if(!dk)return [];
+  try{
+    const saved=JSON.parse(persistentStore.getItem(dk));
+    if(!saved||typeof saved!=='object')return [];
+    if(typeof saved.month==='string')$('libraryMonth').value=saved.month;
+    return Array.isArray(saved.items)?saved.items.slice(0,maxLibraryActivities).filter(Boolean):[];
+  }catch{return [];}
+}
+function savePlanDraft(){
+  const dk=planDraftKey();if(!dk)return;
+  try{persistentStore.setItem(dk,JSON.stringify({month:$('libraryMonth').value,items}));}catch{}
+}
+let editing=!profile,profileNote='',planNote='',items=loadPlanDraft(),snapshot=null;
 function loadForm(){
   $('libraryZone').value=profile?.zone??'';
   checks.forEach(check=>{check.checked=profile?.funds.includes(check.value)??false;});
@@ -33,7 +47,7 @@ function rows(data,interactive){return data.map((item,index)=>{
   row.append(cell(item.name),cell(t(item.fund)+(interactive&&!profile?.funds.includes(item.fund)?` — ${t('unavailable')}`:'')),cell(t(item.audience)));
   if(interactive){
     const td=cell('');const button=document.createElement('button');button.type='button';button.className='button alt';button.textContent=t('remove');
-    button.disabled=editing;button.addEventListener('click',()=>{items=items.filter((_,i)=>i!==index);changed('removed');render();});td.append(button);row.append(td);
+    button.disabled=editing;button.addEventListener('click',()=>{items=items.filter((_,i)=>i!==index);savePlanDraft();changed('removed');render();});td.append(button);row.append(td);
   }
   return row;
 });}
@@ -76,13 +90,13 @@ cabinetFormAction($('libraryProfile'),$('libraryProfile').querySelector('button[
 });
 $('libraryEdit').addEventListener('click',()=>{editing=true;profileNote='';loadForm();render();$('libraryZone').focus();});
 $('libraryCancel').addEventListener('click',()=>{editing=false;loadForm();render();$('libraryEdit').focus();});
-$('libraryMonth').addEventListener('input',()=>{if(snapshot){changed('');$('libraryPlanStatus').textContent=t(planNote);}});
+$('libraryMonth').addEventListener('input',()=>{savePlanDraft();if(snapshot){changed('');$('libraryPlanStatus').textContent=t(planNote);}});
 cabinetFormAction($('libraryActivity'),$('libraryActivity').querySelector('button[type=submit]'),()=>{
   if(!profile||editing)return;
   if(items.length>=maxLibraryActivities){planNote='limit';render();return;}
   const item=validateLibraryActivity({name:$('libraryAction').value,fund:$('libraryFund').value,audience:$('libraryAudience').value},profile);
   if(!item){planNote='itemInvalid';render();return;}
-  items.push(item); $('libraryAction').value='';changed('added');render();
+  items.push(item);savePlanDraft(); $('libraryAction').value='';changed('added');render();
   if (items.length >= maxLibraryActivities) $('libraryGenerate').focus(); else $('libraryAction').focus();
 });
 $('libraryGenerate').addEventListener('click',()=>{
@@ -98,7 +112,8 @@ loadForm();render();
 document.addEventListener('cabinet:school',()=>{
  storageKey=`smartmaktab.demo.library.v1.${school.id}`;profile=null;
  try{profile=validateLibraryProfile(JSON.parse(tabStorage.getItem(storageKey)));}catch{}
- editing=!profile;items=[];snapshot=null;profileNote='';planNote='';$('libraryMonth').value='';$('libraryActivity').reset();$('librarySheet').hidden=true;
+ editing=!profile;snapshot=null;profileNote='';planNote='';$('libraryMonth').value='';$('libraryActivity').reset();$('librarySheet').hidden=true;
+ items=loadPlanDraft();
  loadForm();render();
 });
 

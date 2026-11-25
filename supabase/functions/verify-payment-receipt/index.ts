@@ -6,17 +6,53 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+function normalizeRecipient(raw: string): string | null {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.length === 9) return `992${digits}`;
+  if (digits.length >= 10 && digits.length <= 15) return digits;
+  return null;
+}
+
 function parseReceiptText(text: string) {
   const normalized = (text || '').replace(/\s+/g, ' ').trim();
-  const amountMatches = [...normalized.matchAll(/(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:сомон[иӣ]?|tjs|смн|с\.|руб|usd)/gi)];
-  const amounts = amountMatches.map(m => Number(m[1].replace(',', '.'))).filter(n => Number.isFinite(n) && n > 0);
+
+  let detected_provider: string | null = null;
+  if (/амонатбонк|амонат/i.test(normalized)) detected_provider = 'amonat';
+  else if (/душанбе\s+сити|dushanbe\s+city|510022404|dc\s*\(по\s+номеру/i.test(normalized)) detected_provider = 'dcity';
+  else if (/алиф|alif/i.test(normalized)) detected_provider = 'alif';
+  else if (/эсхата|eskhata/i.test(normalized)) detected_provider = 'eskhata';
+  else if (/спитамен|spitamen/i.test(normalized)) detected_provider = 'spitamen';
+
+  const labeledAmount = normalized.match(
+    /(?:сумма\s+операции|сумма\s+списания|сумма\s+перевода|сумма\s+оплаты|сумма|маблағ\w*)\s*:+\s*(\d{1,6}(?:[.,]\d{1,2})?)/i,
+  );
+  const currencyMatches = [...normalized.matchAll(/(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:сомон[иӣ]?|tjs|смн|с\.|руб|usd)/gi)];
+  const amounts = currencyMatches.map(m => Number(m[1].replace(',', '.'))).filter(n => Number.isFinite(n) && n > 0);
+  const labeledVal = labeledAmount ? Number(labeledAmount[1].replace(',', '.')) : null;
+  const detected_amount = (labeledVal !== null && Number.isFinite(labeledVal) && labeledVal > 0)
+    ? labeledVal
+    : (amounts.length ? Math.max(...amounts) : null);
+
   const dateMatch = normalized.match(/\b(\d{2}[./-]\d{2}[./-]20\d{2})\b/);
-  const txMatch = normalized.match(/(?:trx|tx|id|чек|квитанц\w*|рақам\w*|операц\w*)[\s:#№-]*([a-z0-9-]{5,32})/i);
+  const timeMatch = normalized.match(/\b([012]?\d:[0-5]\d(?::[0-5]\d)?)\b/);
+  const txMatch = normalized.match(
+    /(?:номер\s+операции|номер\s+транзакции|чек\s*№?|trx|tx|id|квитанц\w*|рақам\w*|операц\w*)[\s:#№-]*([a-z0-9-]{5,32})/i,
+  );
+  const recipientMatch = normalized.match(
+    /(?:счет\s+получателя|счет\s+зачисления|получатель|қабулкунанда|гиранда)\s*:+\s*(\+?[\d\s()-]{9,18})/i,
+  );
+  const detected_recipient = normalizeRecipient(recipientMatch?.[1] || '');
+  const status_confirmed = /успешн\w*|операция\s+выполнена|исполнен\w*|муваффақ\w*|иҷро\s+шуд|бомуваффақият/i.test(normalized);
+
   return {
     amounts,
-    detected_amount: amounts.length ? Math.max(...amounts) : null,
+    detected_provider,
+    detected_amount,
     detected_date: dateMatch ? dateMatch[1] : null,
+    detected_time: timeMatch ? timeMatch[1] : null,
     detected_reference: txMatch ? txMatch[1] : null,
+    detected_recipient,
+    status_confirmed,
   };
 }
 
@@ -41,7 +77,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const orgId = typeof body?.organization_id === 'string' ? body.organization_id : '';
     const receiptHash = typeof body?.receipt_hash === 'string' ? body.receipt_hash.trim().toLowerCase() : '';
-    const providerCode = typeof body?.provider_code === 'string' ? body.provider_code.trim() : 'manual';
+    const requestedProvider = typeof body?.provider_code === 'string' ? body.provider_code.trim().toLowerCase() : 'manual';
+    const planCode = typeof body?.plan_code === 'string' && body.plan_code.trim() ? body.plan_code.trim().toLowerCase() : 'trial_10';
     const currency = typeof body?.currency === 'string' ? body.currency.trim() : 'TJS';
     let ocrText = typeof body?.ocr_text === 'string' ? body.ocr_text : '';
     let ocrSource = ocrText ? 'client_tesseract' : 'none';
@@ -54,9 +91,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Optional OCR.space fallback when OCR_SPACE_API_KEY is configured and client text is empty/short.
+    // Optional server-side OCR.space extraction when OCR_SPACE_API_KEY secret is present.
     const ocrKey = Deno.env.get('OCR_SPACE_API_KEY');
-    if (ocrKey && typeof body?.image_base64 === 'string' && body.image_base64.length > 32 && ocrText.trim().length < 20) {
+    if (ocrKey && typeof body?.image_base64 === 'string' && body.image_base64.length > 32) {
       try {
         const form = new FormData();
         form.append('base64Image', body.image_base64);
@@ -74,18 +111,22 @@ Deno.serve(async (req: Request) => {
           if (parsedText) {
             ocrText = parsedText;
             ocrSource = 'ocr_space';
-            if (ocrConfidence === null) ocrConfidence = 0.8;
+            if (ocrConfidence === null) ocrConfidence = 0.85;
           }
         }
       } catch {
-        // Fallback silently; manual admin review remains available
+        // Fallback gracefully to client text + manual super_admin review
       }
     }
 
     const parsed = parseReceiptText(ocrText);
-    const amountDeclared = typeof body?.amount_declared === 'number' && body.amount_declared >= 0
-      ? body.amount_declared
-      : parsed.detected_amount;
+    const providerCode = parsed.detected_provider || requestedProvider || 'manual';
+    const amountDeclared = parsed.detected_amount ?? (
+      typeof body?.amount_declared === 'number' && body.amount_declared >= 0 ? body.amount_declared : null
+    );
+    const txId = parsed.detected_reference || (typeof body?.transaction_id === 'string' ? body.transaction_id : null);
+    const recipient = parsed.detected_recipient || normalizeRecipient(typeof body?.recipient_account === 'string' ? body.recipient_account : '');
+    const statusConfirmed = parsed.status_confirmed || body?.status_confirmed === true;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -103,6 +144,10 @@ Deno.serve(async (req: Request) => {
       p_ocr_text: ocrText.slice(0, 8000),
       p_ocr_confidence: ocrConfidence,
       p_ocr_payload: { source: ocrSource, ...parsed },
+      p_transaction_id: txId,
+      p_recipient_account: recipient,
+      p_status_confirmed: statusConfirmed,
+      p_plan_code: planCode,
     });
 
     if (error) {

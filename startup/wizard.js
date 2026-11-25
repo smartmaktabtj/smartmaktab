@@ -1,4 +1,38 @@
 'use strict';
+const params=new URLSearchParams(location.search);
+const wantsSetup=params.get('setup')==='1'||params.get('changeRole')==='1';
+const activeCabinetKey='smartmaktab.active-cabinet.v1';
+const validResumeRoute=/^cabinets\/(?:[a-z-]+\/)*[a-z-]+\.html\?(?:school=demo-[a-z0-9]+&)?lang=(?:tg|ru)$/;
+function hydrateFromSqlite(){
+ if(!globalThis.SmartMaktabSqlite?.getAllJson)return;
+ try{
+  const raw=globalThis.SmartMaktabSqlite.getAllJson();
+  if(!raw)return;
+  const parsed=JSON.parse(raw);
+  if(!parsed||typeof parsed!=='object')return;
+  for(const [k,v] of Object.entries(parsed)){
+   if(typeof v==='string'&&localStorage.getItem(k)===null)localStorage.setItem(k,v);
+  }
+ }catch{}
+}
+function checkResumeRoute(){
+ if(useFileViewer||openOfflineRoute||wantsSetup)return '';
+ hydrateFromSqlite();
+ try{
+  const rawActive=localStorage.getItem(activeCabinetKey)||globalThis.SmartMaktabSqlite?.getItem?.(activeCabinetKey)||'';
+  const rawWorkspace=localStorage.getItem('smartmaktab.demo.workspace.v1')||globalThis.SmartMaktabSqlite?.getItem?.('smartmaktab.demo.workspace.v1')||'';
+  if(!rawActive||!rawWorkspace)return '';
+  const active=JSON.parse(rawActive);
+  const workspace=JSON.parse(rawWorkspace);
+  if(!active||!workspace?.primary||!Array.isArray(workspace.roles))return '';
+  if(typeof active.route==='string'&&validResumeRoute.test(active.route))return active.route;
+ }catch{}
+ return '';
+}
+const resumeTarget=checkResumeRoute();
+if(resumeTarget){
+ location.replace('./'+resumeTarget);
+}
 const $=id=>document.getElementById(id);
 const rows=JSON.parse(decode($('roleData').dataset.roles));
 const roster=new Map(rows.map(row=>[row.id,row]));
@@ -211,11 +245,22 @@ $('begin').addEventListener('click',async()=>{
   const intro=brandSplash.play('school',{school:schoolNames[schools[row.id]],role:row.title,lang});
   if(embeddedOnly)void getPack().catch(()=>{});
   await intro;
-  const isHandoff=key=>key.startsWith('smartmaktab.demo.role-name.v2.')||key.startsWith('smartmaktab.demo.role-setup.v3.')||key==='smartmaktab.demo.director-handoff.v1';
+  const isHandoff=key=>key.startsWith('smartmaktab.demo.role-name.v2.')||key.startsWith('smartmaktab.demo.role-setup.v3.')||key.startsWith('smartmaktab.demo.saved-setup.v3.')||key.startsWith('smartmaktab.demo.saved-name.v2.')||key==='smartmaktab.demo.director-handoff.v1';
+  const activeSchool=schools[row.id]||state.school;
+  const activeRoute=`${row.path}?school=${activeSchool}&lang=${lang}`;
+  const activePayload={role:state.primary,school:activeSchool,lang,route:activeRoute,savedAt:Date.now()};
   if(!embeddedOnly)try{
-   for(const key of Object.keys(localStorage))if(isHandoff(key))localStorage.removeItem(key);
+   for(const key of Object.keys(localStorage))if(isHandoff(key)){localStorage.removeItem(key);try{globalThis.SmartMaktabSqlite?.removeItem?.(key);}catch{}}
    localStorage.removeItem('smartmaktab.wizard.state');
-   for(const [key,value] of Object.entries(payload))localStorage.setItem(key,value);
+   for(const [key,value] of Object.entries(payload)){
+    localStorage.setItem(key,value);
+    try{globalThis.SmartMaktabSqlite?.setItem?.(key,value);}catch{}
+   }
+   localStorage.setItem(activeCabinetKey,JSON.stringify(activePayload));
+   try{
+    globalThis.SmartMaktabSqlite?.setItem?.(activeCabinetKey,JSON.stringify(activePayload));
+    globalThis.SmartMaktabSqlite?.saveResumeSession?.(state.primary,activeSchool,lang,activeRoute);
+   }catch{}
    location.assign(route);$('beginError').textContent='';return;
   }catch{/* Browser storage can be disabled; use the self-contained cabinet instead. */}
   for(const key of Object.keys(embeddedStore))if(isHandoff(key))delete embeddedStore[key];
@@ -228,7 +273,9 @@ render();
 $('wizard').inert=false;
 $('viewerNotReady').hidden=true;
 
-if(!useFileViewer&&openOfflineRoute&&rows.some(row=>row.path===openOfflineRoute)){
+if(resumeTarget){
+ // Navigating directly to the saved cabinet; skip launch splash.
+}else if(!useFileViewer&&openOfflineRoute&&rows.some(row=>row.path===openOfflineRoute)){
  const params=new URLSearchParams(location.search);const row=rows.find(row=>row.path===openOfflineRoute);
  try{for(const key of Object.keys(localStorage))if(key.startsWith('smartmaktab.demo.'))embeddedStore[key]=localStorage.getItem(key);}catch{}
  openEmbedded(row.path,{school:params.get('school'),lang,title:row.title});

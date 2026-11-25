@@ -3,7 +3,7 @@ import {setupWorkspace} from './workspace-page.mjs';
 import {mountClassPicker} from './class-picker.mjs';
 import {validSchools,schoolNames,findDemoSchools} from './schools.mjs';
 import {installTheme} from './theme.mjs';
-import {viewerContext,offlineViewer,tabStorage,cabinetPageURL,appRoot as root,openCabinetView,cabinetFormAction,publishTheme,publishLanguage} from './cabinet-runtime.mjs';
+import {viewerContext,offlineViewer,tabStorage,persistentStore,saveActiveResume,cabinetPageURL,appRoot as root,openCabinetView,cabinetFormAction,publishTheme,publishLanguage} from './cabinet-runtime.mjs';
 const $ = id => document.getElementById(id);
 export {schoolNames as demoSchoolNames,findDemoSchools} from './schools.mjs';
 export const teacherWorkplacesKey='smartmaktab.demo.teacher-workplaces.v1';
@@ -49,6 +49,15 @@ function getWorkspace(){
   }catch{return null;}
 }
 const workspace=getWorkspace();
+function currentResumeRoute(){
+  if(!cabinet)return '';
+  const rel=(cabinetPageURL.pathname.startsWith(root.pathname)?cabinetPageURL.pathname.slice(root.pathname.length):cabinetPageURL.pathname).replace(/^\//,'');
+  const params=new URLSearchParams();
+  if(fromURL)params.set('school',fromURL);
+  params.set('lang',lang);
+  return `${rel}?${params.toString()}`;
+}
+if(workspace&&cabinet){saveActiveResume({role:cabinet.dataset.cabinetId,school:fromURL,lang,route:currentResumeRoute()});}
 const switcher=workspace&&workspace.roles.length>1?document.createElement('select'):null;
 const switchLabel=switcher?document.createElement('label'):null;
 const switchCaption=switcher?document.createElement('span'):null;
@@ -79,6 +88,13 @@ function refreshLinks(){
     dest.searchParams.set('lang',lang);
     if(chosen && (!link.dataset.group || link.dataset.group==='school')) dest.searchParams.set('school',chosen);
     link.href=dest;
+  }
+  const brand=document.querySelector('.brand');
+  if(cabinet&&brand){
+    const setupDest=new URL('index.html',root);
+    setupDest.searchParams.set('setup','1');
+    setupDest.searchParams.set('lang',lang);
+    brand.href=setupDest;
   }
 }
 function refreshDirectory(){
@@ -112,7 +128,7 @@ function readHash(){
 }
 section?.addEventListener('change',()=>{ try { history.replaceState(null,'', section.value==='all'?'#all':`#${section.value}`); } catch {} refreshDirectory(); });
 query?.addEventListener('input',refreshDirectory);
-$('cabinetLang')?.addEventListener('change',event=>{lang=event.target.value==='ru'?'ru':'tg';saveLanguage(lang);publishLanguage(lang);cabinetPageURL.searchParams.set('lang',lang);if(!offlineViewer)try{history.replaceState(null,'',cabinetPageURL);}catch{}applyLanguage();});
+$('cabinetLang')?.addEventListener('change',event=>{lang=event.target.value==='ru'?'ru':'tg';saveLanguage(lang);publishLanguage(lang);cabinetPageURL.searchParams.set('lang',lang);if(!offlineViewer)try{history.replaceState(null,'',cabinetPageURL);}catch{}if(workspace&&cabinet)saveActiveResume({role:cabinet.dataset.cabinetId,school:fromURL,lang,route:currentResumeRoute()});applyLanguage();});
 window.addEventListener('hashchange',readHash);
 
 const roleCopy={saved:['Анкета заполнена. Теперь выберите школу.','Варақа пур шуд. Акнун мактабро интихоб кунед.'],invalid:['Заполните обязательные поля.','Майдонҳои ҳатмиро пур кунед.'],choose:['Выберите из списка','Аз рӯйхат интихоб кунед'],nothing:['Школы не найдены.','Мактаб ёфт нашуд.'],selected:['Выбрано: ','Интихоб шуд: '],expand:['Развернуть меню','Кушодани меню'],collapse:['Свернуть меню','Пӯшидани меню']};
@@ -120,11 +136,20 @@ const rt=key=>roleCopy[key][lang==='tg'?1:0];
 const roleForm=$('roleIntakeForm'),picker=$('institutionPicker'),toggle=$('cabinetRailToggle');
 let intakeReady=!!fromURL,intakeNote='',collapsed=false;
 function takeSetup(){
- const id=cabinet?.dataset.cabinetId,key=`smartmaktab.demo.role-setup.v3.${id}`;
+ const id=cabinet?.dataset.cabinetId,key=`smartmaktab.demo.role-setup.v3.${id}`,savedKey=`smartmaktab.demo.saved-setup.v3.${id}`;
  if(!id)return null;
  try{
-  const data=JSON.parse(tabStorage.getItem(key));tabStorage.removeItem(key);
-  return data?.school===fromURL&&data.expires>=Date.now()&&data.fields&&typeof data.fields==='object'?data:null;
+  const raw=tabStorage.getItem(key);
+  if(raw){
+   tabStorage.removeItem(key);
+   const data=JSON.parse(raw);
+   if(data?.school===fromURL&&data.expires>=Date.now()&&data.fields&&typeof data.fields==='object'){
+    persistentStore.setItem(savedKey,JSON.stringify({school:data.school,fields:data.fields,first:data.first,last:data.last}));
+    return data;
+   }
+  }
+  const durable=JSON.parse(persistentStore.getItem(savedKey));
+  return durable?.school===fromURL&&durable.fields&&typeof durable.fields==='object'?durable:null;
  }catch{return null;}
 }
 export const roleSetup=takeSetup();
@@ -132,10 +157,19 @@ let roleClassFields=[];
 
 export function takeRolePerson(){
   const id=cabinet?.dataset.cabinetId;if(!id)return null;
-  const key=`smartmaktab.demo.role-name.v2.${id}`;
+  const key=`smartmaktab.demo.role-name.v2.${id}`,savedKey=`smartmaktab.demo.saved-name.v2.${id}`;
   try{
-    const data=JSON.parse(tabStorage.getItem(key));tabStorage.removeItem(key);
-    if(data?.expires>=Date.now()&&[data.first,data.last].every(v=>typeof v==='string'&&v.length<=60))return data;
+    const raw=tabStorage.getItem(key);
+    if(raw){
+      tabStorage.removeItem(key);
+      const data=JSON.parse(raw);
+      if(data?.expires>=Date.now()&&[data.first,data.last].every(v=>typeof v==='string'&&v.length<=60)){
+        persistentStore.setItem(savedKey,JSON.stringify({first:data.first,last:data.last}));
+        return data;
+      }
+    }
+    const durable=JSON.parse(persistentStore.getItem(savedKey));
+    if(durable&&[durable.first,durable.last].every(v=>typeof v==='string'&&v.length<=60))return durable;
   }catch{}
   return null;
 }
@@ -191,6 +225,7 @@ export function chooseInstitution(id,{setAsWorkspace=true}={}){
   cabinetPageURL.searchParams.set('school',id);
   cabinetPageURL.searchParams.set('lang',lang);
   if(!offlineViewer)try{history.replaceState(null,'',cabinetPageURL);}catch{}
+  if((workspace&&setAsWorkspace)||globalThis.SmartMaktabSqlite)saveActiveResume({role:cabinet.dataset.cabinetId,school:id,lang,route:currentResumeRoute()});
   document.dispatchEvent(new Event('cabinet:school'));
   applyLanguage();
 }
