@@ -22,14 +22,13 @@ jobs:
       SM_CONFIRM_PRIVATE_UNSIGNED: ${{ inputs.confirm_unsigned }}
       SM_CONTENT_PUBLIC_KEY: ${{ vars.SM_CONTENT_PUBLIC_KEY }}
       SM_CONTENT_FEED: ${{ vars.SM_CONTENT_FEED }}
-      SM_REPO_PRIVATE: ${{ github.event.repository.private }}
     steps:
-      - name: Require private repository and explicit confirmation
+      - name: Check pilot inputs
         shell: pwsh
         run: |
-          if ($env:SM_REPO_PRIVATE -cne 'true') { throw 'The unsigned pilot requires a private repository' }
           if ($env:SM_CONFIRM_PRIVATE_UNSIGNED -cne 'UNSIGNED') { throw 'Type UNSIGNED to confirm a personal test build' }
           if ($env:SM_RELEASE_VERSION -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Version must be X.Y.Z' }
+          if ([string]::IsNullOrWhiteSpace($env:SM_CONTENT_PUBLIC_KEY)) { throw 'Add repository variable SM_CONTENT_PUBLIC_KEY before building for USB updates' }
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -68,11 +67,34 @@ jobs:
           if ((Get-AuthenticodeSignature -FilePath $files[0].FullName).Status -ne 'NotSigned') { throw 'Unexpected pilot signature status' }
           $hash = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $($files[0].Name)" | Set-Content "$out/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - name: Encrypt the installer before uploading
+        shell: pwsh
+        env:
+          PILOT_ARCHIVE_PASSWORD: ${{ secrets.SM_WINDOWS_PILOT_ARCHIVE_PASSWORD }}
+        run: |
+          $password = $env:PILOT_ARCHIVE_PASSWORD
+          if ($password -cnotmatch '^[A-Za-z0-9]{24,80}$') {
+            throw 'Set SM_WINDOWS_PILOT_ARCHIVE_PASSWORD to a random password of 24 to 80 letters and digits'
+          }
+          $seven = Join-Path $env:ProgramFiles '7-Zip\7z.exe'
+          if (-not (Test-Path -LiteralPath $seven -PathType Leaf)) {
+            $seven = (Get-Command 7z.exe -CommandType Application -ErrorAction Stop).Source
+          }
+          $archive = Join-Path $env:RUNNER_TEMP 'SmartMaktab-Windows-Pilot.7z'
+          if (Test-Path -LiteralPath $archive) { throw 'Archive path must not exist before encryption' }
+          Set-Location 'native/windows/pilot-release'
+          $installer = @(Get-ChildItem -File -Filter '*-Windows-x64-PILOT-UNSIGNED.exe')
+          if ($installer.Count -ne 1) { throw 'Expected exactly one pilot installer' }
+          $installerName = $installer[0].Name
+          & $seven a -t7z -mhe=on "-p$password" $archive $installerName 'SHA256SUMS.txt' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw '7-Zip could not encrypt the pilot archive' }
+          & $seven t "-p$password" $archive | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Encrypted pilot archive failed its integrity check' }
+          & $seven t '-pWRONG_PASSWORD_FOR_VERIFICATION' $archive *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'Pilot archive unexpectedly opened with a wrong password' }
       - uses: actions/upload-artifact@v4
         with:
           name: SmartMaktab-Windows-PILOT-UNSIGNED-${{ inputs.pilot_version }}
-          path: |
-            native/windows/pilot-release/*-Windows-x64-PILOT-UNSIGNED.exe
-            native/windows/pilot-release/SHA256SUMS.txt
+          path: ${{ runner.temp }}/SmartMaktab-Windows-Pilot.7z
           retention-days: 7
           if-no-files-found: error
