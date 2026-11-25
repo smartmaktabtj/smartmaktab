@@ -4,7 +4,7 @@ const {registerContent}=require('./content-ipc.cjs');
 const fs=require('node:fs/promises'), path=require('node:path');
 const origin='smapp://smartmaktab'; const root=path.join(__dirname,'web');
 protocol.registerSchemesAsPrivileged([{scheme:'smapp',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
-const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png','.ttf':'font/ttf','.pfb':'application/octet-stream'};
+const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.ttf':'font/ttf','.pfb':'application/octet-stream'};
 const own=url=>{try{const u=new URL(url);return u.protocol==='smapp:'&&u.hostname==='smartmaktab'&&!u.port&&!u.username&&!u.password;}catch{return false;}};
 const external=url=>{try{const u=new URL(url);return u.protocol==='https:'&&u.hostname==='raw.githubusercontent.com'&&u.pathname.startsWith('/sharipovip/books/');}catch{return false;}};
 function create(){

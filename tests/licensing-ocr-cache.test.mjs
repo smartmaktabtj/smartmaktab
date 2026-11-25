@@ -79,6 +79,31 @@ test('receipt parser, SHA-256 hash, and Edge Function submission format correctl
   assert.equal(parsed.detectedDate, '25.11.2026');
   assert.equal(parsed.detectedReference, 'TRX998877');
   assert.equal(parsed.cardLast4, '4321');
+  assert.equal(parsed.statusConfirmed, true);
+
+  const dcityParsed = parseReceiptText(
+    'ЗАО "Душанбе Сити Банк" ИНН: 510022404 Дата операции: 25.11.2026 Время операции: 23:10:06 ' +
+    'Номер операции: 2248620182 Поставщик: DC (по номеру телефона) Счет получателя: 992907972295 ' +
+    'Сумма операции: 10.00 Комиссия:: 0.00 Статус: Успешный ОПЕРАЦИЯ ВЫПОЛНЕНА',
+  );
+  assert.equal(dcityParsed.detectedProvider, 'dcity');
+  assert.equal(dcityParsed.detectedAmount, 10);
+  assert.equal(dcityParsed.detectedReference, '2248620182');
+  assert.equal(dcityParsed.detectedRecipient, '992907972295');
+  assert.equal(dcityParsed.detectedDate, '25.11.2026');
+  assert.equal(dcityParsed.statusConfirmed, true);
+
+  const amonatParsed = parseReceiptText(
+    'ГУП СБ РТ «Амонатбонк» Дата : 10.11.2026 00:41 Номер транзакции : 105053221 ' +
+    'Название услуги : DC Кошелек Счет зачисления : 992907972295 ' +
+    'Сумма списания : 10.00 TJS Комиссия : 0.10 TJS Итого : 10.10 TJS Исполнен Чек №105053221',
+  );
+  assert.equal(amonatParsed.detectedProvider, 'amonat');
+  assert.equal(amonatParsed.detectedAmount, 10);
+  assert.equal(amonatParsed.detectedReference, '105053221');
+  assert.equal(amonatParsed.detectedRecipient, '992907972295');
+  assert.equal(amonatParsed.detectedDate, '10.11.2026');
+  assert.equal(amonatParsed.statusConfirmed, true);
 
   let called = null;
   const result = await submitReceiptForVerification({

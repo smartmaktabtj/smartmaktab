@@ -1,5 +1,5 @@
 import {openWorkspaceView} from '../../shared/workspace-view.mjs';
-import {tabStorage,cabinetFormAction,printCabinetSheet} from '../../shared/cabinet-runtime.mjs';
+import {tabStorage,persistentStore,cabinetFormAction,printCabinetSheet} from '../../shared/cabinet-runtime.mjs';
 import {selectedDemoSchool as school,enableInstitutionPicker,takeRolePerson,roleSetup} from '../../shared/cabinets.mjs';
 import {maxTasks,validYear,directorProfile,directorTask,directorPlan,taskInYear,validatePersonnel,validateCourse,courseSchedule} from './director-data.mjs';
 const $=id=>document.getElementById(id);
@@ -15,7 +15,22 @@ const t=key=>en[key]?.[document.documentElement.lang==='tg'?1:0]??'';
 const label=(id,value)=>Array.from($(id).options).find(option=>option.value===value)?.textContent??'';
 let profile=null;
 if(key)try{profile=directorProfile(JSON.parse(tabStorage.getItem(key)));}catch{}
-let editing=!profile,tasks=[],snapshot=null,note='',profileNote='';
+const planDraftKey=()=>school?`smartmaktab.demo.director-plan.v1.${school.id}`:null;
+function loadPlanDraft(){
+  const dk=planDraftKey();if(!dk)return [];
+  try{
+    const saved=JSON.parse(persistentStore.getItem(dk));
+    if(!saved||typeof saved!=='object')return [];
+    if(typeof saved.year==='string')$('directorYear').value=saved.year;
+    if(typeof saved.goal==='string')$('directorGoal').value=saved.goal;
+    return Array.isArray(saved.tasks)?saved.tasks.slice(0,maxTasks).filter(Boolean):[];
+  }catch{return [];}
+}
+function savePlanDraft(){
+  const dk=planDraftKey();if(!dk)return;
+  try{persistentStore.setItem(dk,JSON.stringify({year:$('directorYear').value,goal:$('directorGoal').value,tasks}));}catch{}
+}
+let editing=!profile,tasks=loadPlanDraft(),snapshot=null,note='',profileNote='';
 function fillProfile(){ $('directorType').value=profile?.type??'';$('directorShifts').value=profile?.shifts??''; }
 function modified(other=''){note=snapshot?'stale':other;}
 function taskList(list,working){return list.map((task,index)=>{
@@ -28,7 +43,7 @@ function taskList(list,working){return list.map((task,index)=>{
       const warn=document.createElement('p');warn.className='tag warn';warn.textContent=t('outside');li.append(warn);
     }
     const remove=document.createElement('button');remove.type='button';remove.className='button alt';remove.textContent=t('remove');remove.disabled=editing;
-    remove.addEventListener('click',()=>{tasks=tasks.filter((_,i)=>i!==index);modified('removed');render();$('directorTitle').focus();});li.append(remove);
+    remove.addEventListener('click',()=>{tasks=tasks.filter((_,i)=>i!==index);savePlanDraft();modified('removed');render();$('directorTitle').focus();});li.append(remove);
   }
   return li;
 });}
@@ -67,8 +82,8 @@ cabinetFormAction($('directorProfile'),$('directorProfile').querySelector('butto
 });
 $('directorEdit').addEventListener('click',()=>{editing=true;profileNote='';fillProfile();render();$('directorType').focus();});
 $('directorCancel').addEventListener('click',()=>{editing=false;fillProfile();render();$('directorEdit').focus();});
-$('directorYear').addEventListener('input',()=>{modified();render();});
-$('directorGoal').addEventListener('input',()=>{if(snapshot){modified();$('directorStatus').textContent=t(note);}});
+$('directorYear').addEventListener('input',()=>{savePlanDraft();modified();render();});
+$('directorGoal').addEventListener('input',()=>{savePlanDraft();if(snapshot){modified();$('directorStatus').textContent=t(note);}});
 cabinetFormAction($('directorTask'),$('directorAdd'),()=>{
   if(editing||!profile)return;
   const year=$('directorYear').value,due=$('directorDue').value;
@@ -77,7 +92,7 @@ cabinetFormAction($('directorTask'),$('directorAdd'),()=>{
   else if(!taskInYear(due,year))note='invalidDue';
   else if(!task)note='invalidTask';
   else if(tasks.length>=maxTasks)note='limit';
-  else{tasks.push(task);$('directorTitle').value='';modified(tasks.length===maxTasks?'limit':'added');}
+  else{tasks.push(task);savePlanDraft();$('directorTitle').value='';modified(tasks.length===maxTasks?'limit':'added');}
   render();
 });
 $('directorGenerate').addEventListener('click',()=>{
@@ -102,7 +117,9 @@ const statuses={contacts:['Проверьте телефон, почту и ад
   experience:['Стаж директором не может превышать стаж в образовании. Проверьте оба значения.','Собиқаи директорӣ набояд аз собиқаи маориф зиёд бошад. Ҳар ду қиматро санҷед.'],
   dates:['Проверьте годы: они должны быть после года рождения и не позже текущего года.','Солҳоро санҷед: онҳо бояд пас аз соли таваллуд ва на дертар аз соли ҷорӣ бошанд.'],
   language:['Укажите название другого языка.','Номи забони дигарро нависед.'],saved:['Анкета сохранена в памяти этой страницы.','Варақа дар хотираи ҳамин саҳифа сабт шуд.']};
+const personnelKey=()=>`smartmaktab.demo.director-personnel.v1.${school?.id||'default'}`;
 let personnel=null,editingPersonnel=true,status='';
+try{const saved=JSON.parse(persistentStore.getItem(personnelKey()));const checked=saved?validatePersonnel(saved):null;if(checked?.data){personnel=checked.data;editingPersonnel=false;}}catch{}
 const fillPersonnel=(data={})=>{
   for(const [field,id] of Object.entries(inputs))$(id).value=data[field]??'';
   languageInputs.forEach(input=>input.checked=data.languages?.includes(input.value)??false);
@@ -151,7 +168,9 @@ $('directorPersonnelSave').addEventListener('click',()=>{
   const values=Object.fromEntries(Object.entries(inputs).map(([field,id])=>[field,$(id).value]));
   const result=validatePersonnel({...values,languages:languageInputs.filter(input=>input.checked).map(input=>input.value),achievements:achievementInputs.filter(input=>input.checked).map(input=>input.value)});
   if(result.error){status=result.error;renderPersonnel();return;}
-  personnel=result.data;status='saved';editingPersonnel=false;renderPersonnel();enableInstitutionPicker();if(school)$('directorPersonnelEdit').focus();
+  personnel=result.data;status='saved';editingPersonnel=false;
+  try{persistentStore.setItem(personnelKey(),JSON.stringify({...values,languages:result.data.languages,achievements:result.data.achievements}));}catch{}
+  renderPersonnel();enableInstitutionPicker();if(school)$('directorPersonnelEdit').focus();
 });
 personnelForm.addEventListener('submit',event=>{event.preventDefault();$('directorPersonnelSave').click();});
 $('directorPersonnelEdit').addEventListener('click',()=>{editingPersonnel=true;status='';fillPersonnel(personnel);renderPersonnel();$('directorLast').focus();});
@@ -172,7 +191,16 @@ const localCourse=key=>courseLabels[key]?.[document.documentElement.lang==='tg'?
 const humanDate=iso=>iso.split('-').reverse().join('.');
 const setupCourse=roleSetup?.fields?validateCourse({title:roleSetup.fields.directorCourseTitle,provider:roleSetup.fields.directorCourseProvider,
   start:roleSetup.fields.directorCourseStart,end:roleSetup.fields.directorCourseEnd,state:roleSetup.fields.directorCourseCompletion}):null;
-let courseNote='',courses=setupCourse?[setupCourse]:[];
+const coursesKey=()=>`smartmaktab.demo.director-courses.v1.${school?.id||'default'}`;
+function loadCourses(){
+  try{
+    const saved=JSON.parse(persistentStore.getItem(coursesKey()));
+    if(Array.isArray(saved))return saved.slice(0,20).map(item=>validateCourse(item)).filter(Boolean);
+  }catch{}
+  return setupCourse?[setupCourse]:[];
+}
+function saveCourses(){try{persistentStore.setItem(coursesKey(),JSON.stringify(courses));}catch{}}
+let courseNote='',courses=loadCourses();
 function renderCourses(){
  const schedule=courseSchedule(courses,today);
  $('directorCourseStatus').textContent=[localCourse(courseNote),!schedule&&courseNote!=='invalid'?localCourse('empty'):''].filter(Boolean).join(' ');
@@ -183,7 +211,7 @@ function renderCourses(){
   const row=document.createElement('li'),title=document.createElement('strong'),detail=document.createElement('p'),remove=document.createElement('button');
   title.textContent=course.title;detail.textContent=[course.provider,`${humanDate(course.start)} — ${humanDate(course.end)}`,course.state==='planned'?localCourse('planned'):''].filter(Boolean).join(' · ');
   detail.className='small';remove.className='button alt';remove.type='button';remove.textContent=t('remove');
-  remove.addEventListener('click',()=>{courses=courses.filter(item=>item!==course);courseNote='removed';renderCourses();$('directorCourseTitle').focus();});
+  remove.addEventListener('click',()=>{courses=courses.filter(item=>item!==course);saveCourses();courseNote='removed';renderCourses();$('directorCourseTitle').focus();});
   row.append(title,detail,remove);return row;
  }));
 }
@@ -193,15 +221,20 @@ $('directorAddCourse').addEventListener('click',()=>{
  const course=validateCourse({title:$('directorCourseTitle').value,provider:$('directorCourseProvider').value,start:$('directorCourseStart').value,end:$('directorCourseEnd').value,state:$('directorCourseCompletion').value});
  if(!course){courseNote='invalid';renderCourses();return;}
  if(course.state==='completed'&&course.end>today){courseNote='future';renderCourses();return;}
- courses.push(course);courseNote='added';courseForm.reset();renderCourses();$('directorCourseTitle').focus();
+ courses.push(course);saveCourses();courseNote='added';courseForm.reset();renderCourses();$('directorCourseTitle').focus();
 });
 courseForm.addEventListener('submit',event=>{event.preventDefault();$('directorAddCourse').click();});
 document.addEventListener('cabinet:language',renderCourses);
 document.addEventListener('cabinet:school',()=>{
  key=`smartmaktab.demo.director.v1.${school.id}`;profile=null;
  try{profile=directorProfile(JSON.parse(tabStorage.getItem(key)));}catch{}
- editing=!profile;tasks=[];snapshot=null;note='';profileNote='';
+ editing=!profile;snapshot=null;note='';profileNote='';
  for(const id of ['directorYear','directorGoal','directorDue','directorTitle','directorOwner','directorDirection'])$(id).value='';
+ tasks=loadPlanDraft();
+ personnel=null;editingPersonnel=true;status='';
+ try{const saved=JSON.parse(persistentStore.getItem(personnelKey()));const checked=saved?validatePersonnel(saved):null;if(checked?.data){personnel=checked.data;editingPersonnel=false;}}catch{}
+ fillPersonnel(personnel||{});
+ courses=loadCourses();
  $('directorSheet').hidden=true;$('directorCourses').hidden=false;fillProfile();render();renderPersonnel();renderCourses();
 });
 renderCourses();

@@ -13,13 +13,23 @@ const copy = {
     email: 'Почтаи электронӣ',
     password: 'Рамз',
     signIn: 'Ворид шудан',
+    sendRecovery: 'Пайванди таъини рамз ба почта',
+    recoverySent: 'Пайванди таъини рамз / воридшавӣ ба почта фиристода шуд.',
+    setPasswordTitle: 'Таъин ё навсозии рамзи super_admin',
+    newPassword: 'Рамзи нав (на кам аз 8 рамз)',
     projectInfo: 'Лоиҳаи Supabase',
     needSuperAdmin: 'Ин ҳисоб иҷозати super_admin надорад. Дар smartmaktab_private.platform_developers сабт кунед.',
     signedIn: 'Ворид шудед ҳамчун super_admin.',
     tabOrgs: 'Ташкилотҳо',
     tabRoles: 'Нақшҳо ва узвият',
     tabLicenses: 'Иҷозатномаҳо',
+    tabPlans: 'Тарифҳо ва реквизитҳо',
     tabPayments: 'Чекҳои пардохт (OCR)',
+    planTitleTg: 'Номи тариф (тоҷикӣ)',
+    planTitleRu: 'Номи тариф (русӣ)',
+    planPrice: 'Нарх (TJS)',
+    planDays: 'Муҳлат (рӯз)',
+    recipientPhone: 'Рақами қабулкунанда (Амонатбонк / DCity)',
     save: 'Сабт кардан',
     saved: 'Маълумот сабт шуд.',
     orgName: 'Номи муассиса',
@@ -64,13 +74,23 @@ const copy = {
     email: 'Электронная почта',
     password: 'Пароль',
     signIn: 'Войти',
+    sendRecovery: 'Отправить ссылку для задания пароля',
+    recoverySent: 'Ссылка для входа / смены пароля отправлена на почту.',
+    setPasswordTitle: 'Установка / смена пароля super_admin',
+    newPassword: 'Новый пароль (мин. 8 символов)',
     projectInfo: 'Проект Supabase',
     needSuperAdmin: 'У этого аккаунта нет прав super_admin. Добавьте user_id в smartmaktab_private.platform_developers.',
     signedIn: 'Вы вошли как super_admin.',
     tabOrgs: 'Организации',
     tabRoles: 'Роли и доступы',
     tabLicenses: 'Лицензии',
+    tabPlans: 'Тарифы и реквизиты',
     tabPayments: 'Чеки оплаты (OCR)',
+    planTitleTg: 'Название тарифа (тадж.)',
+    planTitleRu: 'Название тарифа (рус.)',
+    planPrice: 'Цена (TJS)',
+    planDays: 'Срок (дней)',
+    recipientPhone: 'Номер получателя (Амонатбонк / DCity)',
     save: 'Сохранить',
     saved: 'Сохранено.',
     orgName: 'Название организации',
@@ -116,6 +136,7 @@ let activeTab = 'orgs';
 let orgs = [];
 let memberships = [];
 let licenses = [];
+let plans = [];
 let payments = [];
 
 function setStatus(msg, kind = '') {
@@ -146,15 +167,17 @@ function showTab(name) {
 async function refreshAll() {
   if (!client.session?.access_token) return;
   try {
-    const [o, m, l, p] = await Promise.all([
+    const [o, m, l, pl, p] = await Promise.all([
       client.select('organizations', 'select=id,name,kind,parent_id,authority_tier,region_name,district_name,school_code&order=name.asc'),
       client.select('school_memberships', 'select=id,user_id,organization_id,role,created_at&order=created_at.desc'),
       client.select('school_licenses', 'select=id,organization_id,status,plan_code,starts_at,expires_at,grace_days,notes,updated_at&order=updated_at.desc'),
-      client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,status,review_note,created_at&order=created_at.desc'),
+      client.getPaymentPlans(),
+      client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,status,review_note,created_at&order=created_at.desc'),
     ]);
     orgs = o || [];
     memberships = m || [];
     licenses = l || [];
+    plans = pl || [];
     payments = p || [];
     renderOrgSelects();
     renderTables();
@@ -239,14 +262,39 @@ function renderTables() {
     return tr;
   }) : [emptyRow(3)]));
 
+  const planBody = $('plansTbody');
+  if (planBody) {
+    planBody.replaceChildren(...(plans.length ? plans.map(pl => {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td');
+      td1.textContent = `${pl.code} · ${lang === 'tg' ? pl.title_tg : pl.title_ru}`;
+      const td2 = document.createElement('td');
+      td2.textContent = `${pl.price_tjs} TJS / ${pl.duration_days}d`;
+      const td3 = document.createElement('td');
+      td3.textContent = `${pl.recipient_phone} (${(pl.supported_providers || []).join(', ')})`;
+      tr.append(td1, td2, td3);
+      return tr;
+    }) : [emptyRow(3)]));
+    if (plans[0] && !$('planTitleTg').value) {
+      $('planCode').value = plans[0].code;
+      $('planTitleTg').value = plans[0].title_tg;
+      $('planTitleRu').value = plans[0].title_ru;
+      $('planPrice').value = String(plans[0].price_tjs);
+      $('planDays').value = String(plans[0].duration_days);
+      $('planPhone').value = plans[0].recipient_phone;
+    }
+  }
+
   const payBody = $('paymentsTbody');
   payBody.replaceChildren(...(payments.length ? payments.map(p => {
     const tr = document.createElement('tr');
     const td1 = document.createElement('td');
-    td1.textContent = `${orgNameById(p.organization_id)} · ${p.amount_declared ?? '—'} ${p.currency}`;
+    td1.textContent = `${orgNameById(p.organization_id)} · ${p.provider_code} · ${p.amount_declared ?? '—'} ${p.currency}`;
     const td2 = document.createElement('td');
     const hashEl = document.createElement('small');
-    hashEl.textContent = `${p.status} · ${p.receipt_hash.slice(0, 14)}…`;
+    const txPart = p.transaction_id ? ` · TX:${p.transaction_id}` : '';
+    const recPart = p.recipient_account ? ` · ->${p.recipient_account}` : '';
+    hashEl.textContent = `${p.status}${txPart}${recPart} · ${p.receipt_hash.slice(0, 10)}…`;
     const ocrEl = document.createElement('div');
     ocrEl.textContent = p.ocr_text ? p.ocr_text.slice(0, 160) : '—';
     td2.append(hashEl, ocrEl);
@@ -398,5 +446,80 @@ $('licForm').addEventListener('submit', async e => {
 
 $('projectEndpoint').textContent = `${getCloudConfig().url} (${getCloudConfig().projectRef})`;
 $('licExpires').value = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+
+$('sendRecoveryBtn').addEventListener('click', async () => {
+  setStatus('');
+  const email = $('loginEmail').value.trim();
+  if (!email) return;
+  try {
+    await client.requestPasswordRecovery(email, location.href.split('#')[0]);
+    setStatus(t('recoverySent'));
+  } catch (err) {
+    setStatus(err.message, 'error');
+  }
+});
+
+$('admPasswordForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    await client.updatePassword($('newPasswordInput').value);
+    $('newPasswordInput').value = '';
+    $('admPasswordCard').hidden = true;
+    setStatus(t('saved'));
+  } catch (err) {
+    setStatus(err.message, 'error');
+  }
+});
+
+$('planForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    await client.adminUpsertSubscriptionPlan({
+      p_code: $('planCode').value.trim(),
+      p_title_tg: $('planTitleTg').value.trim(),
+      p_title_ru: $('planTitleRu').value.trim(),
+      p_price_tjs: Number($('planPrice').value),
+      p_duration_days: Number($('planDays').value),
+      p_recipient_phone: $('planPhone').value.trim(),
+      p_supported_providers: ['amonat', 'dcity'],
+      p_is_active: true,
+    });
+    setStatus(t('saved'));
+    await refreshAll();
+  } catch (err) {
+    setStatus(err.message, 'error');
+  }
+});
+
+(async function restoreUrlOrSession() {
+  if (location.hash && location.hash.includes('access_token=')) {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type = params.get('type');
+    if (accessToken) {
+      client.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
+      history.replaceState(null, '', location.pathname + location.search);
+      try {
+        const ctx = await client.getWorkspaceContext();
+        if (ctx?.is_super_admin) {
+          $('admLoginCard').hidden = true;
+          $('admWorkspace').hidden = false;
+          $('signOutBtn').hidden = false;
+          $('reloadBtn').hidden = false;
+          if (type === 'recovery' || type === 'magiclink') $('admPasswordCard').hidden = false;
+          setStatus(t('signedIn'));
+          await refreshAll();
+        } else {
+          await client.signOut();
+          setStatus(t('needSuperAdmin'), 'error');
+        }
+      } catch (err) {
+        setStatus(err.message, 'error');
+      }
+    }
+  }
+})();
+
 applyTranslations();
 showTab('orgs');

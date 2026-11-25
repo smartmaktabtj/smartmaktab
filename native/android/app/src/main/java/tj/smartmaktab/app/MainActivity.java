@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.*;
@@ -29,13 +30,16 @@ public final class MainActivity extends Activity {
  private Thread assetUpdateWorker;private TransferDialog assetUpdateProgress;private WindowsRelease.CancelHandle assetUpdateCancel;private boolean assetUpdateBusy;
  private boolean uiTg;
  private AssetCache assetCache;
+ private SmartMaktabDb smartDb;
+ private volatile boolean trustedOrigin = true;
  private String tr(String ru,String tg){return uiTg?tg:ru;}
  private boolean own(Uri u){return u!=null&&"https".equals(u.getScheme())&&HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private boolean book(Uri u){return u!=null&&"https".equals(u.getScheme())&&"raw.githubusercontent.com".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/sharipovip/books/");}
- private static String mime(String s){if(s.endsWith(".html"))return "text/html";if(s.endsWith(".js")||s.endsWith(".mjs"))return "text/javascript";if(s.endsWith(".json")||s.endsWith(".webmanifest"))return "application/json";if(s.endsWith(".png"))return "image/png";if(s.endsWith(".svg"))return "image/svg+xml";return "application/octet-stream";}
+ private static String mime(String s){if(s.endsWith(".html"))return "text/html";if(s.endsWith(".css"))return "text/css";if(s.endsWith(".js")||s.endsWith(".mjs"))return "text/javascript";if(s.endsWith(".json")||s.endsWith(".webmanifest"))return "application/json";if(s.endsWith(".png"))return "image/png";if(s.endsWith(".jpg")||s.endsWith(".jpeg"))return "image/jpeg";if(s.endsWith(".webp"))return "image/webp";if(s.endsWith(".svg"))return "image/svg+xml";if(s.endsWith(".wasm"))return "application/wasm";return "application/octet-stream";}
  @Override public void onCreate(Bundle saved){
   super.onCreate(saved);if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("smartmaktab_updates","SmartMaktab",NotificationManager.IMPORTANCE_DEFAULT));
   assetCache=new AssetCache(this);
+  smartDb=new SmartMaktabDb(this);
   FrameLayout holder=new FrameLayout(this);holder.setBackgroundColor(Color.rgb(16,40,33));view=new WebView(this);holder.addView(view,new FrameLayout.LayoutParams(-1,-1));setContentView(holder);
   holder.setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets areas=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());v.setPadding(areas.left,areas.top,areas.right,areas.bottom);}return insets;});
   WebSettings settings=view.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(true);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setMediaPlaybackRequiresUserGesture(true);settings.setJavaScriptCanOpenWindowsAutomatically(false);
@@ -46,6 +50,7 @@ public final class MainActivity extends Activity {
    try{return new WebResourceResponse(mime(name),"UTF-8",getAssets().open("web/"+name));}catch(IOException error){return missing();}
   }).build();
   view.setWebViewClient(new WebViewClient(){
+   @Override public void onPageStarted(WebView w,String url,Bitmap favicon){trustedOrigin=url!=null&&own(Uri.parse(url));}
    @Override public WebResourceResponse shouldInterceptRequest(WebView w,WebResourceRequest r){Uri u=r.getUrl();if(own(u))return loader.shouldInterceptRequest(u);return book(u)?null:missing();}
    @Override public boolean shouldOverrideUrlLoading(WebView w,WebResourceRequest r){Uri u=r.getUrl();if(own(u))return false;if(r.isForMainFrame()&&r.hasGesture()&&book(u)){try{startActivity(new Intent(Intent.ACTION_VIEW,u));}catch(ActivityNotFoundException ignored){}}return true;}
   });
@@ -65,11 +70,22 @@ public final class MainActivity extends Activity {
    }
    @Override public void onPermissionRequestCanceled(PermissionRequest req){if(media==req){media=null;mediaResources=null;}}
   });
+  view.addJavascriptInterface(new SqliteBridge(),"SmartMaktabSqlite");
   if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER))WebViewCompat.addWebMessageListener(view,"SmartMaktabAndroid",Collections.singleton(ORIGIN),(w,msg,origin,main,reply)->{
    if(!main||!own(origin)||!own(Uri.parse(w.getUrl())))return; handle(msg.getData(),reply);
   });
-  view.loadUrl(ORIGIN+"/index.html");
+  String resumeRoute=smartDb.getResumeRoute();
+  view.loadUrl(ORIGIN+"/"+(resumeRoute!=null?resumeRoute:"index.html"));
   requestInitialPermissions();
+ }
+ private final class SqliteBridge {
+  @JavascriptInterface public String getItem(String key){return trustedOrigin&&smartDb!=null&&!isDestroyed()?smartDb.getItem(key):null;}
+  @JavascriptInterface public boolean setItem(String key,String value){return trustedOrigin&&smartDb!=null&&!isDestroyed()&&smartDb.setItem(key,value);}
+  @JavascriptInterface public boolean removeItem(String key){return trustedOrigin&&smartDb!=null&&!isDestroyed()&&smartDb.removeItem(key);}
+  @JavascriptInterface public String getAllJson(){return trustedOrigin&&smartDb!=null&&!isDestroyed()?smartDb.getAllJson():"{}";}
+  @JavascriptInterface public boolean saveResumeSession(String role,String school,String lang,String route){return trustedOrigin&&smartDb!=null&&!isDestroyed()&&smartDb.saveResumeSession(role,school,lang,route);}
+  @JavascriptInterface public boolean clearResumeRoute(){return trustedOrigin&&smartDb!=null&&!isDestroyed()&&smartDb.clearResumeRoute();}
+  @JavascriptInterface public String getResumeRoute(){return trustedOrigin&&smartDb!=null&&!isDestroyed()?smartDb.getResumeRoute():null;}
  }
  private WebResourceResponse missing(){return new WebResourceResponse("text/plain","UTF-8",404,"Not Found",Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));}
  private void handle(String message, JavaScriptReplyProxy reply){
@@ -303,7 +319,7 @@ public final class MainActivity extends Activity {
   if(assetUpdateCancel!=null)assetUpdateCancel.cancel();
   if(assetUpdateWorker!=null)assetUpdateWorker.interrupt();
   if(assetUpdateProgress!=null)assetUpdateProgress.dismiss();
-  clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();
+  clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();if(smartDb!=null)smartDb.close();view.destroy();super.onDestroy();
  }
  private void confirmContentUpdate(boolean tg){
   if(anyTransferBusy())return;uiTg=tg;contentUpdateBusy=true;

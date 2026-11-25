@@ -37,7 +37,8 @@ before(async () => {
   for (const m of [
     '../supabase/migrations/20261124000100_dev_read_only.sql',
     '../supabase/migrations/20261125000100_summary_review.sql',
-    '../supabase/migrations/20261125000200_roles_library_licensing.sql'
+    '../supabase/migrations/20261125000200_roles_library_licensing.sql',
+    '../supabase/migrations/20261125000300_payment_tariffs_tx_unique.sql'
   ]) {
     await db.exec(await read(m));
   }
@@ -136,4 +137,31 @@ test('licensing 30-day offline grace, anti-duplicate receipt hash, and super_adm
   assert.equal(activeLic.effective_status, 'active');
   assert.equal(activeLic.access_allowed, true);
   assert.ok(activeLic.days_left >= 29);
+
+  // Default 10 TJS / +992 907972295 tariff, duplicate transaction_id block, and server-OCR auto-activation
+  const plans = await as(3, () => q('select code, price_tjs::float8 as price, duration_days, recipient_phone, recipient_account from public.subscription_plans'));
+  assert.equal(plans[0].code, 'trial_10');
+  assert.equal(plans[0].price, 10);
+  assert.equal(plans[0].duration_days, 30);
+  assert.equal(plans[0].recipient_account, '992907972295');
+
+  await denied(as(3, () => q("select public.admin_upsert_subscription_plan('trial_10','T','R',25,30,'+992 907972295')")));
+  await as(1, () => q("select public.admin_upsert_subscription_plan('trial_10','Обунаи озмоишӣ','Пробный тариф',10,30,'+992 907972295')"));
+
+  const hash2 = 'b'.repeat(64);
+  const hash3 = 'c'.repeat(64);
+  await as(3, () => q(
+    "select public.submit_payment_receipt($1,$2,'dcity',10,'TJS','Сумма операции: 10.00',0.95,$3,'2248620182','992907972295',true,'trial_10')",
+    [schoolAId, hash2, JSON.stringify({ source: 'ocr_space' })],
+  ));
+  // Different screenshot bytes (hash3) of the SAME transaction_id must still fail 23505
+  await assert.rejects(as(3, () => q(
+    "select public.submit_payment_receipt($1,$2,'dcity',10,'TJS','Сумма операции: 10.00',0.95,$3,'2248620182','992907972295',true,'trial_10')",
+    [schoolAId, hash3, JSON.stringify({ source: 'ocr_space' })],
+  )), { code: '23505' });
+
+  const autoSub = (await as(1, () => q("select status, transaction_id, recipient_account from public.payment_submissions where receipt_hash=$1", [hash2])))[0];
+  assert.equal(autoSub.status, 'verified');
+  assert.equal(autoSub.transaction_id, '2248620182');
+  assert.equal(autoSub.recipient_account, '992907972295');
 });
