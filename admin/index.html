@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="tg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SmartMaktab Admin</title>
+  <link rel="stylesheet" href="./admin.css">
+</head>
+<body>
+  <header class="adm-head">
+    <div class="adm-brand">
+      <h1 data-t="title">SmartMaktab Admin</h1>
+      <p data-t="sub"></p>
+    </div>
+    <div class="adm-row" style="margin-top:0">
+      <label class="adm-field" style="grid-auto-flow:column;align-items:center;gap:6px">
+        <span data-t="lang"></span>
+        <select id="admLang">
+          <option value="tg">Тоҷикӣ</option>
+          <option value="ru">Русский</option>
+        </select>
+      </label>
+      <button id="reloadBtn" type="button" class="btn alt" data-t="reload" hidden></button>
+      <button id="signOutBtn" type="button" class="btn alt" data-t="signOut" hidden></button>
+    </div>
+  </header>
+
+  <main class="adm-main">
+    <p id="admStatus" class="adm-status" role="status" hidden></p>
+
+    <section id="admLoginCard" class="adm-card">
+      <h2 data-t="loginTitle"></h2>
+      <p class="small"><strong data-t="projectInfo"></strong>: <code id="projectEndpoint"></code></p>
+      <form id="admLoginForm" class="adm-grid" autocomplete="off">
+        <label class="adm-field"><span data-t="email"></span><input id="loginEmail" type="email" required></label>
+        <label class="adm-field"><span data-t="password"></span><input id="loginPassword" type="password" required></label>
+        <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="signIn"></button></div>
+      </form>
+    </section>
+
+    <section id="admWorkspace" hidden>
+      <nav class="adm-tabs" role="tablist">
+        <button type="button" class="btn alt" data-tab="orgs" data-t="tabOrgs"></button>
+        <button type="button" class="btn alt" data-tab="roles" data-t="tabRoles"></button>
+        <button type="button" class="btn alt" data-tab="licenses" data-t="tabLicenses"></button>
+        <button type="button" class="btn alt" data-tab="payments" data-t="tabPayments"></button>
+      </nav>
+
+      <section class="adm-card" data-pane="orgs">
+        <h2 data-t="tabOrgs"></h2>
+        <form id="orgForm" class="adm-grid">
+          <label class="adm-field"><span data-t="orgName"></span><input id="orgName" required maxlength="160"></label>
+          <label class="adm-field"><span data-t="orgKind"></span>
+            <select id="orgKind">
+              <option value="school" data-t="kindSchool">school</option>
+              <option value="education_authority" data-t="kindAuthority">education_authority</option>
+            </select>
+          </label>
+          <label class="adm-field"><span data-t="orgTier"></span>
+            <select id="orgTier">
+              <option value="">—</option>
+              <option value="maorif">maorif</option>
+              <option value="raesat">raesat</option>
+            </select>
+          </label>
+          <label class="adm-field"><span data-t="orgParent"></span><select id="orgParent"></select></label>
+          <label class="adm-field"><span data-t="region"></span><input id="orgRegion" maxlength="120"></label>
+          <label class="adm-field"><span data-t="district"></span><input id="orgDistrict" maxlength="120"></label>
+          <label class="adm-field"><span data-t="schoolCode"></span><input id="orgCode" maxlength="40"></label>
+          <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
+        </form>
+        <div class="adm-table-wrap">
+          <table><thead><tr><th data-t="colName"></th><th data-t="colKind"></th><th data-t="colLocation"></th></tr></thead><tbody id="orgsTbody"></tbody></table>
+        </div>
+      </section>
+
+      <section class="adm-card" data-pane="roles" hidden>
+        <h2 data-t="tabRoles"></h2>
+        <form id="roleForm" class="adm-grid">
+          <label class="adm-field"><span data-t="userId"></span><input id="roleUserId" required placeholder="00000000-0000-0000-0000-000000000000"></label>
+          <label class="adm-field"><span data-t="targetOrg"></span><select id="roleOrg" required></select></label>
+          <label class="adm-field"><span data-t="role"></span>
+            <select id="roleName">
+              <option value="school_admin">school_admin</option>
+              <option value="director">director</option>
+              <option value="deputy">deputy</option>
+              <option value="staff">staff</option>
+              <option value="teacher">teacher</option>
+              <option value="maorif">maorif</option>
+              <option value="authority_viewer">authority_viewer</option>
+            </select>
+          </label>
+          <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="assignRole"></button></div>
+        </form>
+        <div class="adm-table-wrap">
+          <table><thead><tr><th data-t="colUser"></th><th data-t="colRole"></th><th data-t="colActions"></th></tr></thead><tbody id="rolesTbody"></tbody></table>
+        </div>
+      </section>
+
+      <section class="adm-card" data-pane="licenses" hidden>
+        <h2 data-t="tabLicenses"></h2>
+        <form id="licForm" class="adm-grid">
+          <label class="adm-field"><span data-t="targetOrg"></span><select id="licOrg" required></select></label>
+          <label class="adm-field"><span data-t="licenseStatus"></span>
+            <select id="licStatus">
+              <option value="trial">trial</option>
+              <option value="active">active</option>
+              <option value="grace">grace</option>
+              <option value="expired">expired</option>
+              <option value="suspended">suspended</option>
+            </select>
+          </label>
+          <label class="adm-field"><span data-t="planCode"></span><input id="licPlan" value="standard" required></label>
+          <label class="adm-field"><span data-t="expiresAt"></span><input id="licExpires" type="date" required></label>
+          <label class="adm-field"><span data-t="graceDays"></span><input id="licGraceDays" type="number" min="0" max="90" value="30" required></label>
+          <label class="adm-field"><span data-t="notes"></span><input id="licNotes" maxlength="400"></label>
+          <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
+        </form>
+        <div class="adm-table-wrap">
+          <table><thead><tr><th data-t="colName"></th><th data-t="colStatus"></th><th data-t="expiresAt"></th></tr></thead><tbody id="licensesTbody"></tbody></table>
+        </div>
+      </section>
+
+      <section class="adm-card" data-pane="payments" hidden>
+        <h2 data-t="tabPayments"></h2>
+        <div class="adm-table-wrap">
+          <table><thead><tr><th data-t="colName"></th><th data-t="colReceipt"></th><th data-t="colActions"></th></tr></thead><tbody id="paymentsTbody"></tbody></table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="./admin.mjs"></script>
+</body>
+</html>
