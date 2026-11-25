@@ -32,11 +32,12 @@ if(bridge)globalThis.smartMaktabBack=()=>!document.dispatchEvent(new Event('sm:n
 
 export function setupNativePrograms(anchor){
  if(!bridge||!anchor)return;
- const details=document.createElement('details'),header=document.createElement('summary'),menu=document.createElement('div'),update=document.createElement('button'),download=document.createElement('button');
- details.className='sm-native-files';header.className='theme-toggle';update.type='button';update.className='button alt';download.type='button';download.className='button alt';
- menu.append(update,download);details.append(header,menu);anchor.before(details);
+ const details=document.createElement('details'),header=document.createElement('summary'),menu=document.createElement('div'),appUpdate=document.createElement('button'),update=document.createElement('button'),download=document.createElement('button');
+ details.className='sm-native-files';header.className='theme-toggle';appUpdate.type='button';appUpdate.className='button alt';update.type='button';update.className='button alt';download.type='button';download.className='button alt';
+ menu.append(appUpdate,update,download);details.append(header,menu);anchor.before(details);
  const language=()=>document.documentElement.lang==='tg'?'tg':'ru';
- function refresh(){const tg=language()==='tg';header.textContent=tg?'Барномаҳо':'Программы';update.textContent=tg?'Навсозии мавод':'Обновление материалов';download.textContent=tg?'Боргирӣ барои Windows (.exe)':'Скачать для Windows (.exe)';}
+ function refresh(){const tg=language()==='tg';header.textContent=tg?'Барномаҳо':'Программы';appUpdate.textContent=tg?'Навсозии барнома':'Обновление приложения';update.textContent=tg?'Навсозии мавод':'Обновление материалов';download.textContent=tg?'Боргирӣ барои Windows (.exe)':'Скачать для Windows (.exe)';}
+ appUpdate.addEventListener('click',()=>{details.open=false;void send({action:'checkAssetUpdate',lang:language()}).catch(()=>{});});
  update.addEventListener('click',()=>{details.open=false;void send({action:'downloadContentUpdate',lang:language()}).catch(()=>{});});
  download.addEventListener('click',()=>{details.open=false;void send({action:'downloadWindows',lang:language()}).catch(()=>{});});
  refresh();document.addEventListener('cabinet:language',refresh);

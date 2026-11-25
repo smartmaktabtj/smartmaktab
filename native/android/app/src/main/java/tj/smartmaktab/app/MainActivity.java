@@ -25,18 +25,21 @@ public final class MainActivity extends Activity {
  private File draft;private OutputStream draftOut;private long written,expected;private String fileName,fileMime;private JavaScriptReplyProxy finalReply;
  private File windowsFile;private Thread windowsWorker;private AlertDialog windowsProgress;private boolean windowsBusy,windowsTg,windowsCancelled;
  private File contentUpdateFile;private Thread contentUpdateWorker;private AlertDialog contentUpdateProgress;private boolean contentUpdateBusy,contentUpdateTg,contentUpdateCancelled;
+ private AssetCache assetCache;
  private String tr(String ru,String tg){return windowsTg?tg:ru;}
  private boolean own(Uri u){return u!=null&&"https".equals(u.getScheme())&&HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private boolean book(Uri u){return u!=null&&"https".equals(u.getScheme())&&"raw.githubusercontent.com".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/sharipovip/books/");}
  private static String mime(String s){if(s.endsWith(".html"))return "text/html";if(s.endsWith(".js")||s.endsWith(".mjs"))return "text/javascript";if(s.endsWith(".json")||s.endsWith(".webmanifest"))return "application/json";if(s.endsWith(".png"))return "image/png";if(s.endsWith(".svg"))return "image/svg+xml";return "application/octet-stream";}
  @Override public void onCreate(Bundle saved){
   super.onCreate(saved);if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("smartmaktab_updates","SmartMaktab",NotificationManager.IMPORTANCE_DEFAULT));
+  assetCache=new AssetCache(this);
   FrameLayout holder=new FrameLayout(this);holder.setBackgroundColor(Color.rgb(16,40,33));view=new WebView(this);holder.addView(view,new FrameLayout.LayoutParams(-1,-1));setContentView(holder);
   holder.setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets areas=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());v.setPadding(areas.left,areas.top,areas.right,areas.bottom);}return insets;});
   WebSettings settings=view.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(true);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setMediaPlaybackRequiresUserGesture(true);settings.setJavaScriptCanOpenWindowsAutomatically(false);
   WebView.setWebContentsDebuggingEnabled(false);
   WebViewAssetLoader loader=new WebViewAssetLoader.Builder().setDomain(HOST).addPathHandler("/",p->{
    String name=p.isEmpty()?"index.html":p;if(!name.matches("[A-Za-z0-9._/-]+")||name.contains(".."))return missing();
+   if(assetCache!=null){try{InputStream cached=assetCache.getAsset(name);if(cached!=null)return new WebResourceResponse(mime(name),"UTF-8",cached);}catch(IOException ignored){}}
    try{return new WebResourceResponse(mime(name),"UTF-8",getAssets().open("web/"+name));}catch(IOException error){return missing();}
   }).build();
   view.setWebViewClient(new WebViewClient(){
@@ -63,6 +66,7 @@ public final class MainActivity extends Activity {
    if(!main||!own(origin)||!own(Uri.parse(w.getUrl())))return; handle(msg.getData(),reply);
   });
   view.loadUrl(ORIGIN+"/index.html");
+  requestInitialPermissions();
  }
  private WebResourceResponse missing(){return new WebResourceResponse("text/plain","UTF-8",404,"Not Found",Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));}
  private void handle(String message, JavaScriptReplyProxy reply){
@@ -73,6 +77,8 @@ public final class MainActivity extends Activity {
      confirmWindows("tg".equals(args.optString("lang")));reply.postMessage("ok");return;
     case "downloadContentUpdate":
      confirmContentUpdate("tg".equals(args.optString("lang")));reply.postMessage("ok");return;
+    case "checkAssetUpdate":
+     checkAssetUpdate("tg".equals(args.optString("lang")));reply.postMessage("ok");return;
     case "openFile":case "shareFile":
      Intent file=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(file,args.getString("action").equals("shareFile")?SHARE:OPEN);reply.postMessage("ok");return;
     case "begin":
@@ -177,6 +183,16 @@ public final class MainActivity extends Activity {
  private void windowsToast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
  private void clearDraft(){if(draftOut!=null)try{draftOut.close();}catch(IOException ignored){}draftOut=null;if(draft!=null)draft.delete();draft=null;}
  @Override public void onBackPressed(){view.evaluateJavascript("Boolean(window.smartMaktabBack && window.smartMaktabBack())",handled->{if(!"true".equals(handled)){if(view.canGoBack())view.goBack();else finish();}});}
+ private void requestInitialPermissions(){
+  if(getSharedPreferences("smartmaktab",MODE_PRIVATE).getBoolean("permissions_requested",false))return;
+  getSharedPreferences("smartmaktab",MODE_PRIVATE).edit().putBoolean("permissions_requested",true).apply();
+  ArrayList<String> needed=new ArrayList<>();
+  if(checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)needed.add(Manifest.permission.CAMERA);
+  if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)needed.add(Manifest.permission.RECORD_AUDIO);
+  if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)needed.add(Manifest.permission.POST_NOTIFICATIONS);
+  if(!needed.isEmpty())requestPermissions(needed.toArray(new String[0]),100);
+ }
+
  @Override protected void onDestroy(){if(windowsWorker!=null)windowsWorker.interrupt();if(windowsProgress!=null)windowsProgress.dismiss();if(windowsFile!=null)windowsFile.delete();if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();if(contentUpdateProgress!=null)contentUpdateProgress.dismiss();if(contentUpdateFile!=null)contentUpdateFile.delete();clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();}
  private void confirmContentUpdate(boolean tg){
   if(contentUpdateBusy)return;contentUpdateTg=tg;contentUpdateBusy=true;
@@ -243,5 +259,26 @@ public final class MainActivity extends Activity {
   }
  }
  private void contentToast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
+
+ private void checkAssetUpdate(boolean tg){
+  if(contentUpdateBusy)return;contentUpdateTg=tg;contentUpdateBusy=true;
+  new AlertDialog.Builder(this).setTitle(tr("Проверка обновления","Тафтиши навсозӣ"))
+   .setMessage(tr("Проверяем наличие новой версии. Оставьте приложение открытым.","Навсозӣ санҷида мешавад. Барномаро кушода нигоҳ доред."))
+   .setCancelable(false).show();
+  new Thread(()->{
+   boolean updated=false;
+   try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
+    String repo=input.readLine();if(repo==null)throw new IOException("repository");
+    updated=assetCache.updateAssets(repo,(msg,percent)->runOnUiThread(()->{}));
+   }catch(Exception error){updated=false;}
+   final boolean result=updated;
+   runOnUiThread(()->{
+    contentUpdateBusy=false;
+    new AlertDialog.Builder(this).setTitle(tr("Обновление","Навсозӣ"))
+     .setMessage(result?tr("Приложение обновлено. Перезапустите его.","Барнома навсозӣ шуд. Онро аз нав оғоз кунед."):tr("Обновлений не найдено или нет интернета.","Навсозӣ ёфт нашуд ё интернет нест."))
+     .setPositiveButton("OK",(d,w)->{if(result)finish();}).show();
+   });
+  },"asset-update").start();
+ }
 
 }

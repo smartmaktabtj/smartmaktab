@@ -64,6 +64,26 @@ function registerContent({app,ipcMain,dialog,BrowserWindow,own},configOverride){
    }catch(e){const safe=['size','format','schema','signature','network'];return {status:safe.includes(e.code)?e.code:kind==='online'?'network':'error'};}
   });
  });
+ async function checkGitHubForUpdate(){
+    if(!url)return {status:'no-feed'};
+    try{
+     const latest=await fetchBounded(url);
+     const newPayload=openPack(latest,key,roles);
+     let old;try{old=await current();}catch{return {status:'corrupt'};}
+     if(!old||newPayload.sequence>old.sequence)return {status:'available',payload:newPayload};
+     return {status:'none'};
+    }catch(e){return {status:'network'};}
+ }
+ ipcMain.handle('sm:content:autoCheck',e=>{
+  if(!allowed(e)||!key)return {status:key?'denied':'no-key'};
+  return transaction(async()=>{
+   try{
+    const found=await findDownloadsPack();
+    if(found)return await store(found.data);
+    return await checkGitHubForUpdate();
+   }catch(e){const safe=['size','format','schema','signature','network'];return {status:safe.includes(e.code)?e.code:'error'};}
+  });
+ });
  ipcMain.handle('sm:content:check',e=>{
   if(!allowed(e)||!key)return {status:key?'denied':'no-key'};
   return transaction(async()=>{
