@@ -6,6 +6,7 @@ import {
   readCachedLicense,
 } from '../shared/license-guard.mjs';
 import {
+  DEFAULT_PAYMENT_TARIFF,
   hashReceiptBytes,
   parseReceiptText,
   submitReceiptForVerification,
@@ -17,6 +18,7 @@ import {
   deleteCachedBook,
 } from '../shared/book-cache.mjs';
 import { createCloudClient } from '../shared/cloud-client.mjs';
+import { getCloudConfig } from '../shared/cloud-config.mjs';
 
 function makeMemoryStorage() {
   const map = new Map();
@@ -197,4 +199,72 @@ test('cloud client persists session in storage and refreshes expired tokens auto
   assert.ok(calls >= 3);
   await client2.signOut();
   assert.equal(storage.getItem('test.session'), null);
+});
+
+test('cloud UI and license helpers survive sandboxed frames without localStorage access', async () => {
+  const prevDoc = globalThis.document;
+  const prevWin = globalThis.window;
+  const prevLoc = globalThis.location;
+  const prevOpt = globalThis.Option;
+  const prevDesc = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  try {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() { throw new Error('SecurityError: sandboxed'); },
+    });
+    const makeEl = tag => {
+      const el = {
+        tagName: tag.toUpperCase(),
+        children: [],
+        dataset: {},
+        options: [],
+        hidden: false,
+        _className: '',
+        set className(v) { this._className = v; },
+        get className() { return this._className; },
+        style: {},
+        setAttribute() {},
+        addEventListener() {},
+        prepend(...n) { this.children.unshift(...n); },
+        append(...n) {
+          for (const x of n) {
+            this.children.push(x);
+            if (this.tagName === 'SELECT' && x?.value !== undefined) this.options.push(x);
+          }
+        },
+        after() {},
+        replaceChildren(...n) {
+          this.children = [...n];
+          if (this.tagName === 'SELECT') this.options = [...n];
+        },
+      };
+      return el;
+    };
+    const docs = makeEl('section');
+    const article = makeEl('article');
+    article.dataset.cabinetId = 'school-director';
+    globalThis.Option = function Option(text, value) { return { textContent: text, value, text }; };
+    globalThis.window = { origin: 'null' };
+    globalThis.location = { protocol: 'about:', href: 'about:srcdoc' };
+    globalThis.document = {
+      documentElement: { lang: 'tg' },
+      createElement: makeEl,
+      getElementById: id => (id === 'workspaceDocs' ? docs : null),
+      querySelector: () => null,
+      addEventListener() {},
+    };
+    const { setupCloudWorkspace } = await import('../shared/cloud-workspace-ui.mjs');
+    const cfg = getCloudConfig();
+    assert.equal(cfg.projectRef, 'waorfkkavzzpbrsvjjln');
+    assert.equal(DEFAULT_PAYMENT_TARIFF.code, 'trial_10');
+    setupCloudWorkspace(article, docs, () => ({ id: 'demo-88', name: 'МТМУ № 88' }));
+    assert.equal(docs.children.length, 1);
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
+    globalThis.location = prevLoc;
+    globalThis.Option = prevOpt;
+    if (prevDesc) Object.defineProperty(globalThis, 'localStorage', prevDesc);
+    else delete globalThis.localStorage;
+  }
 });

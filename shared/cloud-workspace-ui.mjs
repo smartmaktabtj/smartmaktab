@@ -2,8 +2,17 @@ import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
 import { cacheVerifiedLicense, mountLicenseGate } from './license-guard.mjs';
-import { parseReceiptText, runClientOcr, submitReceiptForVerification } from './ocr-receipt.mjs';
+import { DEFAULT_PAYMENT_TARIFF, parseReceiptText, runClientOcr, submitReceiptForVerification } from './ocr-receipt.mjs';
 import { openWorkspaceView, closeWorkspaceView } from './workspace-view.mjs';
+
+const providerLabels = {
+  amonat: ['Амонатбонк', 'Амонатбанк'],
+  dcity: ['Душанбе Сити', 'Душанбе Сити'],
+  alif: ['Алиф', 'Алиф'],
+  eskhata: ['Эсхата', 'Эсхата'],
+  spitamen: ['Спитамен Бонк', 'Спитамен Банк'],
+  manual: ['Дигар / дастӣ', 'Другой / вручную'],
+};
 
 const copy = {
   trigger: ['Облако ва обуна', 'Облако и подписка'],
@@ -28,6 +37,9 @@ const copy = {
   restoreLocal: ['Барқарор дар ин дастгоҳ', 'Восстановить на устройство'],
   restoredLocal: ['Маълумот аз абр барқарор шуд.', 'Данные из облака восстановлены локально.'],
   receiptHeading: ['Тасдиқи пардохт тавассути чек (OCR)', 'Подтверждение оплаты по чеку (OCR)'],
+  payRequisites: ['Маълумот барои пардохт', 'Реквизиты для оплаты'],
+  copyPhone: ['Нусхабардории рақам', 'Скопировать номер'],
+  copiedPhone: ['Рақам нусхабардорӣ шуд:', 'Номер скопирован:'],
   receiptFile: ['Акси чек (PNG/JPG/PDF)', 'Файл чека (PNG/JPG/PDF)'],
   provider: ['Усули пардохт', 'Способ оплаты'],
   amount: ['Маблағ (сомонӣ)', 'Сумма (сомони)'],
@@ -164,7 +176,7 @@ export function setupCloudWorkspace(article, group, school) {
   panel.append(head, note, status, loginForm, sessionBox);
 
   const client = createCloudClient({
-    config: getCloudConfig(),
+    config: getCloudConfig(persistentStore),
     storage: persistentStore,
     storageKey: 'smartmaktab.cloud.session.v1',
   });
@@ -189,6 +201,7 @@ export function setupCloudWorkspace(article, group, school) {
   function refreshGate() {
     mountLicenseGate(gateHost, {
       orgId: selectedOrgId,
+      storage: persistentStore,
       onVerifyOnline: checkLicenseOnline,
       onOpenPayment: () => {
         panel.hidden = false;
@@ -201,7 +214,7 @@ export function setupCloudWorkspace(article, group, school) {
     if (!client.session?.access_token || !selectedOrgId) return;
     try {
       const res = await client.getLicenseStatus(selectedOrgId);
-      cacheVerifiedLicense(selectedOrgId, res);
+      cacheVerifiedLicense(selectedOrgId, res, persistentStore);
       licLine.textContent = `${t('licenseLine')}: ${res.effective_status} (${res.effective_status === 'grace' ? res.grace_days_left : res.days_left}d)`;
       refreshGate();
     } catch (err) {
