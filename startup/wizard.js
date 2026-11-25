@@ -5,7 +5,11 @@ const roster=new Map(rows.map(row=>[row.id,row]));
 const allowed={school:['school'],maorif:['office','advisers','subjects'],raesat:['raesat']};
 const names=['first','last'];
 const empty=()=>({level:'',primary:'',extras:[],person:{first:'',last:''},overrides:new Map(),fields:new Map(),school:'',schools:Object.create(null)});
-let state=empty(),step=1,lang=getLanguage(new URLSearchParams(location.search).get('lang'));
+const WIZARD_STORAGE_KEY='smartmaktab.wizard.state';
+function saveState(){try{localStorage.setItem(WIZARD_STORAGE_KEY,JSON.stringify({state:state,step:step}));}catch{}}
+function loadState(){try{const saved=localStorage.getItem(WIZARD_STORAGE_KEY);if(saved){const parsed=JSON.parse(saved);state=parsed.state??empty();step=parsed.step??1;}}catch{}}
+loadState();
+let lang=getLanguage(new URLSearchParams(location.search).get('lang'));
 const copy={primary:['Основная', 'Асосӣ'],extra:['Дополнительная','Иловагӣ'],first:['Имя','Ном'],last:['Фамилия','Насаб'],
  main:['Подставлено из основной','Аз вазифаи асосӣ'],changed:['Изменено для этой должности','Барои ҳамин вазифа иваз шуд'],
  restore:['Подставить из основной','Аз вазифаи асосӣ гирифтан'],invalid:['Введите вымышленные имя и фамилию.','Ном ва насаби сохтаро ворид кунед.'],
@@ -39,7 +43,7 @@ const clean=value=>value.trim();
 const isName=value=>!!value&&[...value].length<=60&&!/[\u0000-\u001f\u007f-\u009f]/.test(value);
 const valueFor=(id,field)=>state.overrides.get(id)?.[field]??state.person[field];
 const el=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
-function setStep(n){step=n;render();const section=sections[n-1];section.querySelector('.setup-step-body').scrollTop=0;section.querySelector('h2').focus({preventScroll:true});}
+function setStep(n){step=n;saveState();render();const section=sections[n-1];section.querySelector('.setup-step-body').scrollTop=0;section.querySelector('h2').focus({preventScroll:true});}
 function renderChoices(){
  const extras=new Set(state.extras);
  for(const main of [true,false]){
@@ -125,14 +129,14 @@ for(const button of document.querySelectorAll('[data-back]'))button.addEventList
 $('primaryChoices').addEventListener('change',event=>{
  const id=event.target.value;
  if(!roles().some(row=>row.id===id))return;
- state.primary=id;
+ state.primary=id;saveState();
  state.extras=state.extras.filter(role=>role!==id);state.overrides.delete(id);
  $('toExtras').disabled=false;
 });
 $('extraChoices').addEventListener('change',event=>{
  const id=event.target.value;
  if(id===state.primary||!roles().some(row=>row.id===id))return;
- if(event.target.checked&&state.extras.length<10&&!state.extras.includes(id))state.extras.push(id);
+ if(event.target.checked&&state.extras.length<10&&!state.extras.includes(id))state.extras.push(id);saveState();
  if(!event.target.checked){state.extras=state.extras.filter(role=>role!==id);state.overrides.delete(id);}
  refreshExtras();
 });
@@ -191,7 +195,7 @@ $('begin').addEventListener('click',async()=>{
   await intro;
   const isHandoff=key=>key.startsWith('smartmaktab.demo.role-name.v2.')||key.startsWith('smartmaktab.demo.role-setup.v3.')||key==='smartmaktab.demo.director-handoff.v1';
   if(!embeddedOnly)try{
-   for(const key of Object.keys(localStorage))if(isHandoff(key))localStorage.removeItem(key);
+   for(const key of Object.keys(localStorage))if(isHandoff(key))localStorage.removeItem(key);localStorage.removeItem(WIZARD_STORAGE_KEY);
    for(const [key,value] of Object.entries(payload))localStorage.setItem(key,value);
    location.assign(route);$('beginError').textContent='';return;
   }catch{/* Browser storage can be disabled; use the self-contained cabinet instead. */}
