@@ -63,7 +63,12 @@ jobs:
           python-version: '3.12'
       - name: Prepare web assets and Windows dependencies
         shell: pwsh
+        env:
+          SM_CONTENT_PUBLIC_KEY: ${{ vars.SM_CONTENT_PUBLIC_KEY }}
+          SM_CONTENT_FEED: ${{ vars.SM_CONTENT_FEED }}
         run: |
+          node scripts/windows-content.cjs configure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm ci --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/build_startup.py

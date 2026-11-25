@@ -1,0 +1,226 @@
+{
+  "template_id": "lesson_observation_journal",
+  "version": 2,
+  "language": "tg",
+  "status": "draft_unapproved",
+  "title_tg": "Дафтари таҳлили дарсҳо",
+  "title_ru": "Журнал анализа уроков",
+  "template_file": "lesson_observation_journal.tg.docx",
+  "primary_role": "school-academic-deputy",
+  "related_roles": [
+    "school-director"
+  ],
+  "suggested_roles": [
+    "school-academic-deputy",
+    "school-director"
+  ],
+  "fields": [
+    {
+      "key": "school_name",
+      "label_tg": "Номи муассиса",
+      "label_ru": "Название школы",
+      "type": "text",
+      "required": true,
+      "source": "school_context",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "school.name",
+        "scope": "active_school",
+        "aliases": [
+          "номи муассиса",
+          "номи мактаб",
+          "название школы"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "observation_date",
+      "label_tg": "Таърихи мушоҳида",
+      "label_ru": "Дата наблюдения",
+      "type": "date",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "print_format": "dd.mm.yyyy",
+      "admin_binding": {
+        "proposed_key": "form.observation_date",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "teacher_full_name",
+      "label_tg": "Ному насаби омӯзгор",
+      "label_ru": "ФИО учителя",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "staff.selected_teacher_name",
+        "scope": "active_school",
+        "aliases": [
+          "номи омӯзгор",
+          "ному насаби омӯзгор",
+          "фио учителя"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "teacher_specialty",
+      "label_tg": "Ихтисос",
+      "label_ru": "Специальность",
+      "type": "text",
+      "required": false,
+      "source": "school_staff",
+      "when_empty": "leave_blank",
+      "admin_binding": {
+        "proposed_key": "staff.selected_teacher_specialty",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "class_code",
+      "label_tg": "Синф",
+      "label_ru": "Класс",
+      "type": "class_code",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.class_code",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "subject",
+      "label_tg": "Фан",
+      "label_ru": "Предмет",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.subject",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "lesson_type",
+      "label_tg": "Шакли дарс",
+      "label_ru": "Тип урока",
+      "type": "text",
+      "required": false,
+      "source": "document_form",
+      "when_empty": "leave_blank",
+      "admin_binding": {
+        "proposed_key": "form.lesson_type",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "topic",
+      "label_tg": "Мавзӯи дарс",
+      "label_ru": "Тема урока",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.topic",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "lesson_flow",
+      "label_tg": "Равishi дарс",
+      "label_ru": "Ход урока",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.lesson_flow",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "observation_summary",
+      "label_tg": "Хулосаи мушоҳида",
+      "label_ru": "Итог наблюдения",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.observation_summary",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "recommendation",
+      "label_tg": "Пешниҳод",
+      "label_ru": "Рекомендация",
+      "type": "text",
+      "required": false,
+      "source": "document_form",
+      "when_empty": "leave_blank",
+      "admin_binding": {
+        "proposed_key": "form.recommendation",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "observer_full_name",
+      "label_tg": "Ному насаби мушоҳидакунанда",
+      "label_ru": "ФИО наблюдателя",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.observer_full_name",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    }
+  ],
+  "source_reference": "Обезличенный бланк «Дафтар (журнал)-и таҳлили дарсҳо» (из папки «Чоп») на таджикском языке. Реальные ФИО/данные исключены; оставлена структура одной записи наблюдения.",
+  "notes_for_integration": "lesson_flow, observation_summary, recommendation — свободные текстовые блоки. teacher_specialty и lesson_type — необязательные (leave_blank). Проверки: каждый {{ключ}} DOCX описан в fields и наоборот; реальные данные не перенесены; маркеры целые. Правило: данные берутся только из текущей школы и разрешённой роли; доступ проверяется на сервере SmartMaktab. Не проверено визуально (нет Word/LibreOffice).",
+  "source_version": 1,
+  "metadata_format": "smartmaktab-admin-draft-v1",
+  "publication": "blocked_pending_review",
+  "review_note": "Проверить видимость наблюдений и выбор учителя."
+}

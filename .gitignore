@@ -18,3 +18,8 @@ native/android/**/build/
 native/android/app/src/main/assets/web/
 native/android/local.properties
 native/android/release/
+
+# Generated pilot files and signing material
+native/windows/pilot-release/
+native/windows/content-config.json
+*.smupdate-key

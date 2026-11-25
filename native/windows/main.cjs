@@ -1,5 +1,6 @@
 'use strict';
 const {app,BrowserWindow,protocol,session,shell,dialog,ipcMain}=require('electron');
+const {registerContent}=require('./content-ipc.cjs');
 const fs=require('node:fs/promises'), path=require('node:path');
 const origin='smapp://smartmaktab'; const root=path.join(__dirname,'web');
 protocol.registerSchemesAsPrivileged([{scheme:'smapp',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
@@ -14,7 +15,8 @@ function create(){
  void win.loadURL(`${origin}/index.html`);
 }
 app.whenReady().then(()=>{
- app.setAppUserModelId('tj.smartmaktab.app');
+ app.setAppUserModelId(app.name==='SmartMaktab Pilot'?'tj.smartmaktab.app.pilot':'tj.smartmaktab.app');
+ registerContent({app,ipcMain,dialog,BrowserWindow,own});
  protocol.handle('smapp',async request=>{
   if(!own(request.url)||!['GET','HEAD'].includes(request.method))return new Response(null,{status:403});
   try{const name=decodeURIComponent(new URL(request.url).pathname).replace(/^\//u,'')||'index.html';

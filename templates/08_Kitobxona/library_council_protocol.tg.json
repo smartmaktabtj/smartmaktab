@@ -1,0 +1,209 @@
+{
+  "template_id": "library_council_protocol",
+  "version": 2,
+  "language": "tg",
+  "status": "draft_unapproved",
+  "title_tg": "Протоколи Шӯрои китобхона",
+  "title_ru": "Протокол заседания библиотечного совета",
+  "template_file": "library_council_protocol.tg.docx",
+  "primary_role": "school-library-head",
+  "related_roles": [
+    "school-director"
+  ],
+  "suggested_roles": [
+    "school-library-head",
+    "school-director"
+  ],
+  "fields": [
+    {
+      "key": "protocol_number",
+      "label_tg": "Рақами протокол",
+      "label_ru": "Номер протокола",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.protocol_number",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "school_name",
+      "label_tg": "Номи муассиса",
+      "label_ru": "Название школы",
+      "type": "text",
+      "required": true,
+      "source": "school_context",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "school.name",
+        "scope": "active_school",
+        "aliases": [
+          "номи муассиса",
+          "номи мактаб",
+          "название школы"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "meeting_date",
+      "label_tg": "Санаи ҷаласа",
+      "label_ru": "Дата заседания",
+      "type": "date",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "print_format": "dd.mm.yyyy",
+      "admin_binding": {
+        "proposed_key": "form.meeting_date",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "members_total",
+      "label_tg": "Шумораи аъзоён",
+      "label_ru": "Число членов",
+      "type": "integer",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "minimum": 0,
+      "admin_binding": {
+        "proposed_key": "form.members_total",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "members_present",
+      "label_tg": "Иштирок доштанд",
+      "label_ru": "Присутствовали",
+      "type": "integer",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "minimum": 0,
+      "admin_binding": {
+        "proposed_key": "form.members_present",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "members_absent",
+      "label_tg": "Иштирок надоштанд",
+      "label_ru": "Отсутствовали",
+      "type": "integer",
+      "required": false,
+      "source": "document_form",
+      "when_empty": "omit_line",
+      "minimum": 0,
+      "admin_binding": {
+        "proposed_key": "form.members_absent",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "agenda",
+      "label_tg": "Рӯзнома",
+      "label_ru": "Повестка дня",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.agenda",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "speakers",
+      "label_tg": "Баромад намуданд",
+      "label_ru": "Выступили",
+      "type": "text",
+      "required": false,
+      "source": "document_form",
+      "when_empty": "leave_blank",
+      "admin_binding": {
+        "proposed_key": "form.speakers",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "decision",
+      "label_tg": "Қарори ҷамъомад",
+      "label_ru": "Решение собрания",
+      "type": "text",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.decision",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "chair_full_name",
+      "label_tg": "Раиси маҷлис",
+      "label_ru": "Председатель",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.chair_full_name",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "secretary_full_name",
+      "label_tg": "Котиби маҷлис",
+      "label_ru": "Секретарь",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.secretary_full_name",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    }
+  ],
+  "source_reference": "Обезличенный бланк протокола заседания Шӯрои китобхона (из папки «Маълумотномаҳо», файл «Китобдор») на таджикском языке. Персональные данные и реальные ФИО исключены; оставлена структура одного протокола.",
+  "notes_for_integration": "Поля agenda, speakers, decision — свободные текстовые блоки (повторяющиеся пункты повестки/выступлений вводятся при выпуске, фиксированной таблицы нет). members_absent — необязательное: при пустом значении удаляется строка «Иштирок надоштанд». speakers — необязательное: при пустом значении остаётся пустой блок. Проверки: каждый {{ключ}} DOCX описан в fields и наоборот; реальные ФИО не перенесены; маркеры целые. Правило: данные берутся только из текущей школы и разрешённой роли; смена школы не переносит реквизиты; доступ проверяется на сервере SmartMaktab. Не проверено визуально (нет Word/LibreOffice).",
+  "source_version": 1,
+  "metadata_format": "smartmaktab-admin-draft-v1",
+  "publication": "blocked_pending_review",
+  "review_note": "Проверить роли председателя/секретаря и правила кворума."
+}

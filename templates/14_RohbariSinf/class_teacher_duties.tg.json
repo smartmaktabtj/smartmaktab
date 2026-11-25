@@ -1,0 +1,77 @@
+{
+  "template_id": "class_teacher_duties",
+  "version": 2,
+  "language": "tg",
+  "status": "draft_unapproved",
+  "title_tg": "Вазифаҳои хизматии роҳбари синф",
+  "title_ru": "Должностные обязанности классного руководителя",
+  "template_file": "class_teacher_duties.tg.docx",
+  "primary_role": "school-class-teacher",
+  "related_roles": [
+    "school-upbringing-deputy"
+  ],
+  "suggested_roles": [
+    "school-class-teacher",
+    "school-upbringing-deputy"
+  ],
+  "fields": [
+    {
+      "key": "school_name",
+      "label_tg": "Номи муассиса",
+      "label_ru": "Название школы",
+      "type": "text",
+      "required": true,
+      "source": "school_context",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "school.name",
+        "scope": "active_school",
+        "aliases": [
+          "номи муассиса",
+          "номи мактаб",
+          "название школы"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "class_code",
+      "label_tg": "Синф",
+      "label_ru": "Класс",
+      "type": "class_code",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.class_code",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "class_teacher_full_name",
+      "label_tg": "Ному насаби роҳбари синф",
+      "label_ru": "ФИО классного руководителя",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "directory.class_teacher_of_class",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    }
+  ],
+  "source_reference": "Обезличенный бланк «Вазифаҳои хизматии роҳбари синф» (из папки «Чоп») на таджикском языке. Реальные ФИО и номер школы исключены; сохранены основные категории обязанностей и структура.",
+  "notes_for_integration": "Текст обязанностей — фиксированный (из образца), меняются только school_name, class_code и ФИО. Проверки: каждый {{ключ}} DOCX описан в fields и наоборот; реальные данные не перенесены; маркеры целые. Правило: данные берутся только из текущей школы и разрешённой роли; доступ проверяется на сервере SmartMaktab. Не проверено визуально (нет Word/LibreOffice).",
+  "source_version": 1,
+  "metadata_format": "smartmaktab-admin-draft-v1",
+  "publication": "blocked_pending_review",
+  "review_note": "Сверить с действующими обязанностями и утверждённым бланком."
+}

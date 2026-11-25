@@ -1,0 +1,78 @@
+name: SmartMaktab — личный Windows Pilot (без подписи)
+on:
+  workflow_dispatch:
+    inputs:
+      pilot_version:
+        description: 'Версия проверки (X.Y.Z)'
+        type: string
+        default: '1.0.0'
+        required: true
+      confirm_unsigned:
+        description: 'Для личной проверки: напишите UNSIGNED'
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  windows_pilot:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      SM_RELEASE_VERSION: ${{ inputs.pilot_version }}
+      SM_CONFIRM_PRIVATE_UNSIGNED: ${{ inputs.confirm_unsigned }}
+      SM_CONTENT_PUBLIC_KEY: ${{ vars.SM_CONTENT_PUBLIC_KEY }}
+      SM_CONTENT_FEED: ${{ vars.SM_CONTENT_FEED }}
+      SM_REPO_PRIVATE: ${{ github.event.repository.private }}
+    steps:
+      - name: Require private repository and explicit confirmation
+        shell: pwsh
+        run: |
+          if ($env:SM_REPO_PRIVATE -cne 'true') { throw 'The unsigned pilot requires a private repository' }
+          if ($env:SM_CONFIRM_PRIVATE_UNSIGNED -cne 'UNSIGNED') { throw 'Type UNSIGNED to confirm a personal test build' }
+          if ($env:SM_RELEASE_VERSION -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Version must be X.Y.Z' }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            native/windows/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare and package Windows x64
+        shell: pwsh
+        run: |
+          node scripts/windows-content.cjs configure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/build_startup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/stage-native-web.py native/windows/web
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix native/windows ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location native/windows
+          npx --no-install electron-builder --config pilot-builder.cjs --win nsis --x64 --publish never
+          exit $LASTEXITCODE
+      - name: Verify pilot output and record hash
+        shell: pwsh
+        run: |
+          $out = 'native/windows/pilot-release'
+          $files = @(Get-ChildItem $out -File -Filter '*-Windows-x64-PILOT-UNSIGNED.exe')
+          if ($files.Count -ne 1) { throw 'Expected exactly one named pilot installer' }
+          if ((Get-AuthenticodeSignature -FilePath $files[0].FullName).Status -ne 'NotSigned') { throw 'Unexpected pilot signature status' }
+          $hash = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($files[0].Name)" | Set-Content "$out/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartMaktab-Windows-PILOT-UNSIGNED-${{ inputs.pilot_version }}
+          path: |
+            native/windows/pilot-release/*-Windows-x64-PILOT-UNSIGNED.exe
+            native/windows/pilot-release/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error

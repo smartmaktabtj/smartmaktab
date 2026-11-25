@@ -1,3 +1,4 @@
+import {mountWindowsContent} from './windows-content-ui.mjs';
 import {setupNativeFiles} from './native-shell.mjs';
 import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
@@ -20,7 +21,7 @@ export function setupWorkspace({configured,school}){
  if($('teacherBookPanel'))editor.after($('teacherBookPanel'));
  $('cabinetLang').before(toggle);setupNativeFiles($('cabinetLang'));
  setupSchoolForms(article,docs,school);
- const views=initWorkspaceViews(article);
+ const views=initWorkspaceViews(article);mountWindowsContent(article,views);
  for(const id of ['workspaceSettings','workspaceDraft','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate'])$(id)?.classList.add('sm-screen');
  const entries={workspaceDocs:['Документы','Ҳуҷҷатҳо','▤'],workspaceMaterials:['Материалы','Мавод','◇'],teacherSubjects:['Классы и предметы','Синфҳо ва фанҳо','⊞'],teacherDocumentPanel:['План урока','Нақшаи дарс','▤'],directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],adviserSchools:['Школы','Мактабҳо','▦'],adviserDocuments:['Документы направления','Ҳуҷҷатҳои самт','▤']};
  if(teacher){delete entries.teacherSubjects;delete entries.workspaceMaterials;}

@@ -14,5 +14,5 @@ if(env.WINDOWS_SIGNING_MODE==='azure'){
  if(!/^[A-Za-z0-9+/]+={0,2}$/.test(env.WIN_CSC_LINK)||env.WIN_CSC_LINK.length%4||Buffer.from(env.WIN_CSC_LINK,'base64')[0]!==0x30)throw new Error('WINDOWS_CERT_BASE64 must encode a trusted PFX');
  signature={signtoolOptions:{publisherName:env.WINDOWS_SIGN_PUBLISHER,signingHashAlgorithms:['sha256']}};
 }else throw new Error('WINDOWS_SIGNING_MODE must be azure or pfx; unsigned builds disabled');
-module.exports={appId:'tj.smartmaktab.app',productName:'SmartMaktab',forceCodeSigning:true,extraMetadata:{version},directories:{output:'release'},files:['main.cjs','preload.cjs','web/**/*'],
+module.exports={appId:'tj.smartmaktab.app',productName:'SmartMaktab',forceCodeSigning:true,extraMetadata:{version},directories:{output:'release'},files:['main.cjs','preload.cjs','content.cjs','content-ipc.cjs','content-config.json','web/**/*'],
  win:{target:['nsis'],icon:'web/pwa-512.png',artifactName:'SmartMaktab-${version}-Windows-x64.${ext}',...signature},nsis:{oneClick:false,perMachine:false,allowToChangeInstallationDirectory:true}};

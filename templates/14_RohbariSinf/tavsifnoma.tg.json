@@ -1,0 +1,152 @@
+{
+  "template_id": "tavsifnoma",
+  "version": 2,
+  "language": "tg",
+  "status": "draft_unapproved",
+  "title_tg": "Тавсифнома",
+  "title_ru": "Характеристика (выпускника)",
+  "template_file": "tavsifnoma.tg.docx",
+  "primary_role": "school-class-teacher",
+  "related_roles": [
+    "school-director"
+  ],
+  "suggested_roles": [
+    "school-class-teacher",
+    "school-director"
+  ],
+  "fields": [
+    {
+      "key": "class_code",
+      "label_tg": "Синф",
+      "label_ru": "Класс",
+      "type": "class_code",
+      "required": true,
+      "source": "selected_student",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "student.class_code",
+        "scope": "active_school",
+        "aliases": [
+          "синфи хонанда",
+          "класс ученика"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "school_name",
+      "label_tg": "Номи муассиса",
+      "label_ru": "Название школы",
+      "type": "text",
+      "required": true,
+      "source": "school_context",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "school.name",
+        "scope": "active_school",
+        "aliases": [
+          "номи муассиса",
+          "номи мактаб",
+          "название школы"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "student_full_name",
+      "label_tg": "Ному насаби хонанда",
+      "label_ru": "ФИО ученика",
+      "type": "text",
+      "required": true,
+      "source": "selected_student",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "student.full_name",
+        "scope": "active_school",
+        "aliases": [
+          "номи хонанда",
+          "ному насаби хонанда",
+          "фио ученика"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "enrollment_year",
+      "label_tg": "Соли оғози таҳсил",
+      "label_ru": "Год начала обучения",
+      "type": "year",
+      "required": true,
+      "source": "selected_student",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "student.enrollment_year",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "description",
+      "label_tg": "Тавсифи муфассал",
+      "label_ru": "Подробное описание",
+      "type": "multiline",
+      "required": true,
+      "source": "document_form",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "form.description",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "director_full_name",
+      "label_tg": "Ному насаби директор",
+      "label_ru": "ФИО директора",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "directory.school_director",
+        "scope": "active_school",
+        "aliases": [
+          "номи директор",
+          "ному насаби директор",
+          "фио директора"
+        ],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    },
+    {
+      "key": "class_teacher_full_name",
+      "label_tg": "Ному насаби роҳбари синф",
+      "label_ru": "ФИО классного руководителя",
+      "type": "text",
+      "required": true,
+      "source": "school_staff",
+      "when_empty": "block_generation",
+      "admin_binding": {
+        "proposed_key": "directory.class_teacher_of_class",
+        "scope": "active_school",
+        "aliases": [],
+        "requires_confirmation": true,
+        "is_permission_grant": false
+      }
+    }
+  ],
+  "source_reference": "Обезличенный бланк «Тавсифнома» (из файла «Хислатнома») на таджикском языке. Реальные ФИО, даты и адрес исключены; оставлена структура характеристики.",
+  "notes_for_integration": "description — свободный текстовый блок (необязательный, leave_blank). Проверки: каждый {{ключ}} DOCX описан в fields и наоборот; реальные данные не перенесены; маркеры целые. Правило: данные берутся только из текущей школы и разрешённой роли; доступ проверяется на сервере SmartMaktab. Не проверено визуально (нет Word/LibreOffice).",
+  "source_version": 1,
+  "metadata_format": "smartmaktab-admin-draft-v1",
+  "publication": "blocked_pending_review",
+  "review_note": "Ручная проверка содержания характеристики и доступа к данным ученика."
+}
