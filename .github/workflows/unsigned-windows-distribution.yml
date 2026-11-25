@@ -102,7 +102,8 @@ jobs:
             $makensis = (Get-Command makensis -ErrorAction SilentlyContinue)?.Source
           }
           if (-not $makensis) { throw 'makensis not found' }
-          & $makensis "/DX64_EXE=$(Join-Path $uni 'x64.exe')" "/DIA32_EXE=$(Join-Path $uni 'ia32.exe')" "/DOUT_FILE=$setupPath" 'native/windows/universal-installer.nsi'
+          $nsiScript = Join-Path $PWD 'native/windows/universal-installer.nsi'
+          & $makensis "/DX64_EXE=$(Join-Path $uni 'x64.exe')" "/DIA32_EXE=$(Join-Path $uni 'ia32.exe')" "/DOUT_FILE=$setupPath" $nsiScript
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $setup = Get-Item $setupPath
           if ($setup.Length -lt 1 -or $setup.Length -gt 400MB) { throw 'Universal setup exceeds the Android download size limit' }

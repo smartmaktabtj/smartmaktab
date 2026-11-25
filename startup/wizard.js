@@ -51,8 +51,7 @@ function renderChoices(){
    input.checked=main?state.primary===row.id:extras.has(row.id);
    input.disabled=!main&&!input.checked&&extras.size>=10;
    text.append(el('strong',row.title));
-   if(row.number) text.prepend(document.createTextNode(`${String(row.number).padStart(2,'0')} · `));
-   if(['advisers','subjects'].includes(row.group))text.append(el('span',lang==='ru'?`${t(row.group)} · ${row.description}`:t(row.group)));
+      if(['advisers','subjects'].includes(row.group))text.append(el('span',lang==='ru'?`${t(row.group)} · ${row.description}`:t(row.group)));
    else if(row.description!==row.title)text.append(el('span',lang==='tg'?row.descriptionTg:row.description));
    item.append(input,text);return item;
   }));
@@ -192,8 +191,8 @@ $('begin').addEventListener('click',async()=>{
   await intro;
   const isHandoff=key=>key.startsWith('smartmaktab.demo.role-name.v2.')||key.startsWith('smartmaktab.demo.role-setup.v3.')||key==='smartmaktab.demo.director-handoff.v1';
   if(!embeddedOnly)try{
-   for(const key of Object.keys(sessionStorage))if(isHandoff(key))sessionStorage.removeItem(key);
-   for(const [key,value] of Object.entries(payload))sessionStorage.setItem(key,value);
+   for(const key of Object.keys(localStorage))if(isHandoff(key))localStorage.removeItem(key);
+   for(const [key,value] of Object.entries(payload))localStorage.setItem(key,value);
    location.assign(route);$('beginError').textContent='';return;
   }catch{/* Browser storage can be disabled; use the self-contained cabinet instead. */}
   for(const key of Object.keys(embeddedStore))if(isHandoff(key))delete embeddedStore[key];
@@ -208,7 +207,7 @@ $('viewerNotReady').hidden=true;
 
 if(!useFileViewer&&openOfflineRoute&&rows.some(row=>row.path===openOfflineRoute)){
  const params=new URLSearchParams(location.search);const row=rows.find(row=>row.path===openOfflineRoute);
- try{for(const key of Object.keys(sessionStorage))if(key.startsWith('smartmaktab.demo.'))embeddedStore[key]=sessionStorage.getItem(key);}catch{}
+ try{for(const key of Object.keys(localStorage))if(key.startsWith('smartmaktab.demo.'))embeddedStore[key]=localStorage.getItem(key);}catch{}
  openEmbedded(row.path,{school:params.get('school'),lang,title:row.title});
 }else brandSplash.play('launch',{lang});
 
