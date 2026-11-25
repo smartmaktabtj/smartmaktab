@@ -1,0 +1,115 @@
+name: SmartMaktab — Windows x64 для распространения (без подписи)
+on:
+  workflow_dispatch:
+    inputs:
+      windows_version:
+        description: 'Версия Windows (X.Y.Z)'
+        type: string
+        default: '1.0.0'
+        required: true
+      confirm_unsigned:
+        description: 'Подтвердите выпуск без подписи: напишите PUBLISH-UNSIGNED'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: unsigned-windows-distribution
+  cancel-in-progress: false
+jobs:
+  windows_unsigned:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      SM_RELEASE_VERSION: ${{ inputs.windows_version }}
+      SM_CONFIRM_PUBLIC_UNSIGNED: ${{ inputs.confirm_unsigned }}
+      SM_CONTENT_PUBLIC_KEY: ${{ vars.SM_CONTENT_PUBLIC_KEY }}
+      SM_CONTENT_FEED: ${{ vars.SM_CONTENT_FEED }}
+      MAY_PUBLISH: ${{ !github.event.repository.private && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    steps:
+      - name: Check unsigned distribution inputs
+        shell: pwsh
+        run: |
+          if ($env:MAY_PUBLISH -cne 'true') { throw 'Use the default branch of the public repository that hosts the Android downloads' }
+          if ($env:SM_CONFIRM_PUBLIC_UNSIGNED -cne 'PUBLISH-UNSIGNED') { throw 'Type PUBLISH-UNSIGNED to confirm an unsigned build for distribution' }
+          if ($env:SM_RELEASE_VERSION -cnotmatch '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$') { throw 'Version must be X.Y.Z' }
+          if ([string]::IsNullOrWhiteSpace($env:SM_CONTENT_PUBLIC_KEY)) { throw 'Add repository variable SM_CONTENT_PUBLIC_KEY before building for USB updates' }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            native/windows/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare and package Windows x64
+        shell: pwsh
+        run: |
+          node scripts/windows-content.cjs configure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/build_startup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/stage-native-web.py native/windows/web
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix native/windows ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location native/windows
+          npx --no-install electron-builder --config unsigned-builder.cjs --win nsis --x64 --publish never
+          exit $LASTEXITCODE
+      - name: Verify unsigned installer and record hash
+        shell: pwsh
+        run: |
+          $out = 'native/windows/unsigned-release'
+          $files = @(Get-ChildItem $out -File -Filter '*-Windows-x64-UNSIGNED.exe')
+          if ($files.Count -ne 1) { throw 'Expected exactly one named unsigned installer' }
+          $expected = "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-x64-UNSIGNED.exe"
+          if ($files[0].Length -lt 1 -or $files[0].Length -gt 400MB) { throw 'Installer exceeds the Android download size limit' }
+          if ($files[0].Name -cne $expected) { throw 'Installer filename does not match the selected version' }
+          if ((Get-AuthenticodeSignature -FilePath $files[0].FullName).Status -ne 'NotSigned') { throw 'Unexpected installer signature status' }
+          $hash = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($files[0].Name)" | Set-Content "$out/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartMaktab-Windows-x64-UNSIGNED-${{ inputs.windows_version }}
+          path: |
+            native/windows/unsigned-release/*-Windows-x64-UNSIGNED.exe
+            native/windows/unsigned-release/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error
+  publish_windows:
+    needs: windows_unsigned
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SmartMaktab-Windows-x64-UNSIGNED-${{ inputs.windows_version }}
+          path: release-files
+      - name: Publish a versioned Windows release
+        working-directory: release-files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.windows_version }}
+          COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$ ]]
+          tag="windows-unsigned-v$VERSION"
+          exe="SmartMaktab-$VERSION-Windows-x64-UNSIGNED.exe"
+          test -s "$exe"
+          test "$(sha256sum -- "$exe")" = "$(tr -d '\r' < SHA256SUMS.txt)"
+          gh release create "$tag" "$exe" SHA256SUMS.txt \
+            --target "$COMMIT" --title "SmartMaktab Windows x64 $VERSION — без подписи" \
+            --latest=false \
+            --notes 'Публичная сборка Windows x64. Установщик не подписан Authenticode. SmartScreen или политики организации могут заблокировать установку. Контрольная сумма SHA-256 в SHA256SUMS.txt. Для обновления материалов используйте подписанные пакеты .smupdate.'

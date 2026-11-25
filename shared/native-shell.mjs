@@ -29,3 +29,14 @@ export function setupNativeFiles(anchor){
 }
 
 if(bridge)globalThis.smartMaktabBack=()=>!document.dispatchEvent(new Event('sm:native-back',{cancelable:true}));
+
+export function setupNativePrograms(anchor){
+ if(!bridge||!anchor)return;
+ const details=document.createElement('details'),header=document.createElement('summary'),menu=document.createElement('div'),download=document.createElement('button');
+ details.className='sm-native-files';header.className='theme-toggle';download.type='button';download.className='button alt';
+ menu.append(download);details.append(header,menu);anchor.before(details);
+ const language=()=>document.documentElement.lang==='tg'?'tg':'ru';
+ function refresh(){const tg=language()==='tg';header.textContent=tg?'Барномаҳо':'Программы';download.textContent=tg?'Боргирӣ барои Windows (.exe)':'Скачать для Windows (.exe)';}
+ download.addEventListener('click',()=>{details.open=false;void send({action:'downloadWindows',lang:language()}).catch(()=>{});});
+ refresh();document.addEventListener('cabinet:language',refresh);
+}

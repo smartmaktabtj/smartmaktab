@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.*;
+import android.provider.DocumentsContract;
 import android.util.Base64;
 import android.view.*;
 import android.webkit.*;
@@ -19,9 +20,11 @@ import java.util.*;
 public final class MainActivity extends Activity {
  private static final String HOST="appassets.androidplatform.net", ORIGIN="https://"+HOST;
  private static final long LIMIT=150L*1024*1024;
- private static final int PICK=30, SAVE=31, OPEN=32, SHARE=33, MEDIA=34;
+ private static final int PICK=30, SAVE=31, OPEN=32, SHARE=33, MEDIA=34, SAVE_WINDOWS=35;
  private WebView view;private ValueCallback<Uri[]> picker;private PermissionRequest media;private String[] mediaResources;
  private File draft;private OutputStream draftOut;private long written,expected;private String fileName,fileMime;private JavaScriptReplyProxy finalReply;
+ private File windowsFile;private Thread windowsWorker;private AlertDialog windowsProgress;private boolean windowsBusy,windowsTg,windowsCancelled;
+ private String tr(String ru,String tg){return windowsTg?tg:ru;}
  private boolean own(Uri u){return u!=null&&"https".equals(u.getScheme())&&HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private boolean book(Uri u){return u!=null&&"https".equals(u.getScheme())&&"raw.githubusercontent.com".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/sharipovip/books/");}
  private static String mime(String s){if(s.endsWith(".html"))return "text/html";if(s.endsWith(".js")||s.endsWith(".mjs"))return "text/javascript";if(s.endsWith(".json")||s.endsWith(".webmanifest"))return "application/json";if(s.endsWith(".png"))return "image/png";if(s.endsWith(".svg"))return "image/svg+xml";return "application/octet-stream";}
@@ -65,6 +68,8 @@ public final class MainActivity extends Activity {
   try{
    if(message==null||message.length()>150000)throw new IOException("limit");JSONObject args=new JSONObject(message);
    switch(args.getString("action")){
+    case "downloadWindows":
+     confirmWindows("tg".equals(args.optString("lang")));reply.postMessage("ok");return;
     case "openFile":case "shareFile":
      Intent file=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(file,args.getString("action").equals("shareFile")?SHARE:OPEN);reply.postMessage("ok");return;
     case "begin":
@@ -89,6 +94,7 @@ public final class MainActivity extends Activity {
   super.onActivityResult(id,result,data);
   if(id==PICK&&picker!=null){ValueCallback<Uri[]> selected=picker;picker=null;selected.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));return;}
   Uri uri=result==RESULT_OK&&data!=null?data.getData():null;
+  if(id==SAVE_WINDOWS){saveWindows(uri);return;}
   if(id==SAVE){JavaScriptReplyProxy reply=finalReply;finalReply=null;File file=draft;draft=null;
    if(uri==null||file==null){if(file!=null)file.delete();if(reply!=null)reply.postMessage("cancel");return;}
    new Thread(()->{String outcome="ok";try(InputStream in=new FileInputStream(file);OutputStream out=getContentResolver().openOutputStream(uri,"w")){
@@ -106,7 +112,66 @@ public final class MainActivity extends Activity {
    boolean ok=results.length==permissions.length&&results.length>0;for(int r:results)ok &= r==PackageManager.PERMISSION_GRANTED;
    if(ok&&own(Uri.parse(view.getUrl())))pending.grant(resources);else pending.deny();}
  }
+ private void confirmWindows(boolean tg){
+  if(windowsBusy)return;windowsTg=tg;windowsBusy=true;
+  AlertDialog prompt=new AlertDialog.Builder(this).setTitle(tr("Скачать для Windows x64","Боргирӣ барои Windows x64"))
+   .setMessage(tr("На телефон будет скачан установщик .exe без цифровой подписи. Windows может предупредить или заблокировать его. После загрузки выберите папку на телефоне (например, «Загрузки»), чтобы перенести файл на ПК по USB.",
+    "Насбкунандаи .exe бе имзои рақамӣ ба телефон боргирӣ мешавад. Windows метавонад огоҳ кунад ё насбро манъ кунад. Пас аз боргирӣ ҷузвдони телефонро интихоб кунед, то файлро тавассути USB ба компютер гузаронед."))
+   .setPositiveButton(tr("Скачать","Боргирӣ"),(d,w)->downloadWindows())
+   .setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->windowsBusy=false).create();
+  prompt.setOnCancelListener(d->windowsBusy=false);prompt.show();
+ }
+ private void downloadWindows(){
+  windowsCancelled=false;
+  windowsProgress=new AlertDialog.Builder(this).setTitle(tr("Загрузка SmartMaktab для Windows","Боргирии SmartMaktab барои Windows"))
+    .setMessage(tr("Скачиваем и проверяем файл. Оставьте приложение открытым.","Файл боргирӣ ва санҷида мешавад. Барномаро кушода нигоҳ доред."))
+    .setCancelable(false).setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->{windowsCancelled=true;if(windowsWorker!=null)windowsWorker.interrupt();}).show();
+  windowsWorker=new Thread(()->{
+   File dest=null;WindowsRelease release=null;int outcome=0;
+   try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
+    String repo=input.readLine();if(repo==null)throw new IOException("repository");
+    release=WindowsRelease.find(repo);
+    if(release==null)outcome=1;
+    else{if(getCacheDir().getUsableSpace()<release.size+16L*1024*1024)throw new IOException("space");dest=File.createTempFile("smartmaktab-windows-",".part",getCacheDir());release.fetch(dest);}
+   }catch(Exception error){outcome=2;}
+   if(Thread.currentThread().isInterrupted())outcome=3;
+   final File result=dest;final WindowsRelease selected=release;final int status=outcome;
+   runOnUiThread(()->{
+    if(this.isDestroyed()){if(result!=null)result.delete();return;}
+    boolean cancelled=windowsCancelled;windowsWorker=null;
+    if(windowsProgress!=null){windowsProgress.dismiss();windowsProgress=null;}
+    if(cancelled||status!=0||result==null||selected==null){
+     if(result!=null)result.delete();windowsBusy=false;
+     if(!cancelled&&status==1)windowsToast(tr("Версия для Windows ещё не опубликована.","Нусхаи Windows ҳанӯз нашр нашудааст."));
+     else if(!cancelled&&status!=3)windowsToast(tr("Не удалось скачать или проверить файл. Проверьте интернет и свободное место.","Боргирӣ ё санҷиши файл ноком шуд. Интернет ва ҷойи холиро санҷед."));
+     return;
+    }
+    windowsFile=result;
+    Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/octet-stream").putExtra(Intent.EXTRA_TITLE,selected.name);
+    try{startActivityForResult(save,SAVE_WINDOWS);}catch(ActivityNotFoundException error){saveWindows(null);windowsToast(tr("Не удалось открыть выбор папки.","Интихоби ҷузвдон кушода нашуд."));}
+   });
+  },"smartmaktab-windows-download");windowsWorker.start();
+ }
+ private void saveWindows(Uri uri){
+  File file=windowsFile;windowsFile=null;
+  if(uri==null||file==null){if(file!=null)file.delete();windowsBusy=false;return;}
+  new Thread(()->{
+   try(InputStream in=new FileInputStream(file);OutputStream out=getContentResolver().openOutputStream(uri,"w")){
+    if(out==null)throw new IOException("destination");byte[] bytes=new byte[65536];for(int n;(n=in.read(bytes))!=-1;)out.write(bytes,0,n);
+   }catch(IOException|RuntimeException error){
+    try{DocumentsContract.deleteDocument(getContentResolver(),uri);}catch(Exception ignored){}
+    file.delete();runOnUiThread(()->windowsSaved(false));return;
+   }
+   file.delete();runOnUiThread(()->windowsSaved(true));
+  },"smartmaktab-windows-save").start();
+ }
+ private void windowsSaved(boolean ok){
+  windowsBusy=false;if(isDestroyed())return;
+  windowsToast(ok?tr("EXE сохранён. Его можно перенести на ПК по USB.","Файли EXE захира шуд. Онро тавассути USB ба компютер гузаронед."):
+   tr("Не удалось сохранить EXE. Проверьте выбранную папку и свободное место.","EXE захира нашуд. Ҷузвдон ва ҷойи холиро санҷед."));
+ }
+ private void windowsToast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
  private void clearDraft(){if(draftOut!=null)try{draftOut.close();}catch(IOException ignored){}draftOut=null;if(draft!=null)draft.delete();draft=null;}
  @Override public void onBackPressed(){view.evaluateJavascript("Boolean(window.smartMaktabBack && window.smartMaktabBack())",handled->{if(!"true".equals(handled)){if(view.canGoBack())view.goBack();else finish();}});}
- @Override protected void onDestroy(){clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();}
+ @Override protected void onDestroy(){if(windowsWorker!=null)windowsWorker.interrupt();if(windowsProgress!=null)windowsProgress.dismiss();if(windowsFile!=null)windowsFile.delete();clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();}
 }

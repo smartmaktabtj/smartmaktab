@@ -1,5 +1,5 @@
 """Copy only the public UI used by the native shells; no Dev configs, templates source or provider keys."""
-import json, shutil, sys
+import json, os, re, shutil, sys
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 allowed={root/'native/windows/web',root/'native/android/app/src/main/assets/web'}
@@ -14,4 +14,9 @@ for file in files:
     target=dst/file
     target.parent.mkdir(parents=True,exist_ok=True)
     shutil.copyfile(root/file,target)
+if dst==root/'native/android/app/src/main/assets/web':
+    repo=os.environ.get('GITHUB_REPOSITORY', 'smartmaktabtj/smartmaktab')
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}',repo) or repo.endswith(('/.','/..')):
+        raise SystemExit('Invalid GitHub repository for Windows downloads.')
+    (dst.parent/'windows-release-repository.txt').write_text(repo+'\n',encoding='ascii')
 print(f'Staged {len(files)} public assets ({len(roles)} cabinets).')

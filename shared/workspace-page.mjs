@@ -1,5 +1,5 @@
 import {mountWindowsContent} from './windows-content-ui.mjs';
-import {setupNativeFiles} from './native-shell.mjs';
+import {setupNativeFiles,setupNativePrograms} from './native-shell.mjs';
 import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
 import {cabinetFormAction,printCabinetSheet} from './cabinet-runtime.mjs';
@@ -19,7 +19,7 @@ export function setupWorkspace({configured,school}){
  const hero=article.querySelector('.hero');hero.after(overview,drawer,docs,editor);
  const teacher=!!$('teacherSubjects');if(teacher){drawer.append($('teacherSubjects'));if(materials)docs.append(materials);for(const a of $('cabinetRailNav').querySelectorAll('a[href="#teacherSubjects"],a[href="#workspaceMaterials"]'))a.hidden=true;}
  if($('teacherBookPanel'))editor.after($('teacherBookPanel'));
- $('cabinetLang').before(toggle);setupNativeFiles($('cabinetLang'));
+ $('cabinetLang').before(toggle);setupNativeFiles($('cabinetLang'));setupNativePrograms($('cabinetLang'));
  setupSchoolForms(article,docs,school);
  const views=initWorkspaceViews(article);mountWindowsContent(article,views);
  for(const id of ['workspaceSettings','workspaceDraft','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate'])$(id)?.classList.add('sm-screen');

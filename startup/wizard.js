@@ -12,6 +12,14 @@ const copy={primary:['Основная', 'Асосӣ'],extra:['Дополнит�
  school:['Выберите вымышленное учреждение.','Муассисаро интихоб кунед.'],blocked:['Кабинет не открылся. Нажмите «Оғоз» ещё раз или откройте index.html в Chrome/Edge.','Утоқи корӣ кушода нашуд. «Оғоз»-ро дубора пахш кунед ё index.html-ро дар Chrome/Edge кушоед.'],opening:['Открываем кабинет…','Утоқи корӣ кушода мешавад…'],
  advisers:['Направление маориф','Самти маориф'],subjects:['Предметный мушовир','Мушовири фаннӣ']};
 const t=key=>copy[key][lang==='tg'?1:0];
+const androidPrograms=$('androidPrograms');
+if(globalThis.SmartMaktabAndroid&&androidPrograms){
+ androidPrograms.hidden=false;
+ $('androidWindowsDownload').addEventListener('click',()=>{
+  androidPrograms.open=false;
+  globalThis.SmartMaktabAndroid.postMessage(JSON.stringify({action:'downloadWindows',lang}));
+ });
+}
 const staticText=[...document.querySelectorAll('[data-tg]')].map(el=>[el,el.textContent]);
 const sections=[...document.querySelectorAll('[data-step]')];
 for(const section of sections){const footer=section.querySelector('.foot'),body=document.createElement('div');body.className='setup-step-body';
