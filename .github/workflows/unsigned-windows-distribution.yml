@@ -66,7 +66,7 @@ jobs:
       - name: Verify unsigned installers and record hashes
         shell: pwsh
         run: |
-          $out = 'native/windows/unsigned-release'
+          $out = Join-Path $PWD 'native/windows/unsigned-release'
           $expectedNames = @(
             "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-x64-UNSIGNED.exe",
             "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-ia32-UNSIGNED.exe"
@@ -84,7 +84,7 @@ jobs:
       - name: Build universal setup (auto 32/64-bit)
         shell: pwsh
         run: |
-          $out = 'native/windows/unsigned-release'
+          $out = Join-Path $PWD 'native/windows/unsigned-release'
           $uni = Join-Path $PWD 'universal-setup'
           New-Item -ItemType Directory -Force -Path $uni | Out-Null
           Copy-Item (Join-Path $out "SmartMaktab-${env:SM_RELEASE_VERSION}-Windows-x64-UNSIGNED.exe") (Join-Path $uni 'x64.exe')
