@@ -53,7 +53,7 @@ final class WindowsRelease {
   String host=url.getHost().toLowerCase(Locale.ROOT);
   return api?host.equals("api.github.com"):host.equals("github.com")||host.equals("release-assets.githubusercontent.com")||host.equals("objects.githubusercontent.com")||host.equals("github-releases.githubusercontent.com");
  }
- private static HttpsURLConnection open(String address,boolean api) throws IOException {
+ static HttpsURLConnection open(String address,boolean api) throws IOException {
   URL url=new URL(address);
   for(int i=0;i<6;i++){
    if(!allowed(url,api))throw new IOException("download origin");
@@ -73,7 +73,7 @@ final class WindowsRelease {
   if(!REPOSITORY.matcher(repo).matches()||repo.endsWith("/.")||repo.endsWith("/.."))throw new IOException("repository");
   return select(repo,new JSONArray(read("https://api.github.com/repos/"+repo+"/releases?per_page=100",true,4*1024*1024)));
  }
- private static String read(String url,boolean api,int max) throws IOException {
+ static String read(String url,boolean api,int max) throws IOException {
   HttpsURLConnection conn=open(url,api);
   try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
    copy(in,out,max,null);return new String(out.toByteArray(),StandardCharsets.UTF_8);

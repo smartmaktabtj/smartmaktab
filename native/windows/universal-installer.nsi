@@ -14,7 +14,6 @@ Unicode True
 !endif
 Name "SmartMaktab"
 OutFile "${OUT_FILE}"
-InstallDir "$LOCALAPPDATA\SmartMaktabSetup"
 RequestExecutionLevel user
 SilentInstall silent
 SetCompressor /SOLID lzma
@@ -23,7 +22,9 @@ Section "SmartMaktab"
   SetOutPath "$TEMP\SmartMaktabSetup"
   File "${X64_EXE}"
   File "${IA32_EXE}"
-  ${If} ${RunningX64}
+  ; Detect 64-bit Windows via registry. ProgramFilesDir (x86) exists only on x64.
+  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion" "ProgramFilesDir (x86)"
+  ${If} $0 != ""
     ExecWait '"$TEMP\SmartMaktabSetup\x64.exe"'
   ${Else}
     ExecWait '"$TEMP\SmartMaktabSetup\ia32.exe"'

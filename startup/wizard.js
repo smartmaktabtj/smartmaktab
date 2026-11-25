@@ -15,7 +15,13 @@ const t=key=>copy[key][lang==='tg'?1:0];
 const androidPrograms=$('androidPrograms');
 if(globalThis.SmartMaktabAndroid&&androidPrograms){
  androidPrograms.hidden=false;
- $('androidWindowsDownload').addEventListener('click',()=>{
+ const contentButton=$('androidContentUpdate');
+ const windowsButton=$('androidWindowsDownload');
+ if(contentButton)contentButton.addEventListener('click',()=>{
+  androidPrograms.open=false;
+  globalThis.SmartMaktabAndroid.postMessage(JSON.stringify({action:'downloadContentUpdate',lang}));
+ });
+ if(windowsButton)windowsButton.addEventListener('click',()=>{
   androidPrograms.open=false;
   globalThis.SmartMaktabAndroid.postMessage(JSON.stringify({action:'downloadWindows',lang}));
  });

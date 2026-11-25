@@ -20,10 +20,11 @@ import java.util.*;
 public final class MainActivity extends Activity {
  private static final String HOST="appassets.androidplatform.net", ORIGIN="https://"+HOST;
  private static final long LIMIT=150L*1024*1024;
- private static final int PICK=30, SAVE=31, OPEN=32, SHARE=33, MEDIA=34, SAVE_WINDOWS=35;
+ private static final int PICK=30, SAVE=31, OPEN=32, SHARE=33, MEDIA=34, SAVE_WINDOWS=35, SAVE_CONTENT_UPDATE=36;
  private WebView view;private ValueCallback<Uri[]> picker;private PermissionRequest media;private String[] mediaResources;
  private File draft;private OutputStream draftOut;private long written,expected;private String fileName,fileMime;private JavaScriptReplyProxy finalReply;
  private File windowsFile;private Thread windowsWorker;private AlertDialog windowsProgress;private boolean windowsBusy,windowsTg,windowsCancelled;
+ private File contentUpdateFile;private Thread contentUpdateWorker;private AlertDialog contentUpdateProgress;private boolean contentUpdateBusy,contentUpdateTg,contentUpdateCancelled;
  private String tr(String ru,String tg){return windowsTg?tg:ru;}
  private boolean own(Uri u){return u!=null&&"https".equals(u.getScheme())&&HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private boolean book(Uri u){return u!=null&&"https".equals(u.getScheme())&&"raw.githubusercontent.com".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/sharipovip/books/");}
@@ -70,6 +71,8 @@ public final class MainActivity extends Activity {
    switch(args.getString("action")){
     case "downloadWindows":
      confirmWindows("tg".equals(args.optString("lang")));reply.postMessage("ok");return;
+    case "downloadContentUpdate":
+     confirmContentUpdate("tg".equals(args.optString("lang")));reply.postMessage("ok");return;
     case "openFile":case "shareFile":
      Intent file=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(file,args.getString("action").equals("shareFile")?SHARE:OPEN);reply.postMessage("ok");return;
     case "begin":
@@ -95,6 +98,7 @@ public final class MainActivity extends Activity {
   if(id==PICK&&picker!=null){ValueCallback<Uri[]> selected=picker;picker=null;selected.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));return;}
   Uri uri=result==RESULT_OK&&data!=null?data.getData():null;
   if(id==SAVE_WINDOWS){saveWindows(uri);return;}
+  if(id==SAVE_CONTENT_UPDATE){saveContentUpdate(uri);return;}
   if(id==SAVE){JavaScriptReplyProxy reply=finalReply;finalReply=null;File file=draft;draft=null;
    if(uri==null||file==null){if(file!=null)file.delete();if(reply!=null)reply.postMessage("cancel");return;}
    new Thread(()->{String outcome="ok";try(InputStream in=new FileInputStream(file);OutputStream out=getContentResolver().openOutputStream(uri,"w")){
@@ -173,5 +177,71 @@ public final class MainActivity extends Activity {
  private void windowsToast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
  private void clearDraft(){if(draftOut!=null)try{draftOut.close();}catch(IOException ignored){}draftOut=null;if(draft!=null)draft.delete();draft=null;}
  @Override public void onBackPressed(){view.evaluateJavascript("Boolean(window.smartMaktabBack && window.smartMaktabBack())",handled->{if(!"true".equals(handled)){if(view.canGoBack())view.goBack();else finish();}});}
- @Override protected void onDestroy(){if(windowsWorker!=null)windowsWorker.interrupt();if(windowsProgress!=null)windowsProgress.dismiss();if(windowsFile!=null)windowsFile.delete();clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();}
+ @Override protected void onDestroy(){if(windowsWorker!=null)windowsWorker.interrupt();if(windowsProgress!=null)windowsProgress.dismiss();if(windowsFile!=null)windowsFile.delete();if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();if(contentUpdateProgress!=null)contentUpdateProgress.dismiss();if(contentUpdateFile!=null)contentUpdateFile.delete();clearDraft();if(picker!=null)picker.onReceiveValue(null);if(media!=null)media.deny();view.destroy();super.onDestroy();}
+ private void confirmContentUpdate(boolean tg){
+  if(contentUpdateBusy)return;contentUpdateTg=tg;contentUpdateBusy=true;
+  AlertDialog prompt=new AlertDialog.Builder(this).setTitle(tr("Скачать обновление материалов","Боргирии навсозии мавод"))
+   .setMessage(tr("Телефон найдёт последний подписанный файл обновления материалов (.smupdate) на GitHub, скачает и проверит его. После загрузки выберите папку на телефоне (например, «Загрузки»), затем перенесите файл на ПК по USB и нажмите в SmartMaktab «Проверить обновления».\n\n1. Подключите телефон к ПК кабелем.\n2. В шторке уведомлений откройте «Подключение USB» и выберите «Передача файлов».\n3. На ПК в папке телефона (обычно internal_storage/Download) скопируйте файл .smupdate на рабочий стол.\n4. На ПК откройте SmartMaktab и нажмите «Проверить обновления» — файл найдётся и применится сам.",
+    "Телефон охирин файли имзодор (.smupdate)-ро аз GitHub пайдо мекунад, боргирӣ ва месанҷад. Пас аз боргирӣ ҷузвдонро интихоб кунед, сипас файлро тавассути USB ба компютер гузаронед ва дар SmartMaktab тугмаи «Навсозиҳоро тафтиш кунед»-ро пахш кунед.\n\n1. Телефонро тавассути кабел ба компютер пайваст кунед.\n2. Дар менюи огоҳинома «USB»-ро кушоед ва «Интиқоли файл»-ро интихоб кунед.\n3. Дар компютер аз ҷузвдони телефон (internal_storage/Download) файл .smupdate-ро ба мизи кор нусхабардорӣ кунед.\n4. Дар компютер SmartMaktab-ро кушоед ва «Навсозиҳоро тафтиш кунед»-ро пахш кунед — файл худаш пайдо ва татбиқ мешавад."))
+   .setPositiveButton(tr("Скачать","Боргирӣ"),(d,w)->downloadContentUpdate())
+   .setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->contentUpdateBusy=false).create();
+  prompt.setOnCancelListener(d->contentUpdateBusy=false);prompt.show();
+ }
+ private void downloadContentUpdate(){
+  contentUpdateCancelled=false;
+  contentUpdateProgress=new AlertDialog.Builder(this).setTitle(tr("Поиск обновления материалов","Ҷустуҷӯи навсозии мавод"))
+    .setMessage(tr("Скачиваем и проверяем файл. Оставьте приложение открытым.","Файл боргирӣ ва санҷида мешавад. Барномаро кушода нигоҳ доред."))
+    .setCancelable(false).setNegativeButton(tr("Отмена","Бекор кардан"),(d,w)->{contentUpdateCancelled=true;if(contentUpdateWorker!=null)contentUpdateWorker.interrupt();}).show();
+  contentUpdateWorker=new Thread(()->{
+   File dest=null;ContentUpdate update=null;int outcome=0;
+   try(BufferedReader input=new BufferedReader(new InputStreamReader(getAssets().open("windows-release-repository.txt"),java.nio.charset.StandardCharsets.US_ASCII))){
+    String repo=input.readLine();if(repo==null)throw new IOException("repository");
+    update=ContentUpdate.find(repo);
+    if(update==null)outcome=1;
+    else{if(getCacheDir().getUsableSpace()<update.size+16L*1024*1024)throw new IOException("space");dest=File.createTempFile("smartmaktab-content-",".part",getCacheDir());update.fetch(dest);}
+   }catch(Exception error){outcome=2;}
+   if(Thread.currentThread().isInterrupted())outcome=3;
+   final File result=dest;final ContentUpdate selected=update;final int status=outcome;
+   runOnUiThread(()->{
+    if(this.isDestroyed()){if(result!=null)result.delete();return;}
+    boolean cancelled=contentUpdateCancelled;contentUpdateWorker=null;
+    if(contentUpdateProgress!=null){contentUpdateProgress.dismiss();contentUpdateProgress=null;}
+    if(cancelled||status!=0||result==null||selected==null){
+     if(result!=null)result.delete();contentUpdateBusy=false;
+     if(!cancelled&&status==1)contentToast(tr("Обновлений ещё нет. Файл ещё не опубликован.","Навсозӣ ҳанӯз нест. Файл ҳанӯз нашр нашудааст."));
+     else if(!cancelled&&status!=3)contentToast(tr("Не удалось скачать или проверить файл. Проверьте интернет и свободное место.","Боргирӣ ё санҷиши файл ноком шуд. Интернет ва ҷойи холиро санҷед."));
+     return;
+    }
+    contentUpdateFile=result;
+    Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/octet-stream").putExtra(Intent.EXTRA_TITLE,selected.name);
+    try{startActivityForResult(save,SAVE_CONTENT_UPDATE);}catch(ActivityNotFoundException error){saveContentUpdate(null);contentToast(tr("Не удалось открыть выбор папки.","Интихоби ҷузвдон кушода нашуд."));}
+   });
+  },"smartmaktab-content-update");contentUpdateWorker.start();
+ }
+ private void saveContentUpdate(Uri uri){
+  File file=contentUpdateFile;contentUpdateFile=null;
+  if(uri==null||file==null){if(file!=null)file.delete();contentUpdateBusy=false;return;}
+  new Thread(()->{
+   try(InputStream in=new FileInputStream(file);OutputStream out=getContentResolver().openOutputStream(uri,"w")){
+    if(out==null)throw new IOException("destination");byte[] bytes=new byte[65536];for(int n;(n=in.read(bytes))!=-1;)out.write(bytes,0,n);
+   }catch(IOException|RuntimeException error){
+    try{DocumentsContract.deleteDocument(getContentResolver(),uri);}catch(Exception ignored){}
+    file.delete();runOnUiThread(()->contentUpdateSaved(false));return;
+   }
+   file.delete();runOnUiThread(()->contentUpdateSaved(true));
+  },"smartmaktab-content-save").start();
+ }
+ private void contentUpdateSaved(boolean ok){
+  contentUpdateBusy=false;if(isDestroyed())return;
+  if(ok){
+   new AlertDialog.Builder(this).setTitle(tr("Файл сохранён","Файл захира шуд"))
+    .setMessage(tr("Чтобы обновить ПК:\n\n1. Подключите телефон к ПК кабелем.\n2. В шторке уведомлений откройте «Подключение USB» → «Передача файлов».\n3. На ПК в папке телефона (internal_storage/Download) скопируйте файл .smupdate на рабочий стол.\n4. На ПК откройте SmartMaktab и нажмите «Проверить обновления».\n\nПрограмма сама найдёт файл, проверит подпись и применит его.",
+     "Барои навсозии компютер:\n\n1. Телефонро тавассути кабел ба компютер пайваст кунед.\n2. Дар менюи огоҳинома «USB» → «Интиқоли файл»-ро интихоб кунед.\n3. Дар компютер аз ҷузвдони телефон (internal_storage/Download) файл .smupdate-ро ба мизи кор нусхабардорӣ кунед.\n4. Дар компютер SmartMaktab-ро кушоед ва «Навсозиҳоро тафтиш кунед»-ро пахш кунед.\n\nБарнома худаш файлро пайдо мекунад, имзоро месанҷад ва татбиқ мекунад."))
+    .setPositiveButton("OK",(d,w)->{}).show();
+  }else{
+   contentToast(tr("Не удалось сохранить файл. Проверьте выбранную папку и свободное место.","Файл захира нашуд. Ҷузвдон ва ҷойи холиро санҷед."));
+  }
+ }
+ private void contentToast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
+
 }
