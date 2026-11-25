@@ -1,3 +1,4 @@
+import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
 import { cacheVerifiedLicense, mountLicenseGate } from './license-guard.mjs';
@@ -22,8 +23,10 @@ const copy = {
   noOrg: ['Ягон муассиса ба ин ҳисоб вобаста нашудааст.', 'К этому аккаунту не привязана организация.'],
   checkLicense: ['Тафтиши иҷозатнома', 'Проверить лицензию'],
   licenseLine: ['Ҳолати иҷозатнома', 'Статус лицензии'],
-  syncUp: ['Ирсоли шиносномаи мактаб ба абр', 'Сохранить паспорт школы в облако'],
+  syncUp: ['Ҳамоҳангсозӣ бо абр', 'Сохранить данные кабинета в облако'],
   syncDown: ['Навсозӣ аз абр', 'Загрузить записи из облака'],
+  restoreLocal: ['Барқарор дар ин дастгоҳ', 'Восстановить на устройство'],
+  restoredLocal: ['Маълумот аз абр барқарор шуд.', 'Данные из облака восстановлены локально.'],
   receiptHeading: ['Тасдиқи пардохт тавассути чек (OCR)', 'Подтверждение оплаты по чеку (OCR)'],
   receiptFile: ['Акси чек (PNG/JPG/PDF)', 'Файл чека (PNG/JPG/PDF)'],
   provider: ['Усули пардохт', 'Способ оплаты'],
@@ -150,7 +153,8 @@ export function setupCloudWorkspace(article, group, school) {
   const ocrLbl = make('span');
   const ocrInput = make('textarea');
   ocrInput.rows = 3;
-  ocrWrap.append(ocrLbl, ocrInput);
+  const ocrParsedLine = make('small', 'small');
+  ocrWrap.append(ocrLbl, ocrInput, ocrParsedLine);
 
   const sendReceiptBtn = make('button', 'button');
   sendReceiptBtn.type = 'submit';
@@ -159,7 +163,11 @@ export function setupCloudWorkspace(article, group, school) {
   sessionBox.append(orgWrap, licLine, actionRow, cloudList, receiptForm);
   panel.append(head, note, status, loginForm, sessionBox);
 
-  const client = createCloudClient({ config: getCloudConfig() });
+  const client = createCloudClient({
+    config: getCloudConfig(),
+    storage: persistentStore,
+    storageKey: 'smartmaktab.cloud.session.v1',
+  });
   let ctx = null;
   let selectedOrgId = '';
   let statusMessage = t('signedOut');
@@ -208,12 +216,68 @@ export function setupCloudWorkspace(article, group, school) {
       const rows = await client.listRecordsDetail({ p_org_id: selectedOrgId, p_record_type: null, p_include_deleted: false });
       cloudList.replaceChildren(...(rows?.length ? rows.slice(0, 20).map(r => {
         const li = make('li');
-        li.textContent = `${r.record_type} · ${r.title}`;
+        const label = make('span');
+        label.textContent = `${r.record_type} · ${r.title} `;
+        li.append(label);
+        if (r.payload?.local_snapshot && typeof r.payload.local_snapshot === 'object') {
+          const restoreBtn = make('button', 'button alt');
+          restoreBtn.type = 'button';
+          restoreBtn.textContent = t('restoreLocal');
+          restoreBtn.addEventListener('click', () => {
+            for (const [k, v] of Object.entries(r.payload.local_snapshot)) {
+              if (k.startsWith('smartmaktab.demo.') && typeof v === 'string') persistentStore.setItem(k, v);
+            }
+            statusMessage = t('restoredLocal');
+            renderLabels();
+          });
+          li.append(restoreBtn);
+        }
         return li;
       }) : [Object.assign(make('li'), { textContent: t('recordsEmpty') })]));
     } catch (err) {
       statusMessage = err.message;
       renderLabels();
+    }
+  }
+
+  function updateParsedPreview() {
+    const raw = ocrInput.value.trim();
+    if (!raw) { ocrParsedLine.textContent = ''; return; }
+    const p = parseReceiptText(raw);
+    if (p.detectedProvider) provSelect.value = p.detectedProvider;
+    if (p.detectedAmount !== null) amtInput.value = String(p.detectedAmount);
+    const parts = [
+      p.detectedProvider && `${tg() ? 'Бонк' : 'Банк'}: ${p.detectedProvider}`,
+      p.detectedAmount !== null && `${tg() ? 'Маблағ' : 'Сумма'}: ${p.detectedAmount} TJS`,
+      p.detectedReference && `TX: ${p.detectedReference}`,
+      p.detectedRecipient && `${tg() ? 'Қабулкунанда' : 'Получатель'}: ${p.detectedRecipient}`,
+      p.statusConfirmed && (tg() ? 'Ҳолат: ✓' : 'Статус: ✓'),
+    ].filter(Boolean);
+    ocrParsedLine.textContent = parts.join(' · ');
+  }
+
+  async function applySignedInContext() {
+    ctx = await client.getWorkspaceContext();
+    const memberships = ctx?.memberships || [];
+    orgSelect.replaceChildren(...memberships.map(m => new Option(`${m.organization_name} (${m.role})`, m.organization_id)));
+    selectedOrgId = memberships[0]?.organization_id || '';
+    orgSelect.value = selectedOrgId;
+    loginForm.hidden = true;
+    sessionBox.hidden = false;
+    statusMessage = memberships.length ? `${t('signedIn')} (${ctx.user_id})` : t('noOrg');
+    try {
+      const plans = await client.getPaymentPlans();
+      if (plans?.length) {
+        activePlan = plans[0];
+        if (!amtInput.value || amtInput.value === String(DEFAULT_PAYMENT_TARIFF.priceTjs)) {
+          amtInput.value = String(activePlan.price_tjs);
+        }
+      }
+    } catch {}
+    renderLabels();
+    if (selectedOrgId) {
+      await checkLicenseOnline();
+      await loadCloudRecords();
     }
   }
 
@@ -274,28 +338,7 @@ export function setupCloudWorkspace(article, group, school) {
     try {
       await client.signIn(emailInput.value, passInput.value);
       passInput.value = '';
-      ctx = await client.getWorkspaceContext();
-      const memberships = ctx?.memberships || [];
-      orgSelect.replaceChildren(...memberships.map(m => new Option(`${m.organization_name} (${m.role})`, m.organization_id)));
-      selectedOrgId = memberships[0]?.organization_id || '';
-      orgSelect.value = selectedOrgId;
-      loginForm.hidden = true;
-      sessionBox.hidden = false;
-      statusMessage = memberships.length ? `${t('signedIn')} (${ctx.user_id})` : t('noOrg');
-      try {
-        const plans = await client.getPaymentPlans();
-        if (plans?.length) {
-          activePlan = plans[0];
-          if (!amtInput.value || amtInput.value === String(DEFAULT_PAYMENT_TARIFF.priceTjs)) {
-            amtInput.value = String(activePlan.price_tjs);
-          }
-        }
-      } catch {}
-      renderLabels();
-      if (selectedOrgId) {
-        await checkLicenseOnline();
-        await loadCloudRecords();
-      }
+      await applySignedInContext();
     } catch (err) {
       statusMessage = err?.message || t('authError');
       renderLabels();
@@ -316,11 +359,20 @@ export function setupCloudWorkspace(article, group, school) {
     const activeSchool = school();
     if (!selectedOrgId || !activeSchool) return;
     try {
+      const localSnapshot = {};
+      try {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('smartmaktab.demo.') && (key.includes(activeSchool.id) || key.includes('saved-'))) {
+            const val = localStorage.getItem(key);
+            if (typeof val === 'string' && val.length <= 64000) localSnapshot[key] = val;
+          }
+        }
+      } catch {}
       await client.saveRecord({
         p_org_id: selectedOrgId,
         p_record_type: 'plan',
         p_title: `${activeSchool.name} · ${article.dataset.cabinetId}`,
-        p_payload: { school: activeSchool, cabinet_id: article.dataset.cabinetId, synced_at: new Date().toISOString() },
+        p_payload: { school: activeSchool, cabinet_id: article.dataset.cabinetId, local_snapshot: localSnapshot, synced_at: new Date().toISOString() },
       });
       statusMessage = t('savedCloud');
       renderLabels();
@@ -332,6 +384,7 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   syncDownBtn.addEventListener('click', loadCloudRecords);
+  ocrInput.addEventListener('input', updateParsedPreview);
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
@@ -349,9 +402,7 @@ export function setupCloudWorkspace(article, group, school) {
       if (ocr.text) {
         ocrInput.value = ocr.text;
         receiptConfidence = ocr.confidence;
-        const parsed = parseReceiptText(ocr.text);
-        if (parsed.detectedProvider) provSelect.value = parsed.detectedProvider;
-        if (parsed.detectedAmount !== null) amtInput.value = String(parsed.detectedAmount);
+        updateParsedPreview();
       }
     }
   });
@@ -402,4 +453,10 @@ export function setupCloudWorkspace(article, group, school) {
 
   document.addEventListener('cabinet:language', renderLabels);
   renderLabels();
+  if (client.session?.access_token) {
+    void applySignedInContext().catch(async () => {
+      await client.signOut();
+      renderLabels();
+    });
+  }
 }

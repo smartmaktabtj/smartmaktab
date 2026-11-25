@@ -105,6 +105,11 @@ test('receipt parser, SHA-256 hash, and Edge Function submission format correctl
   assert.equal(amonatParsed.detectedDate, '10.11.2026');
   assert.equal(amonatParsed.statusConfirmed, true);
 
+  const yoParsed = parseReceiptText('Душанбе Сити Номер операции: 2248620183 Счёт получателя: +992 90 797 22 95 Сумма операции: 10.00 ОПЕРАЦИЯ ВЫПОЛНЕНА');
+  assert.equal(yoParsed.detectedProvider, 'dcity');
+  assert.equal(yoParsed.detectedRecipient, '992907972295');
+  assert.equal(yoParsed.detectedAmount, 10);
+
   let called = null;
   const result = await submitReceiptForVerification({
     accessToken: 'jwt-test',
@@ -157,4 +162,39 @@ test('cloud client authenticates and invokes RPCs with publishable key only', as
   assert.equal(ctx.is_super_admin, true);
   assert.equal(requests[1].headers.apikey, 'sb_publishable_demo');
   assert.equal(requests[1].headers.Authorization, 'Bearer tok-123');
+});
+
+test('cloud client persists session in storage and refreshes expired tokens automatically', async () => {
+  const storage = makeMemoryStorage();
+  let calls = 0;
+  const fetchMock = async url => {
+    calls++;
+    if (url.endsWith('/auth/v1/token?grant_type=password')) {
+      return new Response(JSON.stringify({ access_token: 'old-tok', refresh_token: 'ref-1', expires_at: 1 }), { status: 200 });
+    }
+    if (url.endsWith('/auth/v1/token?grant_type=refresh_token')) {
+      return new Response(JSON.stringify({ access_token: 'new-tok', refresh_token: 'ref-2', expires_at: Math.floor(Date.now() / 1000) + 3600 }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  const client1 = createCloudClient({
+    config: { url: 'https://example.supabase.co', publishableKey: 'sb_publishable_demo' },
+    fetchImpl: fetchMock,
+    storage,
+    storageKey: 'test.session',
+  });
+  await client1.signIn('a@b.tj', 'pass');
+  assert.ok(storage.getItem('test.session'));
+
+  const client2 = createCloudClient({
+    config: { url: 'https://example.supabase.co', publishableKey: 'sb_publishable_demo' },
+    fetchImpl: fetchMock,
+    storage,
+    storageKey: 'test.session',
+  });
+  await client2.getWorkspaceContext();
+  assert.equal(client2.session.access_token, 'new-tok');
+  assert.ok(calls >= 3);
+  await client2.signOut();
+  assert.equal(storage.getItem('test.session'), null);
 });
