@@ -34,13 +34,17 @@
 #startupShell .intro{margin-bottom:10px}
 #offlineDeck.reader-active #offlineDeckHeader{display:none}
 @media(min-width:1050px){#startupShell .choices{grid-template-columns:repeat(3,minmax(0,1fr))}#startupShell .inputs:not(#primaryForm>.inputs){grid-template-columns:repeat(3,minmax(0,1fr))}#startupShell .field input,#startupShell .field select{min-height:35px;padding:5px 8px}}
-@media(max-width:680px){#startupShell .top{min-height:46px}#startupShell .progress{padding:6px 9px 1px}#wizard h2{padding:11px 12px 5px}.setup-step-body{padding:5px 10px 10px}#startupShell .foot{padding:6px 10px}} @media(max-width:768px){.sm-native-files{display:none!important}}
+@media(max-width:680px){#startupShell .top{min-height:46px}#startupShell .progress{padding:6px 9px 1px}#wizard h2{padding:11px 12px 5px}.setup-step-body{padding:5px 10px 10px}#startupShell .foot{padding:6px 10px}}
 @media(max-height:360px){
  #startupShell:not([hidden]){height:auto;min-height:100dvh;overflow:visible}
  #startupShell #wizard{display:block;overflow:visible;flex:none}
  #startupShell .setup-step-body{overflow:visible;flex:0 1 auto}
 }
-#androidPrograms{position:relative}#androidPrograms summary{cursor:pointer;list-style:none}#androidPrograms>div{position:absolute;z-index:10;inset-inline-end:0;inset-block-start:calc(100% + 5px);width:max-content;max-width:78vw;padding:5px;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 18px #0002}
+#androidPrograms{position:relative}
+#androidPrograms summary{cursor:pointer;list-style:none}
+#androidPrograms summary::-webkit-details-marker{display:none}
+#androidPrograms[open]>div{position:absolute;z-index:100;inset-inline-end:0;inset-block-start:calc(100% + 6px);display:flex;flex-direction:column;gap:6px;min-width:230px;width:max-content;max-width:calc(100vw - 20px);padding:8px;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px #0004}
+#androidPrograms[open]>div button{width:100%;text-align:left;white-space:normal;word-wrap:break-word}
 @@SPLASH_CSS@@
 </style></head><body><div class="shell" id="startupShell">
 <header class="top"><a href="./index.html" class="brand"><span class="logo" aria-hidden="true">S</span>SmartMaktab</a><div class="startup-actions"><button type="button" id="themeToggle" class="theme-toggle">Ночной режим</button><details id="androidPrograms" hidden><summary class="theme-toggle" data-tg="Барномаҳо">Программы</summary><div><button type="button" id="androidAppUpdate" class="button alt" data-tg="Навсозии барнома">Обновление приложения</button><button type="button" id="androidContentUpdate" class="button alt" data-tg="Навсозии мавод">Обновление материалов</button><button type="button" id="androidWindowsDownload" class="button alt" data-tg="Боргирӣ барои Windows (.exe)">Скачать для Windows (.exe)</button></div></details><select id="lang" class="language" aria-label="Язык / Забон"><option value="tg">Тоҷикӣ</option><option value="ru">Русский</option></select></div></header>
