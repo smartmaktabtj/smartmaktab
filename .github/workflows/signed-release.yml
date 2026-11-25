@@ -141,9 +141,16 @@ jobs:
         with:
           gradle-version: '8.13'
           cache-disabled: true
-      - name: Prepare SDK and web assets
+      - name: Install Android SDK and command-line tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+          accept-android-sdk-licenses: 'true'
+          log-accepted-android-sdk-licenses: 'false'
+      - name: Prepare web assets
         run: |
-          sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
           npm ci --no-audit --no-fund
           python3 scripts/build_startup.py
           python3 scripts/stage-native-web.py native/android/app/src/main/assets/web
