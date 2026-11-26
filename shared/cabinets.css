@@ -51,6 +51,7 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
  .sm-app-layout #teacherBookPanel{margin:0;padding:14px;border:1px solid var(--line);border-radius:12px}
  body.sm-print-preview .sm-view-bar{display:none}
  @media(max-width:820px){.sm-app-layout,.sm-app-layout.rail-collapsed{display:flex;flex-direction:column}.sm-app-layout:has(.rail-toggle) .rail{height:auto;width:100%;padding:5px 10px;gap:4px}.sm-app-layout .rail .brand{display:none}.sm-app-layout .rail-toggle{width:auto;min-height:28px;padding:4px 8px}.sm-app-layout .rail nav a{font-size:.78rem;padding:4px 7px}.sm-app-layout .top{padding:6px 10px}.sm-app-layout .top .actions{gap:4px 6px}.sm-app-layout .frame{padding:10px 10px 16px}.sm-app-layout .button,.sm-shortcut{min-height:40px}.sm-app-layout .hero{padding:12px 14px}.sm-app-layout .workspace-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-height:360px){.sm-app-layout{height:auto;min-height:100dvh;overflow:visible}.sm-app-layout .page,.sm-app-layout .frame{overflow:visible;height:auto}}
 }
 @media print{.sm-view-bar,.sm-shortcuts{display:none!important}.sm-app-layout .frame{max-width:none;overflow:visible;height:auto}}
 @media screen{

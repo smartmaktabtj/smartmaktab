@@ -83,6 +83,7 @@
 @keyframes step-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(min-width:1050px){#startupShell .choices{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.inputs,.choices,.teaching-entry{grid-template-columns:1fr}.progress li{font-size:.66rem}}
+@media(max-height:360px){#startupShell:not([hidden]){height:auto;min-height:100dvh;overflow:visible}#wizard,#wizard>section,.setup-step-body{overflow:visible;height:auto;min-height:auto}}
 @@SPLASH_CSS@@
 </style></head><body><div class="shell" id="startupShell" data-screen="0">
 <header class="top"><a href="./index.html" class="brand"><span class="logo" aria-hidden="true">S</span>SmartMaktab</a>
