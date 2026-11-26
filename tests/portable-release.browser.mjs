@@ -36,6 +36,7 @@ test('Android viewport: installable manifest assets exist and the cached PWA ope
  const browser=await chromium.launch();
  try{
   const ctx=await browser.newContext({...devices['Pixel 7'],reducedMotion:'reduce'});
+  await ctx.route('https://*.supabase.co/**',route=>route.abort());
   const page=await ctx.newPage();page.setDefaultTimeout(8000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(site);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
   const manifest=await (await page.request.get(`${site}/manifest.webmanifest`)).json();

@@ -34,7 +34,7 @@ async function openEmbedded(path,options={}){
   return false;
  }
  const lang=validLanguage(options.lang)?options.lang:document.documentElement.lang;
- const school=/^demo-[a-z0-9]+$/.test(options.school??'')?options.school:'';
+ const school=/^[a-z0-9-]+$/i.test(options.school??'')?options.school:'';
  embeddedChannel=Array.from(crypto.getRandomValues(new Uint32Array(4)),item=>item.toString(16)).join('-');
  const ctx={path,channel:embeddedChannel,school,lang,hash:options.hash??'',store:embeddedStore,theme:startupTheme.mode()};
  const doc=new DOMParser().parseFromString(route.html,'text/html');

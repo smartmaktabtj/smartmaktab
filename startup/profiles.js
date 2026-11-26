@@ -59,6 +59,8 @@ function fillProfileFields(id,container,doc){
  if(!original){container.dataset.roleReady='no';return;}
  if(id==='school-director'){
   cloneControl(doc.getElementById('directorLeadYears'),grid,fields,'directorLeadYears',validators);
+  cloneControl(doc.getElementById('directorUniversity'),grid,fields,'directorUniversity',validators);
+  cloneControl(doc.getElementById('directorCategory'),grid,fields,'directorCategory',validators);
   cloneControl(doc.getElementById('directorType'),grid,fields,'directorType',validators);
   cloneControl(doc.getElementById('directorShifts'),grid,fields,'directorShifts',validators);
   validators.push(()=>{
@@ -155,7 +157,7 @@ function buildRolePayload(role,school,fields,personObj){
   directorGender:personObj.gender||fields.directorGender||'',
   directorSpecialty:personObj.specialty||fields.directorSpecialty||'',
   directorEduYears:personObj.eduYears||fields.directorEduYears||'',
-  directorDiploma:personObj.education||fields.directorDiploma||'',
+  directorDiploma:(personObj.education==='higher'?'specialist':personObj.education)||fields.directorDiploma||'',
   directorLanguages:Array.isArray(personObj.languages)?personObj.languages:(fields.directorLanguages||[]),
   directorOtherLanguage:personObj.otherLanguage||fields.directorOtherLanguage||'',
  };

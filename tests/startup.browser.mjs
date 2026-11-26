@@ -11,6 +11,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   page.setDefaultTimeout(5500);
   const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>requests.push(request.url()));
+  await page.route('https://*.supabase.co/**',route=>route.abort());
   await page.goto(`${base}/?lang=ru`);
 
   // Step 0: Auth screen + authority toggle + update icon
@@ -134,6 +135,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
  try{
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   page.setDefaultTimeout(5500);
+  await page.route('https://*.supabase.co/**',route=>route.abort());
   await page.goto(`${base}/?lang=ru`);
   await page.locator('#goToRegister').click();
   await page.locator('#primaryChoices input[value=school-teacher]').check();
@@ -178,6 +180,7 @@ test('current version has no archive routes and the night setting persists acros
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({serviceWorkers:'block',colorScheme:'light',reducedMotion:'reduce'});
+  await page.route('https://*.supabase.co/**',route=>route.abort());
   await page.goto(`${base}/?lang=ru`);
   await page.locator('#lang').selectOption('ru');
   await page.getByRole('button',{name:'Ночной режим'}).click();
