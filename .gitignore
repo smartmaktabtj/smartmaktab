@@ -16,6 +16,7 @@ native/windows/release/
 native/android/.gradle/
 native/android/**/build/
 native/android/app/src/main/assets/web/
+native/android/app/src/main/assets/windows-release-repository.txt
 native/android/local.properties
 native/android/release/
 

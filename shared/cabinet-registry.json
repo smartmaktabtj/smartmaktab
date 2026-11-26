@@ -174,10 +174,10 @@
     "group": "school",
     "number": 18,
     "path": "cabinets/school/five-method-groups.html",
-    "title": "Панҷ иттиҳодияи методӣ",
-    "description": "Пять методических объединений",
+    "title": "Иттиҳодияи методӣ",
+    "description": "Методическое объединение",
     "mode": "shell",
-    "descriptionTg": "Панҷ иттиҳодияи методӣ"
+    "descriptionTg": "Иттиҳодияи методӣ"
   },
   {
     "id": "school-subject-room-head",
@@ -185,19 +185,19 @@
     "number": 19,
     "path": "cabinets/school/subject-room-head.html",
     "title": "Мудири кабинети фаннӣ",
-    "description": "Предметный кабинет",
+    "description": "Заведующий предметным кабинетом",
     "mode": "shell",
-    "descriptionTg": "Утоқи фаннӣ"
+    "descriptionTg": "Мудири кабинети фаннӣ"
   },
   {
     "id": "school-teacher",
     "group": "school",
     "number": 20,
     "path": "cabinets/school/teacher.html",
-    "title": "Муаллим / Омӯзгор",
-    "description": "Учитель; пример информатики",
+    "title": "Омӯзгор",
+    "description": "Учитель",
     "mode": "example",
-    "descriptionTg": "Омӯзгор; намуна аз фанни информатика"
+    "descriptionTg": "Омӯзгор"
   },
   {
     "id": "advisers-school-leadership",
@@ -534,10 +534,10 @@
     "group": "office",
     "number": 1,
     "path": "cabinets/maorif/head.html",
-    "title": "Роҳбари маориф",
-    "description": "Руководитель маориф",
+    "title": "Мудири маориф",
+    "description": "Заведующий маорифом",
     "mode": "shell",
-    "descriptionTg": "Роҳбари шуъбаи маориф"
+    "descriptionTg": "Мудири маориф"
   },
   {
     "id": "office-accounting",
@@ -554,9 +554,9 @@
     "group": "raesat",
     "number": 1,
     "path": "cabinets/raesat/head.html",
-    "title": "Роҳбари раёсат",
-    "description": "Руководитель раёсата",
+    "title": "Сардори раёсат",
+    "description": "Начальник управления образования",
     "mode": "example",
-    "descriptionTg": "Роҳбари раёсат"
+    "descriptionTg": "Сардори раёсат"
   }
 ]

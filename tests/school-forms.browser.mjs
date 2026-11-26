@@ -12,7 +12,7 @@ test('Tajik default, saved optional Russian, copyright, and no demo UI across al
  const browser=await chromium.launch();try{
   const page=await browser.newPage({reducedMotion:'reduce',serviceWorkers:'block'});await page.goto(base);
   assert.equal(await page.locator('html').getAttribute('lang'),'tg');assert.equal(await page.locator('#lang').inputValue(),'tg');
-  assert.match(await page.locator('.ownership-notice').innerText(),/Парвиз Шарипов.*Ҳамаи ҳуқуқҳо/);
+  assert.match(await page.locator('.ownership-notice').innerText(),/Парвиз Шарипов.*Ҳамаи .*ҳуқуқҳо/);
   await page.locator('#lang').selectOption('ru');await page.reload();assert.equal(await page.locator('html').getAttribute('lang'),'ru');
   await page.goto(route('records-clerk'));assert.equal(await page.locator('html').getAttribute('lang'),'ru');
   await page.locator('#cabinetLang').selectOption('tg');await page.goto(base);assert.equal(await page.locator('html').getAttribute('lang'),'tg');

@@ -1,11 +1,21 @@
-// These forms are built from the same physical cabinet fields as Settings.
-const fieldCopy={loading:['Загрузка полей анкеты…','Майдонҳои варақа бор мешаванд…'],failed:['Не удалось открыть анкету. Обновите страницу.','Варақа кушода нашуд. Саҳифаро бозбор кунед.'],
- required:['Заполните обязательные поля анкеты.','Майдонҳои ҳатмиро пур кунед.'],experience:['Стаж директором должен быть не больше общего стажа.','Собиқаи директорӣ набояд аз собиқаи умумӣ зиёд бошад.'],
- course:['Проверьте название и даты курса: окончание не раньше начала.','Ном ва санаҳои курсро санҷед: анҷом пас аз оғоз бошад.'],none:['Школы не найдены.','Мактаб ёфт нашуд.'],same:['Как у основной должности','Мисли вазифаи асосӣ'],
- pick:['Выберите школу','Мактабро интихоб кунед'],optionalCourse:['Последний курс повышения квалификации (необязательно)','Курси охирини такмили ихтисос (ихтиёрӣ)'],
- class:['Классы, в которых вы преподаёте','Синфҳое, ки дарс медиҳед'],other:['Укажите другой язык.','Забони дигарро нависед.'],dates:['Укажите годы после года рождения.','Солҳои пас аз таваллудро ворид кунед.']};
+// Role-specific working controls and unified school directory helpers.
+const fieldCopy={
+ loading:['Загрузка дополнительных полей…','Майдонҳои иловагӣ бор мешаванд…'],
+ failed:['Не удалось открыть дополнительные поля.','Майдонҳои иловагӣ кушода нашуданд.'],
+ required:['Заполните обязательные поля анкеты.','Майдонҳои ҳатмиро пур кунед.'],
+ experience:['Стаж директором должен быть не больше общего стажа.','Собиқаи директорӣ набояд аз собиқаи умумӣ зиёд бошад.'],
+ none:['Школы не найдены.','Мактаб ёфт нашуд.'],
+ same:['Как у основной должности','Мисли вазифаи асосӣ'],
+ pick:['Выберите школу','Мактабро интихоб кунед'],
+ class:['Классы, в которых вы преподаёте','Синфҳое, ки дарс медиҳед'],
+ other:['Укажите другой язык.','Забони дигарро нависед.'],
+};
 const fp=key=>fieldCopy[key][lang==='tg'?1:0];
 const docsForRole=new Map();
+const SKIP_DUPLICATE_KEYS=new Set([
+ 'first','last','directorFirst','directorLast','directorMiddle','directorBirth',
+ 'directorGender','directorSpecialty','directorEduYears','directorDiploma','directorOtherLanguage',
+]);
 const localize=node=>{if(lang==='tg')for(const element of node.querySelectorAll('[data-tg]'))element.textContent=element.dataset.tg;};
 function dataForRole(id){let fields=state.fields.get(id);if(!fields){fields=Object.create(null);state.fields.set(id,fields);}return fields;}
 function roleDoc(id,pack){
@@ -13,6 +23,7 @@ function roleDoc(id,pack){
  return docsForRole.get(id);
 }
 function cloneControl(original,parent,fields,key,validators){
+ if(!original)return null;
  const label=original.closest('label').cloneNode(true),input=label.querySelector('input,select,textarea');
  label.removeAttribute('for');label.removeAttribute('hidden');input.removeAttribute('id');input.removeAttribute('name');input.dataset.setupField=key;
  if(/^director(Birth|Graduation|Attestation|Appointed)$/.test(key))input.max=String(new Date().getFullYear());
@@ -46,35 +57,26 @@ function fillProfileFields(id,container,doc){
  container.replaceChildren(grid,groups);container.dataset.roleReady='yes';
  const original=doc.querySelector(id==='school-director'?'#directorPersonnelForm':'#roleIntakeForm');
  if(!original){container.dataset.roleReady='no';return;}
- for(const control of original.querySelectorAll('input:not([type=checkbox]),select,textarea')){
-  const key=control.dataset.intakeField??control.id;
-  if(!key||['first','last','directorFirst','directorLast'].includes(key))continue;
-  cloneControl(control,grid,fields,key,validators);
- }
- for(const host of original.querySelectorAll('[data-role-class]')){
-  const title=host.previousElementSibling?.querySelector('[data-tg]');
-  addClassControls(groups,fields,host.dataset.field,host.dataset.roleClass==='multi',lang==='tg'?title?.dataset.tg:title?.textContent,validators);
- }
  if(id==='school-director'){
-  addCheckGroup(groups,doc.getElementById('directorLanguages'),fields,'directorLanguages',validators);
-  addCheckGroup(groups,doc.getElementById('directorAchievements'),fields,'directorAchievements',validators);
-  for(const key of ['directorType','directorShifts'])cloneControl(doc.getElementById(key),grid,fields,key,validators);
-  const courses=el('details',undefined,'choice-set'),heading=el('summary',fp('optionalCourse')),content=el('div',undefined,'inputs');
-  courses.append(heading,content);groups.append(courses);
-  for(const key of ['directorCourseTitle','directorCourseProvider','directorCourseStart','directorCourseEnd','directorCourseCompletion']){
-   const source=doc.getElementById(key);source.required=false;const input=cloneControl(source,content,fields,key,validators);
-   if(input instanceof HTMLSelectElement&&!fields[key]){input.value='completed';fields[key]='completed';}
-  }
+  cloneControl(doc.getElementById('directorLeadYears'),grid,fields,'directorLeadYears',validators);
+  cloneControl(doc.getElementById('directorUniversity'),grid,fields,'directorUniversity',validators);
+  cloneControl(doc.getElementById('directorCategory'),grid,fields,'directorCategory',validators);
+  cloneControl(doc.getElementById('directorType'),grid,fields,'directorType',validators);
+  cloneControl(doc.getElementById('directorShifts'),grid,fields,'directorShifts',validators);
   validators.push(()=>{
-   if(Number(fields.directorLeadYears)>Number(fields.directorEduYears))return fp('experience');
-   if(['directorGraduation','directorAttestation','directorAppointed'].some(key=>fields[key]&&Number(fields[key])<=Number(fields.directorBirth)))return fp('dates');
-   if(fields.directorLanguages?.includes('other')&&!fields.directorOtherLanguage?.trim())return fp('other');
-   const {directorCourseTitle:title,directorCourseStart:start,directorCourseEnd:end,directorCourseProvider:provider}=fields;
-   if(title||start||end||provider){if(!title?.trim()||!start||!end||end<start)return fp('course');
-    const today=new Date();const iso=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
-    if(fields.directorCourseCompletion!=='planned'&&end>iso)return fp('course');}
+   if(Number(fields.directorLeadYears||0)>Number(state.person.eduYears||0))return fp('experience');
    return null;
   });
+ }else{
+  for(const control of original.querySelectorAll('input:not([type=checkbox]),select,textarea')){
+   const key=control.dataset.intakeField??control.id;
+   if(!key||SKIP_DUPLICATE_KEYS.has(key))continue;
+   cloneControl(control,grid,fields,key,validators);
+  }
+  for(const host of original.querySelectorAll('[data-role-class]')){
+   const title=host.previousElementSibling?.querySelector('[data-tg]');
+   addClassControls(groups,fields,host.dataset.field,host.dataset.roleClass==='multi',lang==='tg'?title?.dataset.tg:title?.textContent,validators);
+  }
  }
  if(id==='school-teacher'){
   const area=el('div',undefined,'class-field'),host=el('div');host.dataset.setupClass='teacherClasses';area.append(el('strong',fp('class')),host);groups.append(area);
@@ -86,6 +88,8 @@ function fillProfileFields(id,container,doc){
   cloneControl(doc.getElementById('libraryZone'),grid,fields,'libraryZone',validators);
   addCheckGroup(groups,doc.querySelector('#libraryProfile .class-choices'),fields,'libraryFunds',validators,true);
  }
+ if(!grid.children.length)grid.hidden=true;
+ if(!groups.children.length)groups.hidden=true;
  container.validateSetup=()=>validators.reduce((error,validate)=>error??validate(),null);
 }
 async function mountRoleFields(id,container){
@@ -97,27 +101,99 @@ async function mountRoleFields(id,container){
  }catch{if(container.setupRequest===request)container.textContent=fp('failed');}
 }
 function checkRoleFields(container){
- return container?.dataset.roleReady==='yes'?container.validateSetup?.()??null:fp('required');
+ return container?.dataset.roleReady==='yes'?container.validateSetup?.()??null:null;
+}
+const DEFAULT_REGIONS=['Душанбе','Вилояти Суғд','Вилояти Хатлон','ВМКБ','Ноҳияҳои тобеи ҷумҳурӣ'];
+function readLocalCustomSchools(){
+ try{const v=JSON.parse(localStorage.getItem('smartmaktab.custom_schools.v1')||'[]');return Array.isArray(v)?v:[];}catch{return [];}
+}
+function buildMergedSchoolCatalog(){
+ const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools:[];
+ const localCustom=readLocalCustomSchools();
+ const base=cloud.length
+  ? cloud.map(s=>({
+     id:s.id,
+     name:s.name+(s.district_name?` (${s.district_name})`:''),
+     isCloud:true,
+     raw:s,
+    }))
+  : schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:null}));
+ const seen=new Set(base.map(b=>b.id));
+ for(const c of localCustom){
+  if(c?.id&&!seen.has(c.id)){
+   base.push({id:c.id,name:c.name+(c.district_name?` (${c.district_name})`:''),isCloud:false,raw:c});
+  }
+ }
+ return base;
+}
+function filterMergedSchools(term){
+ const q=String(term||'').trim().toLocaleLowerCase();
+ const all=buildMergedSchoolCatalog();
+ if(!q)return all;
+ return all.filter(s=>s.name.toLocaleLowerCase().includes(q)||(s.raw?.school_code||'').toLocaleLowerCase().includes(q));
+}
+function resolveSchoolTitle(schoolId){
+ const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools.find(s=>s.id===schoolId):null;
+ if(cloud)return cloud.name;
+ const custom=readLocalCustomSchools().find(s=>s.id===schoolId);
+ if(custom)return custom.name;
+ return schoolNames[schoolId]||schoolId;
+}
+function populateNewSchoolTerritory(){
+ const regSel=$('newSchoolRegion'),distList=$('newSchoolDistrictList');
+ if(!regSel||!distList)return;
+ const auths=Array.isArray(state.cloudAuthorities)?state.cloudAuthorities:[];
+ const regions=[...new Set([...auths.map(a=>a.region_name).filter(Boolean),...DEFAULT_REGIONS])];
+ const prevReg=regSel.value||state.newSchool?.region_name||'';
+ regSel.replaceChildren(new Option(fp('pick'),''),...regions.map(r=>new Option(r,r)));
+ if(regions.includes(prevReg))regSel.value=prevReg;
+ const curReg=regSel.value;
+ const districts=[...new Set(auths.filter(a=>a.authority_tier==='maorif'&&(!curReg||a.region_name===curReg)).map(a=>a.district_name).filter(Boolean))];
+ distList.replaceChildren(...districts.map(d=>Object.assign(document.createElement('option'),{value:d})));
+}
+function canSubmitStep4(){
+ if(state.creatingNewSchool){
+  return Boolean(clean(state.newSchool?.region_name)&&clean(state.newSchool?.district_name)&&clean(state.newSchool?.name).length>=2);
+ }
+ return Boolean(state.school);
 }
 function fillSchoolChoices(){
- const choice=$('schoolChoice'),ids=findDemoSchools($('schoolSearch').value);
+ const choice=$('schoolChoice'),items=filterMergedSchools($('schoolSearch').value);
  const previous=choice.value;
- choice.replaceChildren(new Option(fp('pick'),''),...ids.map(id=>new Option(schoolNames[id],id)));
- choice.value=ids.includes(previous||state.school)?previous||state.school:ids.length===1?ids[0]:'';
- state.school=choice.value;$('schoolNotice').textContent=ids.length?'':fp('none');$('begin').disabled=!state.school;
+ choice.replaceChildren(new Option(fp('pick'),''),...items.map(s=>new Option(s.name,s.id)));
+ const validIds=new Set(items.map(s=>s.id));
+ choice.value=validIds.has(previous||state.school)?(previous||state.school):(items.length===1?items[0].id:'');
+ state.school=choice.value;
+ $('schoolNotice').textContent=items.length?'':fp('none');
+ populateNewSchoolTerritory();
+ $('begin').disabled=!canSubmitStep4();
 }
 function renderExtraSchools(){
- const list=$('extraSchools');list.replaceChildren(...state.extras.map(id=>{
+ const list=$('extraSchools'),all=buildMergedSchoolCatalog();
+ list.replaceChildren(...state.extras.map(id=>{
   const item=el('label',undefined,'field'),select=el('select');select.dataset.schoolFor=id;
-  select.replaceChildren(new Option(fp('same'),''),...schoolIds.map(id=>new Option(schoolNames[id],id)));
+  select.replaceChildren(new Option(fp('same'),''),...all.map(s=>new Option(s.name,s.id)));
   select.value=state.schools[id]??'';select.addEventListener('change',()=>{state.schools[id]=select.value;});
-  item.append(el('span',roster.get(id).title),select);return item;
+  item.append(el('span',roster.get(id)?.title||id),select);return item;
  }));
  $('extraSchoolBlock').hidden=!state.extras.length;
 }
-function buildRolePayload(role,school,fields,first,last){
+function buildRolePayload(role,school,fields,personObj){
  const roleKey=`smartmaktab.demo.role-setup.v3.${role.id}`;
- const payload={[roleKey]:JSON.stringify({school,first,last,fields,expires:Date.now()+300000})};
+ const first=clean(personObj.first||'');
+ const last=clean(personObj.last||'');
+ const enriched={
+  ...fields,
+  directorMiddle:personObj.middle||fields.directorMiddle||'',
+  directorBirth:personObj.birthYear||fields.directorBirth||'',
+  directorGender:personObj.gender||fields.directorGender||'',
+  directorSpecialty:personObj.specialty||fields.directorSpecialty||'',
+  directorEduYears:personObj.eduYears||fields.directorEduYears||'',
+  directorDiploma:(personObj.education==='higher'?'specialist':personObj.education)||fields.directorDiploma||'',
+  directorLanguages:Array.isArray(personObj.languages)?personObj.languages:(fields.directorLanguages||[]),
+  directorOtherLanguage:personObj.otherLanguage||fields.directorOtherLanguage||'',
+ };
+ const payload={[roleKey]:JSON.stringify({school,first,last,fields:enriched,expires:Date.now()+300000})};
  if(role.id==='school-teacher')payload[`smartmaktab.demo.teacher.v1.${school}`]=JSON.stringify({teaching:fields.teacherTeaching,language:fields.instructionLanguage});
  if(role.id==='school-library-head')payload[`smartmaktab.demo.library.v1.${school}`]=JSON.stringify({zone:fields.libraryZone,funds:fields.libraryFunds});
  if(role.id==='school-director')payload[`smartmaktab.demo.director.v1.${school}`]=JSON.stringify({type:fields.directorType,shifts:fields.directorShifts});

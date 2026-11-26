@@ -27,8 +27,27 @@ const sections=[...document.querySelectorAll('[data-cabinet-section]')];
 const listPath=new Map(listLinks.map(link=>[link,link.getAttribute('href')]));
 const backLinks=[...document.querySelectorAll('a[href*="onboarding/index.html"]')];
 const baseBack=new Map(backLinks.map(link=>[link,link.getAttribute('href')]));
-let fromURL=validSchools.has(searchParams.get('school'))?searchParams.get('school'):'';
-export let selectedDemoSchool=fromURL ? Object.freeze({id:fromURL,name:schoolNames[fromURL]}) : null;
+const profileKey='smartmaktab.profile.v1';
+function readSavedProfile(){
+  try{const raw=persistentStore.getItem(profileKey)||tabStorage.getItem(profileKey);return raw?JSON.parse(raw):null;}catch{return null;}
+}
+function isUuid(v){return typeof v==='string'&&/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|custom-[a-z0-9-]+)$/i.test(v);}
+const urlSchool=searchParams.get('school')||'';
+const savedProf=readSavedProfile();
+let fromURL=validSchools.has(urlSchool)?urlSchool:(isUuid(urlSchool)?urlSchool:(isUuid(savedProf?.organizationId)?savedProf.organizationId:''));
+function schoolDisplayName(id){
+  if(!id)return '';
+  if(schoolNames[id])return schoolNames[id];
+  try{
+    const customs=JSON.parse(persistentStore.getItem('smartmaktab.custom_schools.v1')||'[]');
+    const hit=Array.isArray(customs)?customs.find(x=>x.id===id):null;
+    if(hit?.name)return hit.name;
+  }catch{}
+  const prof=readSavedProfile();
+  if(prof?.organizationId===id&&prof?.organizationName)return prof.organizationName;
+  return id;
+}
+export let selectedDemoSchool=fromURL ? Object.freeze({id:fromURL,name:schoolDisplayName(fromURL)}) : null;
 const cabinet=document.querySelector('[data-cabinet-id]');
 const themeButton=cabinet?document.createElement('button'):null;
 if(themeButton){themeButton.id='themeToggle';themeButton.type='button';themeButton.className='theme-toggle';$('cabinetLang').before(themeButton);}
@@ -40,7 +59,7 @@ function getWorkspace(){
     const data=JSON.parse(tabStorage.getItem(workspaceKey));
     const assigned=data?.schools?.[cabinet.dataset.cabinetId]??'';
     const teacherAlternate=cabinet.dataset.cabinetId==='school-teacher'&&readTeacherWorkplaces().includes(fromURL);
-    if(!data||(assigned!==fromURL&&!teacherAlternate)||!Array.isArray(data.roles)||data.roles.length<1||data.roles.length>11||data.roles[0]?.id!==data.primary)return null;
+    if(!data||(assigned!==fromURL&&!(isUuid(assigned)&&!fromURL)&&!teacherAlternate)||!Array.isArray(data.roles)||data.roles.length<1||data.roles.length>20||data.roles[0]?.id!==data.primary)return null;
     if(!data.roles.every(role=>role&&typeof role.id==='string'&&typeof role.title==='string'&&role.title.length<=150&&
       typeof role.path==='string'&&/^cabinets\/(?:[a-z-]+\/)*[a-z-]+\.html$/.test(role.path)))return null;
     if(new Set(data.roles.map(role=>role.path)).size!==data.roles.length)return null;
@@ -69,7 +88,7 @@ if(switcher){
     if(!selected||selected.id===cabinet.dataset.cabinetId)return;
     const dest=new URL(selected.path,root);
     const target=workspace.schools?.[selected.id];
-    if(validSchools.has(target))dest.searchParams.set('school',target);
+    if(validSchools.has(target)||isUuid(target))dest.searchParams.set('school',target);
     dest.searchParams.set('lang',lang);
     openCabinetView(dest);
   });
@@ -118,7 +137,7 @@ function applyLanguage(){
   if($('cabinetLang')) $('cabinetLang').value=lang;
   for(const [node,ru] of texts) node.textContent=lang==='tg'?node.dataset.tg:ru;
   for(const [node,ru] of placeholders)node.placeholder=lang==='tg'?node.dataset.tgPlaceholder:ru;
-  if($('selectedSchool')) $('selectedSchool').textContent=schoolNames[fromURL]||t('noneSchool');
+  if($('selectedSchool')) $('selectedSchool').textContent=schoolDisplayName(fromURL)||t('noneSchool');
   refreshLinks(); refreshDirectory(); refreshSwitcher();refreshRoleUI();
   document.dispatchEvent(new Event('cabinet:language'));
 }
@@ -216,8 +235,8 @@ if(roleForm){
 $('institutionSearch')?.addEventListener('input',renderSchools);
 $('institutionChoice')?.addEventListener('change',()=>{$('confirmInstitution').disabled=!$('institutionChoice').value;});
 export function chooseInstitution(id,{setAsWorkspace=true}={}){
-  if(!validSchools.has(id)||id===fromURL)return;
-  fromURL=id;selectedDemoSchool=Object.freeze({id,name:schoolNames[id]});intakeReady=true;
+  if((!validSchools.has(id)&&!isUuid(id))||id===fromURL)return;
+  fromURL=id;selectedDemoSchool=Object.freeze({id,name:schoolDisplayName(id)});intakeReady=true;
   if(workspace&&setAsWorkspace){
     workspace.schools??={};workspace.schools[cabinet.dataset.cabinetId]=id;
     try{tabStorage.setItem(workspaceKey,JSON.stringify(workspace));}catch{}

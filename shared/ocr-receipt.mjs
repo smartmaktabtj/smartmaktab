@@ -101,6 +101,7 @@ export async function submitReceiptForVerification({
   planCode = DEFAULT_PAYMENT_TARIFF.code,
   primaryPosition = null,
   extraPositions = [],
+  includeAliya = false,
   config = getCloudConfig(),
   fetchImpl = globalThis.fetch,
 }) {
@@ -130,6 +131,7 @@ export async function submitReceiptForVerification({
       plan_code: planCode,
       primary_position: primaryPosition || undefined,
       extra_positions: Array.isArray(extraPositions) && extraPositions.length ? extraPositions : undefined,
+      include_aliya: Boolean(includeAliya),
     }),
   });
   const payload = await response.json().catch(() => ({}));

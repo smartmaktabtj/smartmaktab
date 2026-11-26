@@ -12,16 +12,19 @@
     <div class="brand-box">
       <div class="brand-badge">S</div>
       <div>
-        <div class="brand-title">SmartMaktab Content Studio (.smupdate)</div>
-        <div class="brand-sub">Редактор материалов кабинетов · Ed25519 · Supabase Sync · GitHub Releases</div>
+        <div class="brand-title">SmartMaktab Admin Studio (.smupdate)</div>
+        <div class="brand-sub">Роли · Категории · Подкатегории и DOCX · Предпросмотр · Ed25519 · GitHub Releases</div>
       </div>
     </div>
     <div class="toolbar">
+      <button type="button" id="btnPreview" class="btn">👁 Предпросмотр</button>
       <button type="button" id="btnSettings" class="btn">🔑 Ключи и GitHub</button>
       <button type="button" id="btnCloud" class="btn">☁ Supabase Sync</button>
+      <button type="button" id="btnImportJson" class="btn">📥 JSON</button>
+      <button type="button" id="btnExportJson" class="btn">📤 JSON</button>
       <button type="button" id="btnOpen" class="btn">📂 Открыть .smupdate</button>
       <button type="button" id="btnSaveFile" class="btn btn-primary">✍ Подписать и сохранить</button>
-      <button type="button" id="btnPublish" class="btn btn-gold">🚀 Опубликовать в GitHub</button>
+      <button type="button" id="btnPublish" class="btn btn-gold">🚀 Публикация</button>
     </div>
   </header>
 
@@ -30,6 +33,7 @@
       <label for="seqInput">Версия пакета (sequence):</label>
       <input type="number" id="seqInput" min="1" step="1" value="1">
       <button type="button" id="btnSeqBump" class="btn btn-sm">+1</button>
+      <span id="saveStateBadge" class="status-pill">Автосохранено ✓</span>
       <span id="cloudBadge" class="status-pill">Supabase: не подключён</span>
       <span id="keyBadge" class="status-pill">Ключ: проверка…</span>
     </div>
@@ -43,9 +47,12 @@
   <div class="workspace">
     <aside class="sidebar">
       <div class="sidebar-filter">
-        <input type="search" id="roleSearch" placeholder="Поиск роли или кабинета…">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="search" id="roleSearch" placeholder="Поиск роли или кабинета…" style="flex:1">
+          <button type="button" id="btnAddRole" class="btn btn-sm btn-primary" title="Добавить роль">+ Роль</button>
+        </div>
         <select id="groupFilter">
-          <option value="all">Все уровни (54 кабинета)</option>
+          <option value="all">Все уровни</option>
           <option value="school">Мактаб / Школа</option>
           <option value="maorif">Маориф / Район</option>
           <option value="raesat">Раёсат / Область</option>
@@ -58,6 +65,83 @@
 
     <main id="editorPane" class="editor"></main>
   </div>
+
+  <!-- Add / Edit Role Modal -->
+  <dialog id="dlgRole">
+    <div class="modal-head">
+      <h3 id="dlgRoleTitle">Управление ролью</h3>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlgRole">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div class="field">
+          <label>ID роли (латиница, дефисы, a-z 0-9 -)</label>
+          <input id="roleIdInput" placeholder="school-methodist-extra">
+        </div>
+        <div class="field">
+          <label>Уровень (группа)</label>
+          <select id="roleGroupInput">
+            <option value="school">Мактаб / Школа</option>
+            <option value="maorif">Маориф / Район</option>
+            <option value="raesat">Раёсат / Область</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Название (Тоҷикӣ)</label>
+          <input id="roleTitleTg" placeholder="Методисти мактаб">
+        </div>
+        <div class="field">
+          <label>Название (Русский)</label>
+          <input id="roleTitleRu" placeholder="Методист школы">
+        </div>
+      </div>
+      <p id="roleFormErr" style="color:var(--danger);font-size:12.5px;margin:4px 0 0"></p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" id="btnRoleAutoId" class="btn">Авто-ID</button>
+      <button type="button" id="btnSaveRole" class="btn btn-primary">Сохранить роль</button>
+      <button type="button" class="btn" data-close-dlg="dlgRole">Отмена</button>
+    </div>
+  </dialog>
+
+  <!-- Live Client Preview Modal -->
+  <dialog id="dlgPreview" class="dlg-wide">
+    <div class="modal-head">
+      <h3>👁 Живой предпросмотр кабинета SmartMaktab</h3>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlgPreview">✕</button>
+    </div>
+    <div class="modal-body preview-body">
+      <div class="preview-toolbar">
+        <div class="field" style="margin:0;min-width:220px">
+          <label>Кабинет / Должность</label>
+          <select id="pvRoleSelect"></select>
+        </div>
+        <div class="field" style="margin:0;min-width:130px">
+          <label>Язык (тҷ / ру)</label>
+          <select id="pvLangSelect">
+            <option value="tg">Тоҷикӣ (тҷ)</option>
+            <option value="ru">Русский (ру)</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0;min-width:130px">
+          <label>Тема</label>
+          <select id="pvThemeSelect">
+            <option value="light">Дневная</option>
+            <option value="dark">Ночная</option>
+          </select>
+        </div>
+      </div>
+      <div id="pvCanvas" class="pv-canvas">
+        <aside id="pvSidebar" class="pv-sidebar"></aside>
+        <section id="pvContent" class="pv-content"></section>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close-dlg="dlgPreview">Закрыть предпросмотр</button>
+    </div>
+  </dialog>
 
   <!-- Settings & Ed25519 Keys Modal -->
   <dialog id="dlgSettings">
@@ -145,14 +229,18 @@
     </div>
   </dialog>
 
-  <!-- GitHub Release Publish Modal -->
+  <!-- GitHub Release Publish + Diff Summary Modal -->
   <dialog id="dlgPublish">
     <div class="modal-head">
-      <h3>🚀 Публикация .smupdate в GitHub Releases</h3>
+      <h3>🚀 Публикация обновления (.smupdate)</h3>
       <button type="button" class="btn btn-sm" data-close-dlg="dlgPublish">✕</button>
     </div>
     <div class="modal-body">
-      <div class="grid-2">
+      <div class="diff-box">
+        <strong>Сводка изменений перед публикацией:</strong>
+        <ul id="pubDiffList" class="diff-list"></ul>
+      </div>
+      <div class="grid-2" style="margin-top:10px">
         <div class="field">
           <label>Тег релиза</label>
           <input id="pubTag" placeholder="content-v1">
@@ -163,7 +251,7 @@
         </div>
       </div>
       <div class="field">
-        <label>Описание изменений</label>
+        <label>Описание изменений (Release Notes)</label>
         <textarea id="pubNotes" rows="3"></textarea>
       </div>
       <p id="pubStatus" style="font-size:13px;color:var(--gold)"></p>

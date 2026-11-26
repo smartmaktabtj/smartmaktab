@@ -85,6 +85,7 @@ Deno.serve(async (req: Request) => {
     const extraPositions = Array.isArray(body?.extra_positions)
       ? body.extra_positions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
       : [];
+    const includeAliya = body?.include_aliya === true;
     const currency = typeof body?.currency === 'string' ? body.currency.trim() : 'TJS';
     let ocrText = typeof body?.ocr_text === 'string' ? body.ocr_text : '';
     let ocrSource = ocrText ? 'client_tesseract' : 'none';
@@ -156,6 +157,7 @@ Deno.serve(async (req: Request) => {
       p_plan_code: planCode,
       p_primary_position: primaryPosition,
       p_extra_positions: extraPositions,
+      p_include_aliya: includeAliya,
     });
 
     if (error) {

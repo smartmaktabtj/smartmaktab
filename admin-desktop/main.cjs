@@ -2,13 +2,38 @@
 
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const path = require('node:path');
 const packCore = require('./pack-core.cjs');
 
 let mainWindow = null;
 
+function logAdminError(label, err) {
+  try {
+    const dir = app.getPath('userData');
+    fsSync.mkdirSync(dir, { recursive: true });
+    fsSync.appendFileSync(
+      path.join(dir, 'admin-error.log'),
+      `[${new Date().toISOString()}] ${label}: ${err?.stack || err?.message || String(err)}\n`,
+      'utf8',
+    );
+  } catch {}
+}
+
+process.on('uncaughtException', err => {
+  logAdminError('uncaughtException', err);
+  if (app.isReady()) {
+    try { dialog.showErrorBox('SmartMaktab Admin — Ошибка', String(err?.message || err)); } catch {}
+  }
+});
+process.on('unhandledRejection', reason => logAdminError('unhandledRejection', reason));
+
 function configPath() {
   return path.join(app.getPath('userData'), 'admin-settings.json');
+}
+
+function dataPath() {
+  return path.join(app.getPath('userData'), 'admin-data.json');
 }
 
 function encryptText(value) {
@@ -36,7 +61,7 @@ async function readSettings() {
     return {
       ownerRepo: raw.ownerRepo || 'smartmaktabtj/smartmaktab',
       branch: raw.branch || 'main',
-      branchFeedPath: raw.branchFeedPath || '',
+      branchFeedPath: raw.branchFeedPath || 'updates/latest.smupdate',
       supabaseEmail: raw.supabaseEmail || '',
       publicKeyBase64: raw.publicKeyBase64 || '',
       privatePem: decryptText(raw.privatePemEnc || ''),
@@ -46,7 +71,7 @@ async function readSettings() {
     return {
       ownerRepo: 'smartmaktabtj/smartmaktab',
       branch: 'main',
-      branchFeedPath: '',
+      branchFeedPath: 'updates/latest.smupdate',
       supabaseEmail: '',
       publicKeyBase64: '',
       privatePem: '',
@@ -59,7 +84,7 @@ async function writeSettings(next) {
   const payload = {
     ownerRepo: next.ownerRepo || 'smartmaktabtj/smartmaktab',
     branch: next.branch || 'main',
-    branchFeedPath: next.branchFeedPath || '',
+    branchFeedPath: next.branchFeedPath ?? 'updates/latest.smupdate',
     supabaseEmail: next.supabaseEmail || '',
     publicKeyBase64: next.publicKeyBase64 || '',
     privatePemEnc: encryptText(next.privatePem || ''),
@@ -67,6 +92,32 @@ async function writeSettings(next) {
   };
   await fs.mkdir(path.dirname(configPath()), { recursive: true });
   await fs.writeFile(configPath(), JSON.stringify(payload, null, 2), { mode: 0o600 });
+}
+
+async function readAdminData() {
+  try {
+    const raw = JSON.parse(await fs.readFile(dataPath(), 'utf8'));
+    return {
+      pack: raw.pack || { schema: 1, sequence: 1, cabinets: {} },
+      customRoles: Array.isArray(raw.customRoles) ? raw.customRoles : [],
+      roleOverrides: raw.roleOverrides && typeof raw.roleOverrides === 'object' ? raw.roleOverrides : {},
+      hiddenRoleIds: Array.isArray(raw.hiddenRoleIds) ? raw.hiddenRoleIds : [],
+      lastPublishedPack: raw.lastPublishedPack || null,
+    };
+  } catch {
+    return {
+      pack: { schema: 1, sequence: 1, cabinets: {} },
+      customRoles: [],
+      roleOverrides: {},
+      hiddenRoleIds: [],
+      lastPublishedPack: null,
+    };
+  }
+}
+
+async function writeAdminData(state) {
+  await fs.mkdir(path.dirname(dataPath()), { recursive: true });
+  await fs.writeFile(dataPath(), JSON.stringify(state, null, 2), 'utf8');
 }
 
 function publicSettingsView(s) {
@@ -83,10 +134,11 @@ function publicSettingsView(s) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 860,
+    width: 1360,
+    height: 880,
     minWidth: 960,
     minHeight: 640,
+    backgroundColor: '#0c1714',
     title: 'SmartMaktab Admin · .smupdate Studio',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -95,6 +147,7 @@ function createWindow() {
       sandbox: true,
     },
   });
+  mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url).catch(() => {});
@@ -110,18 +163,66 @@ function ensureOwn(e) {
 }
 
 function registerIpc() {
-  const roles = packCore.loadRegistry();
-  const roleIds = roles.map(r => r.id);
+  const baseRoles = packCore.loadRegistry();
+  const baseRoleIds = baseRoles.map(r => r.id);
 
   ipcMain.handle('sm-admin:init', async e => {
     if (!ensureOwn(e)) throw new Error('denied');
     const settings = await readSettings();
+    const savedData = await readAdminData();
     return {
-      roles,
+      roles: baseRoles,
+      savedData,
       cloud: packCore.loadCloudDefaults(),
       settings: publicSettingsView(settings),
       limitBytes: packCore.LIMIT,
+      maxDocxBytes: packCore.MAX_DOCX_BYTES,
+      icons: packCore.ALLOWED_ICONS,
     };
+  });
+
+  ipcMain.handle('sm-admin:saveData', async (e, data) => {
+    if (!ensureOwn(e)) throw new Error('denied');
+    await writeAdminData(data);
+    return { ok: true };
+  });
+
+  ipcMain.handle('sm-admin:exportJson', async (e, data) => {
+    if (!ensureOwn(e)) throw new Error('denied');
+    const res = await dialog.showSaveDialog(mainWindow, {
+      title: 'Экспорт проекта (admin-data.json)',
+      defaultPath: path.join(app.getPath('downloads'), 'admin-data.json'),
+      filters: [{ name: 'SmartMaktab JSON', extensions: ['json'] }],
+    });
+    if (res.canceled || !res.filePath) return { canceled: true };
+    await fs.writeFile(res.filePath, JSON.stringify(data, null, 2), 'utf8');
+    return { canceled: false, filePath: res.filePath };
+  });
+
+  ipcMain.handle('sm-admin:importJson', async e => {
+    if (!ensureOwn(e)) throw new Error('denied');
+    const res = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'SmartMaktab JSON', extensions: ['json'] }],
+    });
+    if (res.canceled || !res.filePaths[0]) return { canceled: true };
+    const parsed = JSON.parse(await fs.readFile(res.filePaths[0], 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || !parsed.pack) {
+      throw new Error('Файл JSON не содержит корректного проекта SmartMaktab Admin');
+    }
+    return { canceled: false, data: parsed, filePath: res.filePaths[0] };
+  });
+
+  ipcMain.handle('sm-admin:pickDocx', async e => {
+    if (!ensureOwn(e)) throw new Error('denied');
+    const res = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'Word Template (.docx)', extensions: ['docx'] }],
+    });
+    if (res.canceled || !res.filePaths[0]) return { canceled: true };
+    const buf = await fs.readFile(res.filePaths[0]);
+    const validated = packCore.validateDocxBuffer(buf, path.basename(res.filePaths[0]));
+    return { canceled: false, ...validated };
   });
 
   ipcMain.handle('sm-admin:saveSettings', async (e, patch) => {
@@ -184,7 +285,12 @@ function registerIpc() {
 
   ipcMain.handle('sm-admin:validatePack', async (e, payload) => {
     if (!ensureOwn(e)) throw new Error('denied');
-    return packCore.validatePack(payload, roleIds);
+    return packCore.validatePack(payload, baseRoleIds);
+  });
+
+  ipcMain.handle('sm-admin:diffPack', async (e, { prevPack, nextPack, roleTitles }) => {
+    if (!ensureOwn(e)) throw new Error('denied');
+    return packCore.computePackDiff(prevPack, nextPack, roleTitles);
   });
 
   ipcMain.handle('sm-admin:openSmupdate', async e => {
@@ -196,7 +302,7 @@ function registerIpc() {
     if (res.canceled || !res.filePaths[0]) return { canceled: true };
     const buf = await fs.readFile(res.filePaths[0]);
     const cur = await readSettings();
-    const payload = packCore.verifyAndOpenSmupdate(buf, cur.publicKeyBase64, cur.privatePem, roleIds);
+    const payload = packCore.verifyAndOpenSmupdate(buf, cur.publicKeyBase64, cur.privatePem, baseRoleIds);
     return { canceled: false, filePath: res.filePaths[0], payload };
   });
 
@@ -204,7 +310,7 @@ function registerIpc() {
     if (!ensureOwn(e)) throw new Error('denied');
     const cur = await readSettings();
     if (!cur.privatePem) throw new Error('Не настроен приватный ключ Ed25519 (в Настройках)');
-    const signed = packCore.signPackWithPem(payload, cur.privatePem, roleIds);
+    const signed = packCore.signPackWithPem(payload, cur.privatePem, baseRoleIds);
     const res = await dialog.showSaveDialog(mainWindow, {
       title: 'Сохранить подписанный пакет .smupdate',
       defaultPath: path.join(app.getPath('downloads'), `smartmaktab-content-v${payload.sequence}.smupdate`),
@@ -220,7 +326,7 @@ function registerIpc() {
     const cur = await readSettings();
     if (!cur.privatePem) throw new Error('Не настроен приватный ключ Ed25519');
     if (!cur.githubToken) throw new Error('Не указан GitHub Token (PAT с правами repo)');
-    const signed = packCore.signPackWithPem(payload, cur.privatePem, roleIds);
+    const signed = packCore.signPackWithPem(payload, cur.privatePem, baseRoleIds);
     const fileName = `smartmaktab-content-v${payload.sequence}.smupdate`;
     const result = await packCore.publishReleaseToGithub({
       token: cur.githubToken,
@@ -239,13 +345,28 @@ function registerIpc() {
   ipcMain.handle('sm-admin:slugId', (_e, text, fallback) => packCore.slugId(text, fallback));
 }
 
-app.whenReady().then(() => {
-  registerIpc();
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (app.requestSingleInstanceLock()) {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
   });
-});
+  app.whenReady().then(() => {
+    try {
+      registerIpc();
+      createWindow();
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      });
+    } catch (err) {
+      logAdminError('whenReady', err);
+      try { dialog.showErrorBox('SmartMaktab Admin — Ошибка запуска', String(err?.message || err)); } catch {}
+    }
+  });
+} else {
+  app.quit();
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

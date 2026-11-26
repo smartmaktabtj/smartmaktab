@@ -151,7 +151,7 @@ function renderWorkplaces(){
  $('teacherWorkplaceStatus').textContent=labels[workNote]??'';
  $('teacherSchoolLinks').replaceChildren(...workplaces.map(id=>{
   const node=document.createElement(id===school?.id?'span':'a');
-  node.textContent=`${demoSchoolNames[id]}${id===school?.id?` · ${labels.current}`:''}`;
+  node.textContent=`${demoSchoolNames[id]||(id===school?.id?school.name:id)}${id===school?.id?` · ${labels.current}`:''}`;
   node.className=id===school?.id?'tag':'button alt';
   if(id!==school?.id){
    const url=new URL(cabinetPageURL);url.search='';url.hash='';url.searchParams.set('school',id);

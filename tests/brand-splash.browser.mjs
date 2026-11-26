@@ -2,14 +2,14 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
-import {fillRoleFields} from './onboarding-fixtures.mjs';
+import {fillStartupProfile} from './onboarding-fixtures.mjs';
 const base=process.env.SM_BASE_URL??'http://localhost:4180';
 async function toSchool(page){
- await page.locator('[data-level=school]').click();
+ await page.locator('#goToRegister').click();
  await page.locator('#primaryChoices input[value=school-academic-deputy]').check();
  await page.locator('#toExtras').click();await page.locator('#toProfile').click();
- await page.locator('#firstName').fill('Демо');await page.locator('#lastName').fill('Проверка');
- await fillRoleFields(page.locator('[data-step="4"]'));await page.locator('#toReview').click();
+ await fillStartupProfile(page,{first:'Демо',last:'Проверка'});
+ await page.locator('#toSchoolStep').click();
  await page.locator('#schoolSearch').fill('88');
  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
 }
@@ -19,6 +19,7 @@ test('SmartMaktab is typed in two different full-screen scenes, with keyboard an
   const page=await browser.newPage({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'no-preference'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.clock.install();
+  await page.route('https://*.supabase.co/**',route=>route.abort());
   await page.goto(`${base}/?lang=ru`);
   const intro=page.locator('#brandSplash'),letters=page.locator('#splashLetters');
   await intro.waitFor();
@@ -37,8 +38,8 @@ test('SmartMaktab is typed in two different full-screen scenes, with keyboard an
   await page.locator('#begin').click();await intro.waitFor();
   assert.equal(await intro.getAttribute('data-scene'),'school');
   assert.equal(await page.locator('.splash-route').first().isVisible(),true);
-  assert.equal(await page.locator('#splashCaption').textContent(),'МТМУ № 88');
-  assert.equal(await page.locator('#splashRole').textContent(),'Муовини таълимӣ');
+ assert.equal(await page.locator('#splashCaption').textContent(),'МТМУ № 88');
+ assert.equal(await page.locator('#splashRole').textContent(),'Зам. по учебной работе');
   await page.clock.runFor(1000);assert.equal(await letters.textContent(),'SmartMaktab');
   assert.equal(new URL(page.url()).pathname,'/');
   await page.locator('#splashSkip').click();await page.waitForURL('**/academic-deputy.html?school=demo-88&lang=ru');
@@ -50,6 +51,7 @@ test('reduced motion skips both splash waits and the isolated viewer can play bo
  const browser=await chromium.launch();
  try{
   const p=await browser.newPage({reducedMotion:'reduce',serviceWorkers:'block'});
+  await p.route('https://*.supabase.co/**',route=>route.abort());
   await p.goto(`${base}/?lang=ru`);
   assert.equal(await p.locator('#brandSplash').isVisible(),false);
   await toSchool(p);await p.locator('#begin').click();await p.waitForURL('**/academic-deputy.html?school=demo-88&lang=ru');

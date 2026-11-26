@@ -64,7 +64,7 @@ test('three physically separate synthetic workspaces work in Chromium',async()=>
     assert.equal(await page.getByRole('row').filter({hasText:'МТМУ № 4'}).count(),0);
     await page.goto(`${host}/cabinets/raesat/head.html?lang=ru`);
     await homeView(page);
-    await page.getByRole('heading',{name:'Роҳбари раёсат',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Сардори раёсат',exact:true}).waitFor();
     assert.match(new URL(page.url()).pathname,/cabinets\/raesat\/head\.html/);
     await page.setViewportSize({width:390,height:844});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

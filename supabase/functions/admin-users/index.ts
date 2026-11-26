@@ -23,6 +23,19 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+function normalizeLoginOrEmail(raw: string): { valid: boolean; email: string; display: string } {
+  const text = (raw || '').trim();
+  if (!text) return { valid: false, email: '', display: '' };
+  if (text.includes('@')) {
+    const email = text.toLowerCase();
+    return { valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), email, display: email };
+  }
+  const digits = text.replace(/[\s+()-]/g, '');
+  const handle = /^\d{7,15}$/.test(digits) ? digits : text.toLowerCase().replace(/\s+/g, '');
+  if (!/^[a-z0-9._-]{3,60}$/.test(handle)) return { valid: false, email: '', display: text };
+  return { valid: true, email: `${handle}@login.smartmaktab.tj`, display: text };
+}
+
 function generateReadablePassword(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const bytes = new Uint8Array(8);
@@ -104,20 +117,24 @@ Deno.serve(async (req) => {
       const authUsers = await listAllAuthUsers(adminClient);
       const { data: profiles } = await adminClient
         .from('user_profiles')
-        .select('user_id,full_name,preferred_lang');
-      const profileMap = new Map<string, { full_name: string; preferred_lang: string }>();
+        .select('user_id,full_name,preferred_lang,login_name');
+      const profileMap = new Map<string, { full_name: string; preferred_lang: string; login_name: string }>();
       for (const p of profiles ?? []) {
         profileMap.set(p.user_id, {
           full_name: p.full_name ?? '',
           preferred_lang: p.preferred_lang ?? 'tg',
+          login_name: p.login_name ?? '',
         });
       }
       const users = authUsers.map((u) => {
         const prof = profileMap.get(u.id);
         const metaName = typeof u.user_metadata?.full_name === 'string' ? u.user_metadata.full_name : '';
+        const metaLogin = typeof u.user_metadata?.login_name === 'string' ? u.user_metadata.login_name : '';
+        const cleanLogin = prof?.login_name || metaLogin || (u.email.endsWith('@login.smartmaktab.tj') ? u.email.replace(/@login\.smartmaktab\.tj$/, '') : u.email);
         return {
           id: u.id,
           email: u.email,
+          login_name: cleanLogin,
           full_name: prof?.full_name || metaName || '',
           preferred_lang: prof?.preferred_lang || 'tg',
           created_at: u.created_at,
@@ -129,7 +146,12 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'assign_or_create') {
-      const rawEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const rawIdentifier = typeof body?.login === 'string' && body.login.trim()
+        ? body.login.trim()
+        : (typeof body?.email === 'string' ? body.email.trim() : '');
+      const parsedLogin = rawIdentifier ? normalizeLoginOrEmail(rawIdentifier) : { valid: true, email: '', display: '' };
+      const rawEmail = parsedLogin.email;
+      const loginDisplay = parsedLogin.display;
       const rawUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
       const orgId = typeof body?.org_id === 'string' ? body.org_id.trim() : '';
       let role = typeof body?.role === 'string' ? body.role.trim() : '';
@@ -142,6 +164,8 @@ Deno.serve(async (req) => {
       const maxExtraPositions = Number.isInteger(body?.max_extra_positions) ? Number(body.max_extra_positions) : extraPositions.length;
       const maxDevices = Number.isInteger(body?.max_devices) ? Number(body.max_devices) : 1;
       const accountActive = body?.account_active !== false;
+      const aliyaEnabled = body?.aliya_enabled === true;
+      const customMethodName = typeof body?.custom_method_name === 'string' ? body.custom_method_name.trim().slice(0, 120) : '';
       const fullName = typeof body?.full_name === 'string' ? body.full_name.trim().slice(0, 160) : '';
       const preferredLang = body?.preferred_lang === 'ru' ? 'ru' : 'tg';
       const customPassword = typeof body?.password === 'string' ? body.password.trim() : '';
@@ -165,10 +189,10 @@ Deno.serve(async (req) => {
       if (!rawEmail && !/^[0-9a-f-]{36}$/i.test(rawUserId)) {
         return json(400, { error: 'email_or_user_id_required' });
       }
-      if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+      if (rawIdentifier && !parsedLogin.valid) {
         return json(400, { error: 'invalid_email' });
       }
-      if (customPassword && customPassword.length < 8) {
+      if (customPassword && customPassword.length < 6) {
         return json(400, { error: 'password_too_short' });
       }
 
@@ -194,7 +218,7 @@ Deno.serve(async (req) => {
           email: rawEmail,
           password: temporaryPassword,
           email_confirm: true,
-          user_metadata: fullName ? { full_name: fullName } : undefined,
+          user_metadata: { full_name: fullName, login_name: loginDisplay },
         });
         if (createErr || !createdData?.user) {
           return json(400, { error: createErr?.message || 'create_user_failed' });
@@ -214,11 +238,12 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (fullName) {
+      if (fullName || loginDisplay) {
         await adminClient.from('user_profiles').upsert(
           {
             user_id: targetUserId,
-            full_name: fullName,
+            full_name: fullName || undefined,
+            login_name: loginDisplay || undefined,
             preferred_lang: preferredLang,
             updated_at: new Date().toISOString(),
           },
@@ -235,6 +260,8 @@ Deno.serve(async (req) => {
         p_max_extra_positions: maxExtraPositions,
         p_max_devices: maxDevices,
         p_account_active: accountActive,
+        p_aliya_enabled: aliyaEnabled,
+        p_custom_method_name: customMethodName,
       });
       if (rpcErr) {
         return json(400, { error: rpcErr.message || 'assign_membership_failed' });
@@ -243,6 +270,7 @@ Deno.serve(async (req) => {
       return json(200, {
         user_id: targetUserId,
         email: targetEmail,
+        login_name: loginDisplay || targetEmail,
         full_name: fullName,
         membership_id: membershipId,
         organization_id: orgId,
@@ -252,6 +280,7 @@ Deno.serve(async (req) => {
         max_extra_positions: maxExtraPositions,
         max_devices: maxDevices,
         account_active: accountActive,
+        aliya_enabled: aliyaEnabled,
         created,
         temporary_password: temporaryPassword,
       });

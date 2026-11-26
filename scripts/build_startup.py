@@ -31,7 +31,7 @@ def build_startup(viewer):
     js=(ROOT/'startup/wizard.js').read_text(encoding='utf8')
     ui=(ROOT/'startup/file-viewer.js').read_text(encoding='utf8')
     payload=b64encode(compress(compact_json(viewer).encode('utf8'),mtime=0)).decode('ascii')
-    shared='\n'.join(re.sub(r'^import .+\n','',(ROOT/path).read_text(encoding='utf8'),flags=re.M).replace('export ','') for path in ('shared/theme.mjs','shared/language.mjs','shared/class-picker.mjs','shared/subjects.mjs','shared/teaching-editor.mjs','shared/schools.mjs'))
+    shared='\n'.join(re.sub(r'^import .+\n','',(ROOT/path).read_text(encoding='utf8'),flags=re.M).replace('export ','') for path in ('shared/theme.mjs','shared/language.mjs','shared/class-picker.mjs','shared/subjects.mjs','shared/teaching-editor.mjs','shared/schools.mjs','shared/cloud-config.mjs','shared/position-catalog.mjs'))
     gzip_js=subprocess.check_output(['node',str(ROOT/'scripts/bundle-inline.cjs'),str(ROOT/'startup/gzip-fallback.mjs')],encoding='utf8')
     profiles=(ROOT/'startup/profiles.js').read_text(encoding='utf8')
     splash=(ROOT/'startup/brand-splash.js').read_text(encoding='utf8')

@@ -1,4 +1,5 @@
 import { getCloudConfig } from './cloud-config.mjs';
+import { normalizeLoginIdentifier } from './position-catalog.mjs';
 
 export function createCloudClient({
   config = getCloudConfig(),
@@ -53,14 +54,37 @@ export function createCloudClient({
     return data;
   }
 
-  async function signIn(email, password) {
+  async function signIn(identifier, password) {
+    const parsed = normalizeLoginIdentifier(identifier);
+    const email = parsed.valid ? parsed.email : String(identifier || '').trim();
     const res = await fetchImpl(`${config.url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: headers({}, false),
-      body: JSON.stringify({ email: String(email || '').trim(), password: String(password || '') }),
+      body: JSON.stringify({ email, password: String(password || '') }),
     });
     const data = await parseJson(res);
     persistSession(data);
+    return data;
+  }
+
+  async function fetchRegistrationBootstrap() {
+    const res = await fetchImpl(`${config.url}/functions/v1/register-user?action=bootstrap`, {
+      method: 'GET',
+      headers: headers({}, false),
+    });
+    return parseJson(res);
+  }
+
+  async function registerUser(payload) {
+    const res = await fetchImpl(`${config.url}/functions/v1/register-user`, {
+      method: 'POST',
+      headers: headers({}, false),
+      body: JSON.stringify({ action: 'register', ...(payload || {}) }),
+    });
+    const data = await parseJson(res);
+    if (data?.session?.access_token) {
+      persistSession(data.session);
+    }
     return data;
   }
 
@@ -160,12 +184,15 @@ export function createCloudClient({
     refreshSession,
     signIn,
     signOut,
+    fetchRegistrationBootstrap,
+    registerUser,
     requestPasswordRecovery,
     updatePassword,
     rpc,
     select,
     invokeFunction,
     getWorkspaceContext: () => rpc('get_my_workspace_context'),
+    upsertMyPositionProfiles: args => rpc('upsert_my_position_profiles', args),
     saveRecord: args => rpc('save_school_record', args),
     setRecordDeleted: args => rpc('set_school_record_deleted', args),
     listRecordsDetail: args => rpc('get_school_records_detail', args),

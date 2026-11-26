@@ -72,7 +72,7 @@ test('role templates, materials and settings are separate and printable drafts r
   const page=await browser.newPage({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(`${base}/cabinets/school/class-teacher.html?school=demo-88&lang=ru`);
-  await page.getByRole('button',{name:'Настройки'}).waitFor();
+  await page.getByRole('button',{name:/Профиль/}).waitFor();
   assert.equal(await page.locator('#cabinetRailNav a[href="#roleIntake"]').count(),0);
   assert.equal(await page.locator('#cabinetRailNav a[href="#institutionPicker"]').count(),0);
   assert.equal(await page.locator('#cabinetRailNav a[href="#workspaceMaterials"]').count(),1);
@@ -86,7 +86,7 @@ test('role templates, materials and settings are separate and printable drafts r
   assert.equal(await page.locator('#workspaceSheetBody').textContent(),'<strong>Демо</strong>');
   assert.equal(await page.locator('#workspaceSheetBody strong').count(),0);
   assert.equal(await page.locator('#workspaceDraft').evaluate(node=>getComputedStyle(node).animationName),'none');
-  await page.getByRole('button',{name:'Настройки'}).click();
+  await page.getByRole('button',{name:/Профиль/}).click();
   const picker=page.locator('#roleIntake [data-role-class]');
   await picker.locator('[data-class-grade]').selectOption('5');
   assert.deepEqual(await picker.locator('[data-class-letter] option').evaluateAll(nodes=>nodes.map(node=>node.value).slice(1,7)),['А','Б','В','Г','Ғ','Д']);

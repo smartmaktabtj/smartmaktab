@@ -53,17 +53,30 @@ jobs:
             if curl -fsS http://127.0.0.1:4180/ >/dev/null; then break; fi
             sleep 1
           done
-          npm run test:startup:browser
-          npm run test:cabinets:browser
-          npm run test:director:browser
-          npm run test:school-forms:browser
-          npm run test:update-operations:browser
-          npm run test:file-viewer:browser
-          npm run test:brand-splash:browser
-          npm run test:role-profiles:browser
-          npm run test:library:browser
-          npm run test:kitobkhona-reader:browser
-          npm run test:portable:browser
+          run_bt() {
+            local name="$1"
+            local out
+            if ! out=$(npm run "$name" 2>&1); then
+              echo "$out"
+              local snippet
+              snippet=$(printf '%s\n' "$out" | tail -n 35 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')
+              echo "::error title=Failed browser suite: $name::$snippet"
+              return 1
+            fi
+            echo "$out"
+          }
+          run_bt test:startup:browser
+          run_bt test:cabinets:browser
+          run_bt test:director:browser
+          run_bt test:school-forms:browser
+          run_bt test:update-operations:browser
+          run_bt test:file-viewer:browser
+          run_bt test:brand-splash:browser
+          run_bt test:role-profiles:browser
+          run_bt test:library:browser
+          run_bt test:kitobkhona-reader:browser
+          run_bt test:portable:browser
+          run_bt test:phase2:browser
 
   android-java-compile:
     runs-on: ubuntu-24.04

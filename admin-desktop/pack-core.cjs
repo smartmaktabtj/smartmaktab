@@ -3,6 +3,15 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const https = require('node:https');
+
+const ALLOWED_ICONS = [
+  'folder', 'document', 'book', 'info',
+  'calendar', 'chart', 'settings', 'users', 'money', 'school',
+];
+const ICON_SET = new Set(ALLOWED_ICONS);
+const ROLE_GROUP_SET = new Set(['school', 'maorif', 'raesat']);
+const MAX_DOCX_BYTES = 160 * 1024;
 
 function loadContentModule() {
   const bundled = path.join(__dirname, 'bundled', 'content.cjs');
@@ -52,20 +61,57 @@ function slugId(input, fallback = 'item') {
 }
 
 function estimateSignedBytes(jsonBuf) {
-  // base64 length + signature (88 chars) + envelope JSON overhead
   const b64Len = Math.ceil(jsonBuf.length / 3) * 4;
   return b64Len + 128;
 }
 
+function validateDocxBuffer(buf, fileName = 'template.docx') {
+  if (!Buffer.isBuffer(buf) || buf.length < 4) {
+    throw new Error('Файл .docx повреждён или пуст');
+  }
+  if (!(buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04)) {
+    throw new Error('Выбранный файл не является корректным документом Word (.docx / ZIP)');
+  }
+  if (buf.length > MAX_DOCX_BYTES) {
+    throw new Error(`Файл ${fileName} (${Math.round(buf.length / 1024)} КБ) превышает лимит вложения ${Math.round(MAX_DOCX_BYTES / 1024)} КБ для пакета .smupdate (общий лимит 256 КБ)`);
+  }
+  const cleanName = path.basename(String(fileName || 'template.docx')).replace(/[^\w .()-]/g, '_');
+  const finalName = /\.docx$/i.test(cleanName) ? cleanName : `${cleanName}.docx`;
+  return {
+    docxName: finalName.slice(0, 80),
+    docxBase64: buf.toString('base64'),
+    bytes: buf.length,
+  };
+}
+
+function effectiveRoles(payload, roles) {
+  const base = Array.isArray(roles) && roles.length ? roles : loadRegistry().map(r => r.id);
+  const custom = Array.isArray(payload?.customRoles) ? payload.customRoles.map(r => r?.id).filter(Boolean) : [];
+  return [...new Set([...base, ...custom])];
+}
+
 function validatePack(payload, roles) {
-  const allowedRoles = Array.isArray(roles) && roles.length ? roles : loadRegistry().map(r => r.id);
+  const allowedRoles = effectiveRoles(payload, roles);
+  const baseRoles = Array.isArray(roles) && roles.length ? roles : loadRegistry().map(r => r.id);
   const rawJson = Buffer.from(JSON.stringify(payload));
   const estBytes = estimateSignedBytes(rawJson);
   try {
-    getPayload(rawJson, allowedRoles);
+    getPayload(rawJson, baseRoles);
   } catch (err) {
-    // Produce human-friendly field-level error diagnosis
     let detail = err.code || err.message || 'schema';
+    if (Array.isArray(payload?.customRoles)) {
+      for (const r of payload.customRoles) {
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(r?.id || '')) {
+          detail = `Некорректный ID роли "${r?.id || ''}"`; break;
+        }
+        if (!r?.title?.tg?.trim() || !r?.title?.ru?.trim()) {
+          detail = `Роль ${r.id}: заполните название (TJ и RU)`; break;
+        }
+        if (!ROLE_GROUP_SET.has(r?.group)) {
+          detail = `Роль ${r.id}: выберите уровень (school / maorif / raesat)`; break;
+        }
+      }
+    }
     const cats = payload?.cabinets || {};
     for (const [role, list] of Object.entries(cats)) {
       if (!allowedRoles.includes(role)) { detail = `Неизвестная роль: ${role}`; break; }
@@ -82,7 +128,7 @@ function validatePack(payload, roles) {
         if (c.title.tg.length > 80 || c.title.ru.length > 80) {
           detail = `${role} / ${c.id}: название категории длиннее 80 символов`; break;
         }
-        if (!['folder', 'document', 'book', 'info'].includes(c.icon)) {
+        if (!ICON_SET.has(c.icon)) {
           detail = `${role} / ${c.id}: неизвестная иконка "${c.icon}"`; break;
         }
         if (!Array.isArray(c.sections) || c.sections.length > 20) {
@@ -105,6 +151,9 @@ function validatePack(payload, roles) {
           }
           if (s.text.tg.length > 4000 || s.text.ru.length > 4000) {
             detail = `${role} / ${c.id} / ${s.id}: текст раздела превышает 4000 символов`; break;
+          }
+          if ((s.docxName && !s.docxBase64) || (!s.docxName && s.docxBase64)) {
+            detail = `${role} / ${c.id} / ${s.id}: некорректное вложение DOCX`; break;
           }
         }
       }
@@ -170,7 +219,109 @@ function verifyAndOpenSmupdate(buffer, publicBase64, privatePem, roles) {
   return openPack(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer), key, allowedRoles);
 }
 
-async function publishReleaseToGithub(opts, fetcher = fetch) {
+function computePackDiff(prevPack, nextPack, roleTitles = {}) {
+  const prevCabs = prevPack?.cabinets || {};
+  const nextCabs = nextPack?.cabinets || {};
+  const allRoles = new Set([...Object.keys(prevCabs), ...Object.keys(nextCabs)]);
+  const changes = [];
+  const labelRole = id => roleTitles[id] || id;
+
+  const prevCustom = new Map((prevPack?.customRoles || []).map(r => [r.id, r]));
+  const nextCustom = new Map((nextPack?.customRoles || []).map(r => [r.id, r]));
+  for (const [id, r] of nextCustom) {
+    if (!prevCustom.has(id)) changes.push({ kind: 'added', text: `+ Добавлена роль «${r.title?.ru || r.title?.tg || id}»` });
+    else if (JSON.stringify(prevCustom.get(id)) !== JSON.stringify(r)) {
+      changes.push({ kind: 'edited', text: `✎ Изменена роль «${r.title?.ru || id}»` });
+    }
+  }
+  for (const [id, r] of prevCustom) {
+    if (!nextCustom.has(id)) changes.push({ kind: 'removed', text: `✗ Удалена роль «${r.title?.ru || id}»` });
+  }
+
+  for (const roleId of allRoles) {
+    const oldList = Array.isArray(prevCabs[roleId]) ? prevCabs[roleId] : [];
+    const newList = Array.isArray(nextCabs[roleId]) ? nextCabs[roleId] : [];
+    const oldMap = new Map(oldList.map(c => [c.id, c]));
+    const newMap = new Map(newList.map(c => [c.id, c]));
+    const rName = labelRole(roleId);
+
+    for (const c of newList) {
+      const prevCat = oldMap.get(c.id);
+      if (!prevCat) {
+        changes.push({ kind: 'added', text: `✓ [${rName}] Добавлена категория «${c.title?.ru || c.id}» (${(c.sections || []).length} разд.)` });
+        continue;
+      }
+      if (
+        prevCat.title?.tg !== c.title?.tg ||
+        prevCat.title?.ru !== c.title?.ru ||
+        prevCat.icon !== c.icon
+      ) {
+        changes.push({ kind: 'edited', text: `✎ [${rName}] Обновлена категория «${c.title?.ru || c.id}»` });
+      }
+      const prevSecs = new Map((prevCat.sections || []).map(s => [s.id, s]));
+      const nextSecs = new Map((c.sections || []).map(s => [s.id, s]));
+      for (const s of c.sections || []) {
+        const ps = prevSecs.get(s.id);
+        if (!ps) {
+          changes.push({ kind: 'added', text: `  + [${rName} → ${c.title?.ru || c.id}] Добавлен раздел «${s.title?.ru || s.id}»${s.docxName ? ` (+ ${s.docxName})` : ''}` });
+        } else if (JSON.stringify(ps) !== JSON.stringify(s)) {
+          changes.push({ kind: 'edited', text: `  ✎ [${rName} → ${c.title?.ru || c.id}] Изменён раздел «${s.title?.ru || s.id}»${s.docxName && s.docxName !== ps.docxName ? ` (+ ${s.docxName})` : ''}` });
+        }
+      }
+      for (const ps of prevCat.sections || []) {
+        if (!nextSecs.has(ps.id)) {
+          changes.push({ kind: 'removed', text: `  ✗ [${rName} → ${c.title?.ru || c.id}] Удалён раздел «${ps.title?.ru || ps.id}»` });
+        }
+      }
+    }
+    for (const c of oldList) {
+      if (!newMap.has(c.id)) {
+        changes.push({ kind: 'removed', text: `✗ [${rName}] Удалена категория «${c.title?.ru || c.id}»` });
+      }
+    }
+  }
+
+  return changes;
+}
+
+function nodeHttpsRequest(url, init = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = https.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || 443,
+        path: parsed.pathname + parsed.search,
+        method: init.method || 'GET',
+        headers: init.headers || {},
+        timeout: 25000,
+      },
+      res => {
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+          const buf = Buffer.concat(chunks);
+          const text = buf.toString('utf8');
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            text: async () => text,
+            json: async () => JSON.parse(text || '{}'),
+          });
+        });
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
+    req.on('error', reject);
+    if (init.body !== undefined) {
+      req.write(Buffer.isBuffer(init.body) ? init.body : Buffer.from(String(init.body), 'utf8'));
+    }
+    req.end();
+  });
+}
+
+async function publishReleaseToGithub(opts, fetcher = globalThis.fetch) {
+  const httpFetch = typeof fetcher === 'function' ? fetcher : nodeHttpsRequest;
   const { token, ownerRepo, tag, name, notes, fileName, buffer, branchFeedPath, branch = 'main' } = opts;
   if (!token || !ownerRepo || !tag || !fileName || !buffer) {
     throw new Error('Требуются token, ownerRepo, tag, fileName и buffer');
@@ -185,13 +336,12 @@ async function publishReleaseToGithub(opts, fetcher = fetch) {
     'X-GitHub-Api-Version': '2022-11-28',
   };
 
-  // 1) Find or create GitHub Release for tag
   let release = null;
-  const byTag = await fetcher(`https://api.github.com/repos/${ownerRepo}/releases/tags/${encodeURIComponent(tag)}`, { headers });
+  const byTag = await httpFetch(`https://api.github.com/repos/${ownerRepo}/releases/tags/${encodeURIComponent(tag)}`, { headers });
   if (byTag.ok) {
     release = await byTag.json();
   } else if (byTag.status === 404) {
-    const createRes = await fetcher(`https://api.github.com/repos/${ownerRepo}/releases`, {
+    const createRes = await httpFetch(`https://api.github.com/repos/${ownerRepo}/releases`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -212,17 +362,16 @@ async function publishReleaseToGithub(opts, fetcher = fetch) {
     throw new Error(`GitHub Release lookup HTTP ${byTag.status}`);
   }
 
-  // Delete matching asset name if re-publishing same tag
   const existingAsset = (release.assets || []).find(a => a.name === fileName);
   if (existingAsset) {
-    await fetcher(`https://api.github.com/repos/${ownerRepo}/releases/assets/${existingAsset.id}`, {
+    await httpFetch(`https://api.github.com/repos/${ownerRepo}/releases/assets/${existingAsset.id}`, {
       method: 'DELETE',
       headers,
     });
   }
 
   const uploadBase = String(release.upload_url || '').replace(/\{[^}]+\}$/, '');
-  const upRes = await fetcher(`${uploadBase}?name=${encodeURIComponent(fileName)}`, {
+  const upRes = await httpFetch(`${uploadBase}?name=${encodeURIComponent(fileName)}`, {
     method: 'POST',
     headers: {
       ...headers,
@@ -241,13 +390,13 @@ async function publishReleaseToGithub(opts, fetcher = fetch) {
   const cleanFeed = String(branchFeedPath || '').trim().replace(/^\/+/, '');
   if (cleanFeed) {
     if (!cleanFeed.endsWith('.smupdate')) throw new Error('Путь feed должен заканчиваться на .smupdate');
-    const getCur = await fetcher(`https://api.github.com/repos/${ownerRepo}/contents/${cleanFeed}?ref=${encodeURIComponent(branch)}`, { headers });
+    const getCur = await httpFetch(`https://api.github.com/repos/${ownerRepo}/contents/${cleanFeed}?ref=${encodeURIComponent(branch)}`, { headers });
     let sha;
     if (getCur.ok) {
       const curJson = await getCur.json();
       sha = curJson.sha;
     }
-    const putRes = await fetcher(`https://api.github.com/repos/${ownerRepo}/contents/${cleanFeed}`, {
+    const putRes = await httpFetch(`https://api.github.com/repos/${ownerRepo}/contents/${cleanFeed}`, {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -274,14 +423,18 @@ async function publishReleaseToGithub(opts, fetcher = fetch) {
 
 module.exports = {
   LIMIT,
+  MAX_DOCX_BYTES,
+  ALLOWED_ICONS,
   loadRegistry,
   loadCloudDefaults,
   slugId,
   estimateSignedBytes,
+  validateDocxBuffer,
   validatePack,
   generateEd25519Keypair,
   publicBase64FromPrivatePem,
   signPackWithPem,
   verifyAndOpenSmupdate,
+  computePackDiff,
   publishReleaseToGithub,
 };
