@@ -180,7 +180,8 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
     await ctx.route('https://*.supabase.co/**', async route => {
       const url = route.request().url();
       const json = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
-      if (url.includes('/rpc/get_workspace_context')) return json({ is_super_admin: true, user_id: 'admin-1', memberships: [] });
+      if (url.includes('/rpc/get_my_workspace_context')) return json({ is_super_admin: true, user_id: 'admin-1', memberships: [] });
+      if (url.includes('/auth/v1/token')) return json({ access_token: 'mock_jwt', refresh_token: 'mock_ref', expires_at: Math.floor(Date.now() / 1000) + 3600 });
       if (url.includes('/rest/v1/organizations')) return json(mockOrgs);
       if (url.includes('/functions/v1/admin-users')) return json({ users: [] });
       return json([]);
