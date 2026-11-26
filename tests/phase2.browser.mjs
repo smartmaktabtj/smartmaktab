@@ -1,10 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { fillStartupProfile, homeView, openView } from './onboarding-fixtures.mjs';
 import { buildSimpleDocxBytes } from '../shared/spreadsheet-import.mjs';
 
 const base = process.env.SM_BASE_URL ?? 'http://localhost:4180';
+const repoRoot = resolve(new URL('..', import.meta.url).pathname);
+
+function startAdminStaticServer() {
+  const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
+  const server = http.createServer(async (req, res) => {
+    const cleanPath = (req.url || '/').split('?')[0];
+    if (!/^\/(?:admin|shared)\/[a-zA-Z0-9._-]+$/.test(cleanPath)) {
+      res.writeHead(404).end('Not found');
+      return;
+    }
+    try {
+      const data = await readFile(resolve(repoRoot, `.${cleanPath}`));
+      res.writeHead(200, { 'Content-Type': mime[extname(cleanPath)] || 'application/octet-stream' });
+      res.end(data);
+    } catch {
+      res.writeHead(404).end('Not found');
+    }
+  });
+  return new Promise(res => server.listen(0, '127.0.0.1', () => {
+    const addr = server.address();
+    res({ url: `http://127.0.0.1:${addr.port}`, close: () => new Promise(r => server.close(r)) });
+  }));
+}
 
 test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll, .docx import & workload', async () => {
   const browser = await chromium.launch();
@@ -170,6 +196,7 @@ test('Phase 2 browser: Staff grades & animated charts -> Director -> Maorif veri
 
 test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child orgs', async () => {
   const browser = await chromium.launch();
+  const adminSrv = await startAdminStaticServer();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
     const mockOrgs = [
@@ -192,7 +219,7 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
 
-    await page.goto(`${base}/admin/index.html#access_token=mock_jwt&refresh_token=mock_ref`);
+    await page.goto(`${adminSrv.url}/admin/index.html#access_token=mock_jwt&refresh_token=mock_ref`);
     await page.locator('#admWorkspace:not([hidden])').waitFor();
     await page.locator('#orgHierarchyBox > summary').click();
     await page.locator('#orgHierarchyTree').waitFor();
@@ -209,5 +236,6 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
+    await adminSrv.close();
   }
 });
