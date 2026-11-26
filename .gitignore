@@ -23,3 +23,11 @@ native/android/release/
 native/windows/pilot-release/
 native/windows/content-config.json
 *.smupdate-key
+
+# Admin Desktop Electron staging & builds
+admin-desktop/bundled/
+admin-desktop/release/
+admin-desktop/unsigned-release/
+admin-desktop/node_modules/
+__pycache__/
+*.pyc

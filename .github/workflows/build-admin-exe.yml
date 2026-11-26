@@ -1,0 +1,67 @@
+name: SmartMaktab Admin Studio — сборка Windows EXE
+on:
+  workflow_dispatch:
+    inputs:
+      admin_version:
+        description: 'Версия Admin Studio (X.Y.Z)'
+        type: string
+        default: '1.0.0'
+        required: true
+      confirm_unsigned:
+        description: 'Для сборки без Authenticode подписи введите PUBLISH-UNSIGNED'
+        type: string
+        default: 'PUBLISH-UNSIGNED'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: build-admin-exe
+  cancel-in-progress: false
+jobs:
+  build_admin_exe:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      SM_ADMIN_VERSION: ${{ inputs.admin_version }}
+      SM_CONFIRM_PUBLIC_UNSIGNED: ${{ inputs.confirm_unsigned }}
+    steps:
+      - name: Validate inputs
+        shell: pwsh
+        run: |
+          if ($env:SM_CONFIRM_PUBLIC_UNSIGNED -cne 'PUBLISH-UNSIGNED') { throw 'Type PUBLISH-UNSIGNED to confirm build' }
+          if ($env:SM_ADMIN_VERSION -cnotmatch '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$') { throw 'Version must be X.Y.Z' }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Stage assets and build Admin Studio EXE
+        shell: pwsh
+        run: |
+          python scripts/stage-admin-desktop.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix admin-desktop install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location admin-desktop
+          npx --no-install electron-builder --config builder.cjs --win nsis --x64 --publish never
+          exit $LASTEXITCODE
+      - name: Verify installer and write SHA256SUMS
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD 'admin-desktop/release'
+          $expected = "SmartMaktab-Admin-${env:SM_ADMIN_VERSION}-Windows-x64-UNSIGNED.exe"
+          $file = Get-Item (Join-Path $out $expected) -ErrorAction SilentlyContinue
+          if ($null -eq $file) { throw "Missing $expected" }
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $expected" | Set-Content "$out/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartMaktab-Admin-Windows-${{ inputs.admin_version }}
+          path: |
+            admin-desktop/release/*.exe
+            admin-desktop/release/SHA256SUMS.txt

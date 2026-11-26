@@ -38,7 +38,8 @@ before(async () => {
     '../supabase/migrations/20261124000100_dev_read_only.sql',
     '../supabase/migrations/20261125000100_summary_review.sql',
     '../supabase/migrations/20261125000200_roles_library_licensing.sql',
-    '../supabase/migrations/20261125000300_payment_tariffs_tx_unique.sql'
+    '../supabase/migrations/20261125000300_payment_tariffs_tx_unique.sql',
+    '../supabase/migrations/20261126000100_fix_grants_seed_and_content.sql'
   ]) {
     await db.exec(await read(m));
   }
@@ -165,3 +166,35 @@ test('licensing 30-day offline grace, anti-duplicate receipt hash, and super_adm
   assert.equal(autoSub.transaction_id, '2248620182');
   assert.equal(autoSub.recipient_account, '992907972295');
 });
+
+test('authenticated orgs parent_id/memberships created_at grants and content_pack_revisions sync/rollback work', async () => {
+  const orgCols = await as(1, () => q('select id,name,kind,parent_id,authority_tier,region_name,district_name,school_code,created_at from public.organizations order by name'));
+  assert.ok(orgCols.length >= 4);
+  const memCols = await as(1, () => q('select id,user_id,organization_id,role,created_at from public.school_memberships order by created_at desc'));
+  assert.ok(memCols.length >= 4);
+
+  const packV1 = { schema: 1, sequence: 1, cabinets: { 'school-director': [{ id: 'docs', title: { tg: 'Ҳуҷҷатҳо', ru: 'Документы' }, icon: 'folder', sections: [] }] } };
+  const packV2 = { schema: 1, sequence: 2, cabinets: { 'school-director': [{ id: 'docs', title: { tg: 'Нақшаҳо', ru: 'Планы' }, icon: 'book', sections: [] }] } };
+
+  await denied(as(3, () => q("select * from public.admin_save_content_revision($1,'hack')", [JSON.stringify(packV1)])));
+  await denied(as(4, () => q('select * from public.admin_list_content_revisions()')));
+
+  const r1 = (await as(1, () => q("select * from public.admin_save_content_revision($1,'Initial pack',0)", [JSON.stringify(packV1)])))[0];
+  assert.equal(r1.sequence, 1);
+  assert.equal(r1.payload.sequence, 1);
+
+  // Optimistic lock mismatch must raise 40001
+  await assert.rejects(as(1, () => q("select * from public.admin_save_content_revision($1,'Stale',0)", [JSON.stringify(packV2)])), { code: '40001' });
+
+  const r2 = (await as(1, () => q("select * from public.admin_save_content_revision($1,'Second version',1)", [JSON.stringify(packV2)])))[0];
+  assert.equal(r2.sequence, 2);
+
+  const r3 = (await as(1, () => q("select * from public.admin_rollback_content_revision($1,'Restore initial')", [r1.id])))[0];
+  assert.equal(r3.sequence, 3);
+  assert.equal(r3.payload.sequence, 3);
+  assert.equal(r3.payload.cabinets['school-director'][0].title.ru, 'Документы');
+
+  const marked = (await as(1, () => q("select * from public.admin_mark_content_published($1,'content-v3','https://raw.githubusercontent.com/smartmaktabtj/smartmaktab/main/latest.smupdate')", [r3.id])))[0];
+  assert.equal(marked.published_tag, 'content-v3');
+});
+

@@ -43,4 +43,4 @@ async function fetchBounded(url,fetcher=fetch){
  const reader=response.body.getReader(),parts=[];let length=0;
  try{for(;;){const {value,done}=await reader.read();if(done)break;length+=value.byteLength;if(length>LIMIT)stop('size');parts.push(Buffer.from(value));}return Buffer.concat(parts,length);}finally{await reader.cancel().catch(()=>{});}
 }
-module.exports={publicKey,openPack,signPack,feed,readBounded,fetchBounded};
+module.exports={publicKey,openPack,signPack,getPayload,feed,readBounded,fetchBounded,LIMIT};

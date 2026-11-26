@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://*.supabase.co https://api.github.com; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>SmartMaktab Admin · .smupdate Content Studio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-box">
+      <div class="brand-badge">S</div>
+      <div>
+        <div class="brand-title">SmartMaktab Content Studio (.smupdate)</div>
+        <div class="brand-sub">Редактор материалов кабинетов · Ed25519 · Supabase Sync · GitHub Releases</div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="btnSettings" class="btn">🔑 Ключи и GitHub</button>
+      <button type="button" id="btnCloud" class="btn">☁ Supabase Sync</button>
+      <button type="button" id="btnOpen" class="btn">📂 Открыть .smupdate</button>
+      <button type="button" id="btnSaveFile" class="btn btn-primary">✍ Подписать и сохранить</button>
+      <button type="button" id="btnPublish" class="btn btn-gold">🚀 Опубликовать в GitHub</button>
+    </div>
+  </header>
+
+  <section class="statusbar">
+    <div class="seq-group">
+      <label for="seqInput">Версия пакета (sequence):</label>
+      <input type="number" id="seqInput" min="1" step="1" value="1">
+      <button type="button" id="btnSeqBump" class="btn btn-sm">+1</button>
+      <span id="cloudBadge" class="status-pill">Supabase: не подключён</span>
+      <span id="keyBadge" class="status-pill">Ключ: проверка…</span>
+    </div>
+    <div class="meter-box">
+      <div class="meter-bar"><div id="meterFill" class="meter-fill" style="width:0%"></div></div>
+      <span id="sizeLabel">0 / 262 144 Б</span>
+    </div>
+    <div id="validStatus" class="status-pill ok">Схема готова</div>
+  </section>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-filter">
+        <input type="search" id="roleSearch" placeholder="Поиск роли или кабинета…">
+        <select id="groupFilter">
+          <option value="all">Все уровни (54 кабинета)</option>
+          <option value="school">Мактаб / Школа</option>
+          <option value="maorif">Маориф / Район</option>
+          <option value="raesat">Раёсат / Область</option>
+          <option value="ministry">Вазорат / Министерство</option>
+          <option value="republic">Ҷумҳурӣ / Республика</option>
+        </select>
+      </div>
+      <div id="roleList" class="role-list"></div>
+    </aside>
+
+    <main id="editorPane" class="editor"></main>
+  </div>
+
+  <!-- Settings & Ed25519 Keys Modal -->
+  <dialog id="dlgSettings">
+    <div class="modal-head">
+      <h3>🔑 Ключи Ed25519 и настройки GitHub</h3>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlgSettings">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Приватный ключ Ed25519 (.smupdate-key)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" id="btnPickKey" class="btn">Выбрать файл ключа…</button>
+          <button type="button" id="btnGenKey" class="btn btn-gold">Сгенерировать новую пару ключей</button>
+        </div>
+        <small id="keyStatusText" style="color:var(--muted)"></small>
+      </div>
+      <div class="field">
+        <label>Публичный ключ (SM_CONTENT_PUBLIC_KEY — Base64 DER SPKI для GitHub Variables)</label>
+        <code id="pubKeyBox" class="pub">—</code>
+      </div>
+      <hr style="border-color:var(--line)">
+      <div class="grid-2">
+        <div class="field">
+          <label>GitHub репозиторий (owner/repo)</label>
+          <input id="cfgRepo" placeholder="smartmaktabtj/smartmaktab">
+        </div>
+        <div class="field">
+          <label>Ветка по умолчанию</label>
+          <input id="cfgBranch" placeholder="main">
+        </div>
+      </div>
+      <div class="field">
+        <label>Путь feed-файла в ветке (необязательно, например updates/latest.smupdate для SM_CONTENT_FEED)</label>
+        <input id="cfgFeedPath" placeholder="updates/latest.smupdate">
+      </div>
+      <div class="field">
+        <label>GitHub Token (PAT с правами repo / contents:write)</label>
+        <input id="cfgToken" type="password" placeholder="ghp_… (оставьте пустым, чтобы сохранить текущий)">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" id="btnSaveSettings" class="btn btn-primary">Сохранить настройки</button>
+      <button type="button" class="btn" data-close-dlg="dlgSettings">Закрыть</button>
+    </div>
+  </dialog>
+
+  <!-- Supabase Sync & Rollback Modal -->
+  <dialog id="dlgCloud">
+    <div class="modal-head">
+      <h3>☁ Синхронизация Supabase (content_pack_revisions)</h3>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlgCloud">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="cloudAuthBox">
+        <div class="grid-2">
+          <div class="field">
+            <label>Email суперадмина Supabase</label>
+            <input id="sbEmail" type="email" placeholder="sinamostudio@gmail.com">
+          </div>
+          <div class="field">
+            <label>Пароль</label>
+            <input id="sbPass" type="password">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" id="btnSbLogin" class="btn btn-primary">Войти в Supabase</button>
+          <span id="sbAuthMsg" style="font-size:12.5px;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <div id="cloudSyncBox" hidden>
+        <div class="field" style="margin-top:10px">
+          <label>Комментарий к ревизии при сохранении в облако</label>
+          <input id="sbNote" placeholder="Обновлены материалы директора и учителя">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button type="button" id="btnSbPull" class="btn">⬇ Загрузить список ревизий</button>
+          <button type="button" id="btnSbPush" class="btn btn-primary">⬆ Сохранить текущую версию в Supabase</button>
+        </div>
+        <div id="revList" class="rev-list"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close-dlg="dlgCloud">Закрыть</button>
+    </div>
+  </dialog>
+
+  <!-- GitHub Release Publish Modal -->
+  <dialog id="dlgPublish">
+    <div class="modal-head">
+      <h3>🚀 Публикация .smupdate в GitHub Releases</h3>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlgPublish">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div class="field">
+          <label>Тег релиза</label>
+          <input id="pubTag" placeholder="content-v1">
+        </div>
+        <div class="field">
+          <label>Заголовок релиза</label>
+          <input id="pubName" placeholder="SmartMaktab Content v1">
+        </div>
+      </div>
+      <div class="field">
+        <label>Описание изменений</label>
+        <textarea id="pubNotes" rows="3"></textarea>
+      </div>
+      <p id="pubStatus" style="font-size:13px;color:var(--gold)"></p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" id="btnConfirmPublish" class="btn btn-gold">Подписать и опубликовать</button>
+      <button type="button" class="btn" data-close-dlg="dlgPublish">Отмена</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="renderer.mjs"></script>
+</body>
+</html>

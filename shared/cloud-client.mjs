@@ -146,6 +146,13 @@ export function createCloudClient({
     });
   }
 
+  async function invokeFunction(slug, body = {}) {
+    return authedFetch(`${config.url}/functions/v1/${slug}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
   return {
     get config() { return config; },
     get session() { return session; },
@@ -157,6 +164,7 @@ export function createCloudClient({
     updatePassword,
     rpc,
     select,
+    invokeFunction,
     getWorkspaceContext: () => rpc('get_my_workspace_context'),
     saveRecord: args => rpc('save_school_record', args),
     setRecordDeleted: args => rpc('set_school_record_deleted', args),
@@ -174,5 +182,10 @@ export function createCloudClient({
     adminSetLicense: args => rpc('admin_set_license', args),
     adminReviewPayment: args => rpc('admin_review_payment', args),
     adminUpsertSubscriptionPlan: args => rpc('admin_upsert_subscription_plan', args),
+    adminUsers: payload => invokeFunction('admin-users', payload),
+    adminListContentRevisions: () => rpc('admin_list_content_revisions'),
+    adminSaveContentRevision: args => rpc('admin_save_content_revision', args),
+    adminRollbackContentRevision: args => rpc('admin_rollback_content_revision', args),
+    adminMarkContentPublished: args => rpc('admin_mark_content_published', args),
   };
 }
