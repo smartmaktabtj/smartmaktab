@@ -1,9 +1,12 @@
 import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
-import { cacheVerifiedLicense, mountLicenseGate } from './license-guard.mjs';
+import { cacheVerifiedLicense, clearCachedLicense, getOrCreateDeviceId, mountLicenseGate } from './license-guard.mjs';
 import { DEFAULT_PAYMENT_TARIFF, parseReceiptText, runClientOcr, submitReceiptForVerification } from './ocr-receipt.mjs';
+import { POSITION_CATALOG, computePositionTariffTotal, formatPositionTitle, getPositionsForOrg } from './position-catalog.mjs';
 import { openWorkspaceView, closeWorkspaceView } from './workspace-view.mjs';
+
+const LAST_ORG_KEY = 'smartmaktab.cloud.last_org.v1';
 
 const providerLabels = {
   amonat: ['Амонатбонк', 'Амонатбанк'],
@@ -12,6 +15,14 @@ const providerLabels = {
   eskhata: ['Эсхата', 'Эсхата'],
   spitamen: ['Спитамен Бонк', 'Спитамен Банк'],
   manual: ['Дигар / дастӣ', 'Другой / вручную'],
+};
+
+const roleLabels = {
+  school_admin: ['Маъмури муассиса', 'Администратор школы'],
+  teacher: ['Омӯзгор / Мутахассис', 'Учитель / Специалист'],
+  librarian: ['Китобдор', 'Библиотекарь'],
+  district_observer: ['Нозири маориф', 'Инспектор маориф'],
+  super_admin: ['Супер-админ', 'Супер-админ'],
 };
 
 const copy = {
@@ -32,14 +43,17 @@ const copy = {
   noOrg: ['Ягон муассиса ба ин ҳисоб вобаста нашудааст.', 'К этому аккаунту не привязана организация.'],
   checkLicense: ['Тафтиши иҷозатнома', 'Проверить лицензию'],
   licenseLine: ['Ҳолати иҷозатнома', 'Статус лицензии'],
+  accessLine: ['Дастрасии шумо', 'Ваш доступ'],
   syncUp: ['Ҳамоҳангсозӣ бо абр', 'Сохранить данные кабинета в облако'],
   syncDown: ['Навсозӣ аз абр', 'Загрузить записи из облака'],
   restoreLocal: ['Барқарор дар ин дастгоҳ', 'Восстановить на устройство'],
   restoredLocal: ['Маълумот аз абр барқарор шуд.', 'Данные из облака восстановлены локально.'],
-  receiptHeading: ['Тасдиқи пардохт тавассути чек (OCR)', 'Подтверждение оплаты по чеку (OCR)'],
+  receiptHeading: ['Тасдиқи пардохт ва интихоби вазифа', 'Выбор должности и оплата по чеку'],
   payRequisites: ['Маълумот барои пардохт', 'Реквизиты для оплаты'],
   copyPhone: ['Нусхабардории рақам', 'Скопировать номер'],
   copiedPhone: ['Рақам нусхабардорӣ шуд:', 'Номер скопирован:'],
+  primaryPosLbl: ['Вазифаи асосӣ барои обуна', 'Основная должность для подписки'],
+  extraPosLbl: ['Вазифаҳои иловагӣ (ихтиёрӣ)', 'Дополнительные должности (по желанию)'],
   receiptFile: ['Акси чек (PNG/JPG/PDF)', 'Файл чека (PNG/JPG/PDF)'],
   provider: ['Усули пардохт', 'Способ оплаты'],
   amount: ['Маблағ (сомонӣ)', 'Сумма (сомони)'],
@@ -50,12 +64,44 @@ const copy = {
   savedCloud: ['Сабт ба абр ирсол шуд.', 'Запись сохранена в облако.'],
   recordsEmpty: ['Сабтҳои абрӣ ёфт нашуданд.', 'Облачные записи не найдены.'],
   authError: ['Хатои воридшавӣ ё шабака.', 'Ошибка входа или сети.'],
+  deviceBlockedMsg: [
+    'Огоҳӣ: Ин логин дар дастгоҳи дигар фаъол аст. Ҳамоҳангсозӣ манъ шуд.',
+    'Внимание: превышен лимит устройств для этого аккаунта. Синхронизация заблокирована.',
+  ],
+  posBlockedMsg: [
+    'Огоҳӣ: Ин утоқ ба вазифаи пардохтшудаи шумо дохил намешавад.',
+    'Внимание: этот кабинет не входит в ваш оплаченный тариф.',
+  ],
 };
+
+function detectDeviceLabel() {
+  try {
+    const ua = String(globalThis.navigator?.userAgent || '');
+    if (/Android/i.test(ua)) return 'Android';
+    if (/Windows/i.test(ua)) return 'Windows';
+    if (/Mac OS|Macintosh/i.test(ua)) return 'macOS';
+    if (/Linux/i.test(ua)) return 'Linux';
+  } catch {}
+  return 'Web';
+}
+
+function safeReadKey(store, key) {
+  try { return store?.getItem?.(key) || ''; } catch { return ''; }
+}
+
+function safeWriteKey(store, key, val) {
+  try {
+    if (val) store?.setItem?.(key, val);
+    else store?.removeItem?.(key);
+  } catch {}
+}
 
 export function setupCloudWorkspace(article, group, school) {
   const tg = () => document.documentElement.lang !== 'ru';
+  const langCode = () => (tg() ? 'tg' : 'ru');
   const t = k => copy[k][tg() ? 0 : 1];
   const make = (tag, cls) => { const x = document.createElement(tag); if (cls) x.className = cls; return x; };
+  const cabinetId = article?.dataset?.cabinetId || '';
 
   const gateHost = make('div', 'no-print');
   gateHost.id = 'licenseGateBanner';
@@ -113,6 +159,7 @@ export function setupCloudWorkspace(article, group, school) {
   orgWrap.append(orgLbl, orgSelect);
 
   const licLine = make('p', 'small');
+  const scopeLine = make('p', 'small');
   const actionRow = make('div', 'control');
   const checkLicBtn = make('button', 'button alt');
   checkLicBtn.type = 'button';
@@ -136,6 +183,17 @@ export function setupCloudWorkspace(article, group, school) {
   const copyPhoneBtn = make('button', 'button alt');
   copyPhoneBtn.type = 'button';
   reqBox.append(reqTitle, reqDetail, copyPhoneBtn);
+
+  const posWrap = make('label', 'field');
+  const posLbl = make('span');
+  const posSelect = make('select');
+  posWrap.append(posLbl, posSelect);
+
+  const extraWrap = make('div', 'field school-field-wide');
+  const extraLbl = make('span');
+  const extraListBox = make('div', 'control');
+  const tariffCalcLine = make('small', 'small');
+  extraWrap.append(extraLbl, extraListBox, tariffCalcLine);
 
   const fileWrap = make('label', 'field');
   const fileLbl = make('span');
@@ -170,9 +228,9 @@ export function setupCloudWorkspace(article, group, school) {
 
   const sendReceiptBtn = make('button', 'button');
   sendReceiptBtn.type = 'submit';
-  receiptForm.append(recTitle, reqBox, fileWrap, provWrap, amtWrap, ocrWrap, sendReceiptBtn);
+  receiptForm.append(recTitle, reqBox, posWrap, extraWrap, fileWrap, provWrap, amtWrap, ocrWrap, sendReceiptBtn);
 
-  sessionBox.append(orgWrap, licLine, actionRow, cloudList, receiptForm);
+  sessionBox.append(orgWrap, licLine, scopeLine, actionRow, cloudList, receiptForm);
   panel.append(head, note, status, loginForm, sessionBox);
 
   const client = createCloudClient({
@@ -181,8 +239,11 @@ export function setupCloudWorkspace(article, group, school) {
     storageKey: 'smartmaktab.cloud.session.v1',
   });
   let ctx = null;
-  let selectedOrgId = '';
+  let selectedOrgId = safeReadKey(persistentStore, LAST_ORG_KEY);
   let statusMessage = t('signedOut');
+  let roleTariffs = [...POSITION_CATALOG];
+  let selectedExtras = new Set();
+  let extraCheckboxes = [];
   let activePlan = {
     code: DEFAULT_PAYMENT_TARIFF.code,
     price_tjs: DEFAULT_PAYMENT_TARIFF.priceTjs,
@@ -193,14 +254,16 @@ export function setupCloudWorkspace(article, group, school) {
   let receiptBytes = null;
   let receiptBase64 = '';
   let receiptConfidence = null;
+  let manualAmountOverride = false;
 
   function activeOrg() {
     return (ctx?.memberships || []).find(m => m.organization_id === selectedOrgId) || null;
   }
 
   function refreshGate() {
-    mountLicenseGate(gateHost, {
+    const state = mountLicenseGate(gateHost, {
       orgId: selectedOrgId,
+      cabinetId,
       storage: persistentStore,
       onVerifyOnline: checkLicenseOnline,
       onOpenPayment: () => {
@@ -208,15 +271,108 @@ export function setupCloudWorkspace(article, group, school) {
         openWorkspaceView(panel.id, trigger);
       },
     });
+    const blocked = !state.allowed;
+    syncUpBtn.disabled = blocked;
+    syncDownBtn.disabled = blocked;
+    return state;
+  }
+
+  function rebuildPositionSelectors() {
+    const lang = langCode();
+    const m = activeOrg();
+    const orgLike = m ? { kind: m.kind, authority_tier: m.authority_tier } : { kind: 'school' };
+    const available = getPositionsForOrg(orgLike, roleTariffs).filter(r => r.is_active !== false);
+    const currentPos = posSelect.value || m?.primary_position || cabinetId || available[0]?.position_code || 'school-director';
+    posSelect.replaceChildren(...available.map(r => new Option(
+      `${lang === 'ru' ? r.title_ru : r.title_tg} (${Number(r.base_price_tjs ?? 10).toFixed(2)} TJS)`,
+      r.position_code,
+    )));
+    if (available.some(r => r.position_code === currentPos)) {
+      posSelect.value = currentPos;
+    }
+
+    extraCheckboxes = [];
+    const extraChoices = available.filter(r => r.position_code !== posSelect.value).slice(0, 12);
+    const nodes = extraChoices.map(r => {
+      const lbl = make('label', 'small');
+      const cb = make('input');
+      cb.type = 'checkbox';
+      cb.value = r.position_code;
+      cb.checked = selectedExtras.has(r.position_code);
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedExtras.add(r.position_code);
+        else selectedExtras.delete(r.position_code);
+        updateTariffSummary();
+      });
+      const txt = make('span');
+      txt.textContent = ` ${lang === 'ru' ? r.title_ru : r.title_tg} (+${Number(r.extra_price_tjs ?? 5).toFixed(2)} TJS)`;
+      lbl.append(cb, txt);
+      extraCheckboxes.push(cb);
+      return lbl;
+    });
+    extraListBox.replaceChildren(...nodes);
+    updateTariffSummary();
+  }
+
+  function updateTariffSummary() {
+    const primary = posSelect.value;
+    const extras = [...selectedExtras].filter(code => code !== primary);
+    const calc = computePositionTariffTotal(primary, extras, roleTariffs);
+    if (!manualAmountOverride) {
+      amtInput.value = String(calc.totalTjs);
+    }
+    tariffCalcLine.textContent = tg()
+      ? `Тарофаи интихобшуда: ${calc.basePrice} TJS + ${extras.length} вазифаи иловагӣ (${calc.extrasPrice} TJS) = Ҳамагӣ ${calc.totalTjs} TJS`
+      : `Выбранный тариф: ${calc.basePrice} TJS + ${extras.length} доп. должн. (${calc.extrasPrice} TJS) = Итого ${calc.totalTjs} TJS`;
   }
 
   async function checkLicenseOnline() {
     if (!client.session?.access_token || !selectedOrgId) return;
     try {
+      const m = activeOrg();
+      let devRes = { allowed: true, max_devices: m?.max_devices ?? 1, active_devices: 1 };
+      try {
+        devRes = await client.claimDeviceSession({
+          p_org_id: selectedOrgId,
+          p_device_id: getOrCreateDeviceId(persistentStore),
+          p_device_label: detectDeviceLabel(),
+          p_cabinet_id: cabinetId || null,
+        });
+      } catch {}
+
       const res = await client.getLicenseStatus(selectedOrgId);
-      cacheVerifiedLicense(selectedOrgId, res, persistentStore);
-      licLine.textContent = `${t('licenseLine')}: ${res.effective_status} (${res.effective_status === 'grace' ? res.grace_days_left : res.days_left}d)`;
-      refreshGate();
+      const isBlockedDevice = devRes?.allowed === false && devRes?.reason === 'device_limit_reached';
+      const isDisabledAccount = devRes?.allowed === false && devRes?.reason === 'account_disabled';
+      const isDisallowedPos = devRes?.allowed === false && devRes?.reason === 'position_not_allowed';
+
+      cacheVerifiedLicense(selectedOrgId, {
+        ...res,
+        primary_position: m?.primary_position ?? null,
+        extra_positions: m?.extra_positions ?? [],
+        role: m?.role ?? '',
+        max_devices: devRes?.max_devices ?? m?.max_devices ?? 1,
+        is_super_admin: Boolean(ctx?.is_super_admin),
+        deviceBlocked: isBlockedDevice,
+        accountDisabled: isDisabledAccount || m?.account_active === false,
+      }, persistentStore);
+
+      const durVal = res.effective_status === 'grace' ? res.grace_days_left : res.days_left;
+      licLine.textContent = tg()
+        ? `${t('licenseLine')}: ${res.effective_status} (${durVal} рӯз) · Дастгоҳҳо: ${devRes?.active_devices ?? 1}/${devRes?.max_devices ?? m?.max_devices ?? 1}`
+        : `${t('licenseLine')}: ${res.effective_status} (${durVal} дн.) · Устройства: ${devRes?.active_devices ?? 1}/${devRes?.max_devices ?? m?.max_devices ?? 1}`;
+
+      const lang = langCode();
+      const posName = m?.primary_position ? formatPositionTitle(m.primary_position, lang) : (roleLabels[m?.role]?.[tg() ? 0 : 1] || m?.role || '');
+      const extraCount = (m?.extra_positions || []).length;
+      scopeLine.textContent = m
+        ? (tg()
+          ? `${t('accessLine')}: ${posName}${extraCount ? ` (+${extraCount} иловагӣ)` : ''}`
+          : `${t('accessLine')}: ${posName}${extraCount ? ` (+${extraCount} доп.)` : ''}`)
+        : '';
+
+      if (isBlockedDevice) statusMessage = t('deviceBlockedMsg');
+      else if (isDisallowedPos) statusMessage = t('posBlockedMsg');
+      renderLabels();
     } catch (err) {
       statusMessage = err.message;
       renderLabels();
@@ -258,7 +414,10 @@ export function setupCloudWorkspace(article, group, school) {
     if (!raw) { ocrParsedLine.textContent = ''; return; }
     const p = parseReceiptText(raw);
     if (p.detectedProvider) provSelect.value = p.detectedProvider;
-    if (p.detectedAmount !== null) amtInput.value = String(p.detectedAmount);
+    if (p.detectedAmount !== null) {
+      manualAmountOverride = true;
+      amtInput.value = String(p.detectedAmount);
+    }
     const parts = [
       p.detectedProvider && `${tg() ? 'Бонк' : 'Банк'}: ${p.detectedProvider}`,
       p.detectedAmount !== null && `${tg() ? 'Маблағ' : 'Сумма'}: ${p.detectedAmount} TJS`,
@@ -272,21 +431,29 @@ export function setupCloudWorkspace(article, group, school) {
   async function applySignedInContext() {
     ctx = await client.getWorkspaceContext();
     const memberships = ctx?.memberships || [];
-    orgSelect.replaceChildren(...memberships.map(m => new Option(`${m.organization_name} (${m.role})`, m.organization_id)));
-    selectedOrgId = memberships[0]?.organization_id || '';
+    orgSelect.replaceChildren(...memberships.map(m => {
+      const posTxt = m.primary_position
+        ? formatPositionTitle(m.primary_position, langCode())
+        : (roleLabels[m.role]?.[tg() ? 0 : 1] || m.role);
+      return new Option(`${m.organization_name} (${posTxt})`, m.organization_id);
+    }));
+    const saved = safeReadKey(persistentStore, LAST_ORG_KEY);
+    const chosen = memberships.find(m => m.organization_id === saved) || memberships[0] || null;
+    selectedOrgId = chosen?.organization_id || '';
+    safeWriteKey(persistentStore, LAST_ORG_KEY, selectedOrgId);
     orgSelect.value = selectedOrgId;
     loginForm.hidden = true;
     sessionBox.hidden = false;
-    statusMessage = memberships.length ? `${t('signedIn')} (${ctx.user_id})` : t('noOrg');
+    statusMessage = memberships.length ? t('signedIn') : t('noOrg');
     try {
-      const plans = await client.getPaymentPlans();
-      if (plans?.length) {
-        activePlan = plans[0];
-        if (!amtInput.value || amtInput.value === String(DEFAULT_PAYMENT_TARIFF.priceTjs)) {
-          amtInput.value = String(activePlan.price_tjs);
-        }
-      }
+      const [plans, tariffs] = await Promise.all([
+        client.getPaymentPlans().catch(() => []),
+        client.getRoleTariffs().catch(() => []),
+      ]);
+      if (plans?.length) activePlan = plans[0];
+      if (tariffs?.length) roleTariffs = tariffs;
     } catch {}
+    rebuildPositionSelectors();
     renderLabels();
     if (selectedOrgId) {
       await checkLicenseOnline();
@@ -311,9 +478,11 @@ export function setupCloudWorkspace(article, group, school) {
     recTitle.textContent = t('receiptHeading');
     reqTitle.textContent = t('payRequisites');
     reqDetail.textContent = tg()
-      ? `Рақам / Ҳамён: ${activePlan.recipient_phone} · Маблағ: ${activePlan.price_tjs} TJS (${activePlan.duration_days} рӯз)`
-      : `Номер / Кошелёк: ${activePlan.recipient_phone} · Тариф: ${activePlan.price_tjs} TJS (${activePlan.duration_days} дн.)`;
+      ? `Рақам / Ҳамён: ${activePlan.recipient_phone} · Давомнокӣ: ${activePlan.duration_days} рӯз`
+      : `Номер / Кошелёк: ${activePlan.recipient_phone} · Период: ${activePlan.duration_days} дн.`;
     copyPhoneBtn.textContent = t('copyPhone');
+    posLbl.textContent = t('primaryPosLbl');
+    extraLbl.textContent = t('extraPosLbl');
     for (const opt of provSelect.options) {
       const pair = providerLabels[opt.value];
       if (pair) opt.textContent = pair[tg() ? 0 : 1];
@@ -345,6 +514,16 @@ export function setupCloudWorkspace(article, group, school) {
     });
   }
 
+  posSelect.addEventListener('change', () => {
+    selectedExtras.delete(posSelect.value);
+    manualAmountOverride = false;
+    rebuildPositionSelectors();
+  });
+
+  amtInput.addEventListener('input', () => {
+    manualAmountOverride = true;
+  });
+
   loginForm.addEventListener('submit', async e => {
     e.preventDefault();
     signInBtn.disabled = true;
@@ -362,6 +541,8 @@ export function setupCloudWorkspace(article, group, school) {
 
   orgSelect.addEventListener('change', async () => {
     selectedOrgId = orgSelect.value;
+    safeWriteKey(persistentStore, LAST_ORG_KEY, selectedOrgId);
+    rebuildPositionSelectors();
     await checkLicenseOnline();
     await loadCloudRecords();
   });
@@ -437,10 +618,14 @@ export function setupCloudWorkspace(article, group, school) {
         ocrText: ocrInput.value,
         ocrConfidence: receiptConfidence,
         planCode: activePlan.code,
+        primaryPosition: posSelect.value || cabinetId || null,
+        extraPositions: [...selectedExtras],
       });
       statusMessage = t('receiptSent');
       receiptForm.reset();
-      amtInput.value = String(activePlan.price_tjs);
+      manualAmountOverride = false;
+      selectedExtras.clear();
+      rebuildPositionSelectors();
       receiptBytes = null;
       receiptBase64 = '';
       await checkLicenseOnline();
@@ -454,7 +639,10 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   signOutBtn.addEventListener('click', async () => {
+    const prevOrg = selectedOrgId;
     await client.signOut();
+    clearCachedLicense(prevOrg, persistentStore);
+    safeWriteKey(persistentStore, LAST_ORG_KEY, '');
     ctx = null;
     selectedOrgId = '';
     loginForm.hidden = false;
@@ -464,7 +652,11 @@ export function setupCloudWorkspace(article, group, school) {
     renderLabels();
   });
 
-  document.addEventListener('cabinet:language', renderLabels);
+  document.addEventListener('cabinet:language', () => {
+    rebuildPositionSelectors();
+    renderLabels();
+  });
+  rebuildPositionSelectors();
   renderLabels();
   if (client.session?.access_token) {
     void applySignedInContext().catch(async () => {

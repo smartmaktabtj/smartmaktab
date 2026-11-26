@@ -19,6 +19,13 @@ import {
 } from '../shared/book-cache.mjs';
 import { createCloudClient } from '../shared/cloud-client.mjs';
 import { getCloudConfig } from '../shared/cloud-config.mjs';
+import {
+  POSITION_CATALOG,
+  computePositionTariffTotal,
+  getPositionsForOrg,
+  getRoleForPosition,
+  isCabinetPermitted,
+} from '../shared/position-catalog.mjs';
 
 function makeMemoryStorage() {
   const map = new Map();
@@ -267,4 +274,56 @@ test('cloud UI and license helpers survive sandboxed frames without localStorage
     if (prevDesc) Object.defineProperty(globalThis, 'localStorage', prevDesc);
     else delete globalThis.localStorage;
   }
+});
+
+test('position catalog covers all 54 positions, tariff calculation, and anti-sharing cabinet checks', async () => {
+  assert.equal(POSITION_CATALOG.length, 54);
+  assert.equal(getRoleForPosition('school-director'), 'school_admin');
+  assert.equal(getRoleForPosition('school-library-head'), 'staff');
+  assert.equal(getRoleForPosition('office-head'), 'maorif');
+  assert.equal(getRoleForPosition('raesat-head'), 'authority_viewer');
+
+  const schoolPositions = getPositionsForOrg({ kind: 'school' });
+  assert.equal(schoolPositions.length, 20);
+  const maorifPositions = getPositionsForOrg({ kind: 'education_authority', authority_tier: 'maorif' });
+  assert.equal(maorifPositions.length, 33);
+  const raesatPositions = getPositionsForOrg({ kind: 'education_authority', authority_tier: 'raesat' });
+  assert.equal(raesatPositions.length, 34);
+
+  assert.equal(isCabinetPermitted({ primary_position: 'school-teacher', extra_positions: ['school-class-teacher'], account_active: true }, 'school-teacher'), true);
+  assert.equal(isCabinetPermitted({ primary_position: 'school-teacher', extra_positions: ['school-class-teacher'], account_active: true }, 'school-class-teacher'), true);
+  assert.equal(isCabinetPermitted({ primary_position: 'school-teacher', extra_positions: ['school-class-teacher'], account_active: true }, 'school-director'), false);
+  assert.equal(isCabinetPermitted({ primary_position: 'school-teacher', extra_positions: ['school-class-teacher'], account_active: false }, 'school-teacher'), false);
+
+  const customTariffs = [
+    { position_code: 'school-director', base_price_tjs: 25, extra_price_tjs: 10 },
+    { position_code: 'school-deputy-academic', base_price_tjs: 15, extra_price_tjs: 8 },
+  ];
+  const calc = computePositionTariffTotal('school-director', ['school-deputy-academic'], customTariffs);
+  assert.equal(calc.baseTjs, 25);
+  assert.equal(calc.extraTjs, 8);
+  assert.equal(calc.totalTjs, 33);
+
+  const now = Date.parse('2026-11-26T12:00:00Z');
+  const active = { configured: true, status: 'active', expires_at: '2026-12-26T00:00:00Z', grace_days: 30, primary_position: 'school-teacher', extra_positions: ['school-class-teacher'] };
+  assert.equal(evaluateLicenseState({ ...active, deviceBlocked: true }, now, 'school-teacher').reason, 'device_limit_reached');
+  assert.equal(evaluateLicenseState({ ...active, accountDisabled: true }, now, 'school-teacher').reason, 'account_disabled');
+  assert.equal(evaluateLicenseState(active, now, 'school-director').reason, 'position_not_allowed');
+  assert.equal(evaluateLicenseState(active, now, 'school-class-teacher').allowed, true);
+
+  let lastPayload = null;
+  await submitReceiptForVerification({
+    accessToken: 'jwt-test',
+    organizationId: '11111111-1111-1111-1111-111111111111',
+    bytes: new TextEncoder().encode('receipt'),
+    ocrText: 'Сумма операции: 33.00',
+    primaryPosition: 'school-director',
+    extraPositions: ['school-deputy-academic'],
+    fetchImpl: async (_url, init) => {
+      lastPayload = JSON.parse(init.body);
+      return new Response(JSON.stringify({ submission_id: 'sub-2' }), { status: 200 });
+    },
+  });
+  assert.equal(lastPayload.primary_position, 'school-director');
+  assert.deepEqual(lastPayload.extra_positions, ['school-deputy-academic']);
 });

@@ -132,14 +132,35 @@ Deno.serve(async (req) => {
       const rawEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
       const rawUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
       const orgId = typeof body?.org_id === 'string' ? body.org_id.trim() : '';
-      const role = typeof body?.role === 'string' ? body.role.trim() : '';
+      let role = typeof body?.role === 'string' ? body.role.trim() : '';
+      const primaryPosition = typeof body?.primary_position === 'string' && body.primary_position.trim()
+        ? body.primary_position.trim().toLowerCase()
+        : null;
+      const extraPositions = Array.isArray(body?.extra_positions)
+        ? body.extra_positions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
+        : [];
+      const maxExtraPositions = Number.isInteger(body?.max_extra_positions) ? Number(body.max_extra_positions) : extraPositions.length;
+      const maxDevices = Number.isInteger(body?.max_devices) ? Number(body.max_devices) : 1;
+      const accountActive = body?.account_active !== false;
       const fullName = typeof body?.full_name === 'string' ? body.full_name.trim().slice(0, 160) : '';
       const preferredLang = body?.preferred_lang === 'ru' ? 'ru' : 'tg';
       const customPassword = typeof body?.password === 'string' ? body.password.trim() : '';
       const forceResetPassword = body?.reset_password === true;
 
+      if (primaryPosition && !role) {
+        const { data: posRow } = await adminClient
+          .from('role_tariffs')
+          .select('access_role')
+          .eq('position_code', primaryPosition)
+          .maybeSingle();
+        if (posRow?.access_role) role = posRow.access_role;
+      }
+
       if (!/^[0-9a-f-]{36}$/i.test(orgId) || !VALID_ROLES.has(role)) {
         return json(400, { error: 'invalid_org_or_role' });
+      }
+      if (maxExtraPositions < 0 || maxExtraPositions > 19 || maxDevices < 1 || maxDevices > 10) {
+        return json(400, { error: 'invalid_quotas' });
       }
       if (!rawEmail && !/^[0-9a-f-]{36}$/i.test(rawUserId)) {
         return json(400, { error: 'email_or_user_id_required' });
@@ -209,6 +230,11 @@ Deno.serve(async (req) => {
         p_user_id: targetUserId,
         p_org_id: orgId,
         p_role: role,
+        p_primary_position: primaryPosition,
+        p_extra_positions: extraPositions,
+        p_max_extra_positions: maxExtraPositions,
+        p_max_devices: maxDevices,
+        p_account_active: accountActive,
       });
       if (rpcErr) {
         return json(400, { error: rpcErr.message || 'assign_membership_failed' });
@@ -221,6 +247,11 @@ Deno.serve(async (req) => {
         membership_id: membershipId,
         organization_id: orgId,
         role,
+        primary_position: primaryPosition,
+        extra_positions: extraPositions,
+        max_extra_positions: maxExtraPositions,
+        max_devices: maxDevices,
+        account_active: accountActive,
         created,
         temporary_password: temporaryPassword,
       });

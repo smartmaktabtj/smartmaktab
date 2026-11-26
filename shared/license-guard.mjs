@@ -1,4 +1,7 @@
+import { formatPositionTitle, isCabinetPermitted } from './position-catalog.mjs';
+
 const CACHE_KEY = 'sm:license-cache-v1';
+const DEVICE_KEY = 'smartmaktab.device.id.v1';
 const MS_PER_DAY = 86_400_000;
 const CLOCK_SKEW_TOLERANCE_MS = 3_600_000;
 
@@ -8,7 +11,7 @@ const copy = {
     'Срок лицензии истёк. Осталось дней временного офлайн-доступа:',
   ],
   days: ['рӯз', 'дн.'],
-  lockTitle: ['Дастрасии мактаб маҳдуд карда шуд', 'Доступ организации приостановлен'],
+  lockTitle: ['Дастрасии мактаб маҳдуд карда шуд', 'Доступ ограничен'],
   lockExpired: [
     'Муҳлати иҷозатнома ва 30 рӯзи давраи имтиёзӣ ба охир расид. Барои идома додан пардохтро тасдиқ кунед ё онлайн санҷед.',
     'Срок лицензии и 30-дневный льготный период истекли. Подтвердите оплату или выполните онлайн-проверку.',
@@ -21,11 +24,81 @@ const copy = {
     'Дастрасии муассиса аз ҷониби маъмур боздошта шудааст.',
     'Доступ организации приостановлен администратором.',
   ],
+  lockDeviceLimit: [
+    'Ин логин ва парол аллакай дар дигар дастгоҳ фаъол аст (маҳдудияти дастгоҳҳо). Расонидани логин ба кормандони дигар иҷозат дода намешавад.',
+    'Этот логин и пароль уже используются на максимальном числе устройств. Передача аккаунта другим сотрудникам запрещена — обратитесь к администратору для отвязки старого устройства.',
+  ],
+  lockPosition: [
+    'Ин утоқ ба вазифаи пардохтшудаи шумо дохил намешавад. Вазифаи иловагиро дар бахши обуна пайваст кунед.',
+    'Этот кабинет не входит в оплаченный набор должностей вашего аккаунта. Подключите дополнительную должность по тарифу.',
+  ],
+  lockDisabled: [
+    'Дастрасии ин ҳисоб аз ҷониби маъмур қатъ карда шудааст.',
+    'Этот аккаунт отключён администратором.',
+  ],
+  allowedPositionPrefix: [
+    'Вазифаи фаъоли шумо:',
+    'Ваша активная должность:',
+  ],
   verifyBtn: ['Тафтиши онлайн', 'Проверить онлайн'],
-  receiptBtn: ['Ирсоли расиди пардохт', 'Отправить чек об оплате'],
+  receiptBtn: ['Обуна ва пардохт', 'Тариф и оплата'],
 };
 
-export function evaluateLicenseState(record, nowMs = Date.now()) {
+export function getOrCreateDeviceId(storage) {
+  const store = safeStorage(storage);
+  try {
+    const existing = store?.getItem?.(DEVICE_KEY);
+    if (existing && existing.length >= 8) return existing;
+  } catch {}
+  let next = '';
+  try {
+    if (globalThis.crypto?.randomUUID) next = `dev-${globalThis.crypto.randomUUID()}`;
+  } catch {}
+  if (!next) {
+    const bytes = new Uint8Array(16);
+    try { globalThis.crypto.getRandomValues(bytes); } catch {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    next = `dev-${[...bytes].map(b => b.toString(16).padStart(2, '0')).join('')}`;
+  }
+  try { store?.setItem?.(DEVICE_KEY, next); } catch {}
+  return next;
+}
+
+export function evaluateLicenseState(record, nowMs = Date.now(), cabinetId = '') {
+  if (record?.accountDisabled) {
+    return { status: 'locked', allowed: false, reason: 'account_disabled', daysLeft: 0, graceDaysLeft: 0, clockTampered: false };
+  }
+  if (record?.deviceBlocked) {
+    return {
+      status: 'locked',
+      allowed: false,
+      reason: 'device_limit_reached',
+      daysLeft: 0,
+      graceDaysLeft: 0,
+      clockTampered: false,
+      maxDevices: record.max_devices ?? 1,
+    };
+  }
+  if (cabinetId && record && !record.is_super_admin && (record.primary_position || record.role)) {
+    const permitted = isCabinetPermitted({
+      primary_position: record.primary_position || null,
+      extra_positions: record.extra_positions || [],
+      role: record.role || '',
+      account_active: !record.accountDisabled,
+    }, cabinetId);
+    if (!permitted) {
+      return {
+        status: 'locked',
+        allowed: false,
+        reason: 'position_not_allowed',
+        daysLeft: 0,
+        graceDaysLeft: 0,
+        clockTampered: false,
+        primaryPosition: record.primary_position || null,
+      };
+    }
+  }
   if (!record || !record.configured) {
     return { status: 'unconfigured', allowed: true, reason: 'no_cloud_license', daysLeft: 0, graceDaysLeft: 30, clockTampered: false };
   }
@@ -70,13 +143,21 @@ export function cacheVerifiedLicense(orgId, serverStatus, storage, nowMs = Date.
   const prev = all[orgId];
   const serverNowMs = serverStatus.server_now ? Date.parse(serverStatus.server_now) : nowMs;
   const entry = {
-    configured: !!serverStatus.configured,
+    ...(prev || {}),
+    configured: serverStatus.configured ?? prev?.configured ?? false,
     organization_id: orgId,
-    status: serverStatus.status || 'none',
-    plan_code: serverStatus.plan_code || 'trial',
-    expires_at: serverStatus.expires_at || null,
-    grace_days: serverStatus.grace_days ?? 30,
-    offline_token_version: serverStatus.offline_token_version ?? 1,
+    status: serverStatus.status ?? prev?.status ?? 'none',
+    plan_code: serverStatus.plan_code ?? prev?.plan_code ?? 'trial',
+    expires_at: serverStatus.expires_at ?? prev?.expires_at ?? null,
+    grace_days: serverStatus.grace_days ?? prev?.grace_days ?? 30,
+    offline_token_version: serverStatus.offline_token_version ?? prev?.offline_token_version ?? 1,
+    primary_position: serverStatus.primary_position !== undefined ? serverStatus.primary_position : (prev?.primary_position ?? null),
+    extra_positions: serverStatus.extra_positions !== undefined ? serverStatus.extra_positions : (prev?.extra_positions ?? []),
+    role: serverStatus.role !== undefined ? serverStatus.role : (prev?.role ?? ''),
+    max_devices: serverStatus.max_devices !== undefined ? serverStatus.max_devices : (prev?.max_devices ?? 1),
+    is_super_admin: serverStatus.is_super_admin !== undefined ? Boolean(serverStatus.is_super_admin) : Boolean(prev?.is_super_admin),
+    deviceBlocked: serverStatus.deviceBlocked !== undefined ? Boolean(serverStatus.deviceBlocked) : false,
+    accountDisabled: serverStatus.accountDisabled !== undefined ? Boolean(serverStatus.accountDisabled) : false,
     lastVerifiedAt: new Date(serverNowMs || nowMs).toISOString(),
     maxSeenNowMs: Math.max(prev?.maxSeenNowMs || 0, serverNowMs || nowMs, nowMs),
   };
@@ -115,11 +196,12 @@ export function clearCachedLicense(orgId, storage) {
   try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
 }
 
-export function mountLicenseGate(container, { orgId, storage, onVerifyOnline, onOpenPayment } = {}) {
-  const tg = () => document.documentElement.lang !== 'ru';
+export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment } = {}) {
+  const lang = document.documentElement.lang === 'ru' ? 'ru' : 'tg';
+  const tg = () => lang === 'tg';
   const t = k => copy[k][tg() ? 0 : 1];
   const record = readCachedLicense(orgId, safeStorage(storage));
-  const state = evaluateLicenseState(record);
+  const state = evaluateLicenseState(record, Date.now(), cabinetId);
   container.replaceChildren();
   container.hidden = state.allowed && state.status !== 'grace';
 
@@ -138,7 +220,16 @@ export function mountLicenseGate(container, { orgId, storage, onVerifyOnline, on
     const h = document.createElement('h2');
     h.textContent = t('lockTitle');
     const p = document.createElement('p');
-    p.textContent = state.reason === 'clock_tampered' ? t('lockClock') : state.reason === 'suspended' ? t('lockSuspended') : t('lockExpired');
+    if (state.reason === 'clock_tampered') p.textContent = t('lockClock');
+    else if (state.reason === 'suspended') p.textContent = t('lockSuspended');
+    else if (state.reason === 'device_limit_reached') p.textContent = t('lockDeviceLimit');
+    else if (state.reason === 'account_disabled') p.textContent = t('lockDisabled');
+    else if (state.reason === 'position_not_allowed') {
+      const posLabel = state.primaryPosition ? ` (${t('allowedPositionPrefix')} ${formatPositionTitle(state.primaryPosition, lang)})` : '';
+      p.textContent = `${t('lockPosition')}${posLabel}`;
+    } else {
+      p.textContent = t('lockExpired');
+    }
     const row = document.createElement('div');
     row.className = 'control';
     if (typeof onVerifyOnline === 'function') {

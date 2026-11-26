@@ -79,6 +79,12 @@ Deno.serve(async (req: Request) => {
     const receiptHash = typeof body?.receipt_hash === 'string' ? body.receipt_hash.trim().toLowerCase() : '';
     const requestedProvider = typeof body?.provider_code === 'string' ? body.provider_code.trim().toLowerCase() : 'manual';
     const planCode = typeof body?.plan_code === 'string' && body.plan_code.trim() ? body.plan_code.trim().toLowerCase() : 'trial_10';
+    const primaryPosition = typeof body?.primary_position === 'string' && body.primary_position.trim()
+      ? body.primary_position.trim().toLowerCase()
+      : null;
+    const extraPositions = Array.isArray(body?.extra_positions)
+      ? body.extra_positions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
+      : [];
     const currency = typeof body?.currency === 'string' ? body.currency.trim() : 'TJS';
     let ocrText = typeof body?.ocr_text === 'string' ? body.ocr_text : '';
     let ocrSource = ocrText ? 'client_tesseract' : 'none';
@@ -148,6 +154,8 @@ Deno.serve(async (req: Request) => {
       p_recipient_account: recipient,
       p_status_confirmed: statusConfirmed,
       p_plan_code: planCode,
+      p_primary_position: primaryPosition,
+      p_extra_positions: extraPositions,
     });
 
     if (error) {
