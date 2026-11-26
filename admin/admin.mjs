@@ -626,7 +626,7 @@ async function refreshAll() {
   try {
     const [o, m, l, pl, rt, p, ds, uRes] = await Promise.all([
       client.select('organizations', 'select=id,name,kind,parent_id,authority_tier,region_name,district_name,school_code&order=name.asc'),
-      client.select('school_memberships', 'select=id,user_id,organization_id,role,primary_position,extra_positions,max_extra_positions,max_devices,account_active,created_at&order=created_at.desc'),
+      client.select('school_memberships', 'select=id,user_id,organization_id,role,primary_position,extra_positions,max_extra_positions,max_devices,account_active,aliya_enabled,custom_method_name,created_at&order=created_at.desc'),
       client.select('school_licenses', 'select=id,organization_id,status,plan_code,starts_at,expires_at,grace_days,max_accounts,max_positions_per_account,default_max_devices,notes,updated_at&order=updated_at.desc'),
       client.getPaymentPlans(),
       client.getRoleTariffs().catch(() => POSITION_CATALOG),
@@ -796,8 +796,9 @@ function renderPositionControls() {
 function loadMembershipIntoForm(m) {
   const u = userById(m.user_id);
   $('roleUserPick').value = u ? u.id : '';
-  $('roleUserId').value = u?.email || '';
+  $('roleUserId').value = u?.login_name || (u?.email ? u.email.replace(/@login\.smartmaktab\.tj$/, '') : '');
   $('roleFullName').value = u?.full_name || '';
+  if ($('roleAliyaEnabled')) $('roleAliyaEnabled').checked = m.aliya_enabled === true;
   $('roleRegionFilter').value = '';
   renderOrgSelects();
   $('roleOrg').value = m.organization_id;
@@ -959,7 +960,7 @@ function renderTables() {
     const u = userById(m.user_id);
     const td1 = document.createElement('td');
     const uTitle = document.createElement('strong');
-    uTitle.textContent = u?.email || (lang === 'ru' ? 'Пользователь' : 'Корбар');
+    uTitle.textContent = u?.login_name || (u?.email ? u.email.replace(/@login\.smartmaktab\.tj$/, '') : '') || (lang === 'ru' ? 'Пользователь' : 'Корбар');
     td1.append(uTitle);
     if (u?.full_name) {
       td1.append(document.createElement('br'), document.createTextNode(u.full_name));
@@ -983,8 +984,8 @@ function renderTables() {
     statusPill.textContent = m.account_active === false ? t('disabledBadge') : t('activeBadge');
     const quotaText = document.createElement('div');
     quotaText.textContent = lang === 'ru'
-      ? `Устройства: ${activeDevCount}/${m.max_devices ?? 1} · Доп. роли: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}`
-      : `Дастгоҳҳо: ${activeDevCount}/${m.max_devices ?? 1} · Иловагӣ: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}`;
+      ? `Устройства: ${activeDevCount}/${m.max_devices ?? 1} · Доп. роли: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''}`
+      : `Дастгоҳҳо: ${activeDevCount}/${m.max_devices ?? 1} · Иловагӣ: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''}`;
     td3.append(statusPill, quotaText);
 
     const td4 = document.createElement('td');
@@ -1431,6 +1432,7 @@ $('roleForm').addEventListener('submit', async e => {
   const maxExtra = Math.max(extraPositions.length, Number($('roleMaxExtra').value || 0));
   const maxDevices = Math.max(1, Number($('roleMaxDevices').value || 1));
   const accountActive = $('roleAccountActive').checked;
+  const aliyaEnabled = $('roleAliyaEnabled')?.checked === true;
   const fullName = $('roleFullName').value.trim();
   const password = $('roleTempPassword').value.trim();
   const resetPass = $('roleResetPass').checked;
@@ -1438,7 +1440,7 @@ $('roleForm').addEventListener('submit', async e => {
   try {
     const res = await client.adminUsers({
       action: 'assign_or_create',
-      email,
+      login: email,
       org_id: orgId,
       role,
       primary_position: primaryPos,
@@ -1446,6 +1448,7 @@ $('roleForm').addEventListener('submit', async e => {
       max_extra_positions: maxExtra,
       max_devices: maxDevices,
       account_active: accountActive,
+      aliya_enabled: aliyaEnabled,
       full_name: fullName,
       preferred_lang: lang,
       ...(password ? { password } : {}),

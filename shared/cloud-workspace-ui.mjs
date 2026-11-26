@@ -3,7 +3,7 @@ import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
 import { cacheVerifiedLicense, clearCachedLicense, getOrCreateDeviceId, mountLicenseGate } from './license-guard.mjs';
 import { DEFAULT_PAYMENT_TARIFF, parseReceiptText, runClientOcr, submitReceiptForVerification } from './ocr-receipt.mjs';
-import { POSITION_CATALOG, computePositionTariffTotal, formatPositionTitle, getPositionsForOrg } from './position-catalog.mjs';
+import { ALIYA_ADDON_PRICE_TJS, POSITION_CATALOG, computePositionTariffTotal, formatPositionTitle, getCompatibleExtraPositions, getPositionsForOrg } from './position-catalog.mjs';
 import { openWorkspaceView, closeWorkspaceView } from './workspace-view.mjs';
 
 const LAST_ORG_KEY = 'smartmaktab.cloud.last_org.v1';
@@ -32,7 +32,7 @@ const copy = {
     'Барои ҳамоҳангсозии маълумот бо сервери мактаб ва санҷиши иҷозатнома (30 рӯз офлайн) ворид шавед.',
     'Войдите для синхронизации данных школы с облаком и проверки лицензии (30 дней офлайн).',
   ],
-  email: ['Почтаи корӣ', 'Рабочая почта'],
+  email: ['Логин, телефон ё Email', 'Логин, телефон или Email'],
   password: ['Рамз', 'Пароль'],
   signIn: ['Ворид шудан', 'Войти'],
   signOut: ['Баромадан', 'Выйти'],
@@ -131,7 +131,7 @@ export function setupCloudWorkspace(article, group, school) {
   const emailWrap = make('label', 'field');
   const emailLbl = make('span');
   const emailInput = make('input');
-  emailInput.type = 'email';
+  emailInput.type = 'text';
   emailInput.required = true;
   emailWrap.append(emailLbl, emailInput);
 
@@ -192,8 +192,14 @@ export function setupCloudWorkspace(article, group, school) {
   const extraWrap = make('div', 'field school-field-wide');
   const extraLbl = make('span');
   const extraListBox = make('div', 'control');
+  const aliyaLabel = make('label', 'small');
+  const aliyaToggle = make('input');
+  aliyaToggle.type = 'checkbox';
+  aliyaToggle.id = 'cloudAliyaAddonToggle';
+  const aliyaTxt = make('span');
+  aliyaLabel.append(aliyaToggle, aliyaTxt);
   const tariffCalcLine = make('small', 'small');
-  extraWrap.append(extraLbl, extraListBox, tariffCalcLine);
+  extraWrap.append(extraLbl, extraListBox, aliyaLabel, tariffCalcLine);
 
   const fileWrap = make('label', 'field');
   const fileLbl = make('span');
@@ -292,8 +298,12 @@ export function setupCloudWorkspace(article, group, school) {
     }
 
     extraCheckboxes = [];
-    const extraChoices = available.filter(r => r.position_code !== posSelect.value).slice(0, 12);
-    const nodes = extraChoices.map(r => {
+    const compatible = getCompatibleExtraPositions(posSelect.value, available);
+    const compatibleIds = new Set(compatible.map(r => r.position_code));
+    for (const oldExtra of [...selectedExtras]) {
+      if (!compatibleIds.has(oldExtra)) selectedExtras.delete(oldExtra);
+    }
+    const nodes = compatible.map(r => {
       const lbl = make('label', 'small');
       const cb = make('input');
       cb.type = 'checkbox';
@@ -305,7 +315,7 @@ export function setupCloudWorkspace(article, group, school) {
         updateTariffSummary();
       });
       const txt = make('span');
-      txt.textContent = ` ${lang === 'ru' ? r.title_ru : r.title_tg} (+${Number(r.extra_price_tjs ?? 5).toFixed(2)} TJS)`;
+      txt.textContent = ` ${lang === 'ru' ? r.title_ru : r.title_tg} (+${Number(r.extra_price_tjs ?? r.base_price_tjs ?? 10).toFixed(2)} TJS)`;
       lbl.append(cb, txt);
       extraCheckboxes.push(cb);
       return lbl;
@@ -317,13 +327,20 @@ export function setupCloudWorkspace(article, group, school) {
   function updateTariffSummary() {
     const primary = posSelect.value;
     const extras = [...selectedExtras].filter(code => code !== primary);
-    const calc = computePositionTariffTotal(primary, extras, roleTariffs);
+    const includeAliya = Boolean(aliyaToggle.checked);
+    const calc = computePositionTariffTotal({
+      primaryPosition: primary,
+      extraPositions: extras,
+      tariffs: roleTariffs,
+      includeAliya,
+    });
     if (!manualAmountOverride) {
       amtInput.value = String(calc.totalTjs);
     }
+    const aliyaPart = includeAliya ? ` + Алия (${calc.aliyaTjs} TJS)` : '';
     tariffCalcLine.textContent = tg()
-      ? `Тарофаи интихобшуда: ${calc.basePrice} TJS + ${extras.length} вазифаи иловагӣ (${calc.extrasPrice} TJS) = Ҳамагӣ ${calc.totalTjs} TJS`
-      : `Выбранный тариф: ${calc.basePrice} TJS + ${extras.length} доп. должн. (${calc.extrasPrice} TJS) = Итого ${calc.totalTjs} TJS`;
+      ? `Тарофаи интихобшуда: ${calc.basePrice} TJS + ${extras.length} вазифаи иловагӣ (${calc.extrasPrice} TJS)${aliyaPart} = Ҳамагӣ ${calc.totalTjs} TJS`
+      : `Выбранный тариф: ${calc.basePrice} TJS + ${extras.length} доп. должн. (${calc.extrasPrice} TJS)${aliyaPart} = Итого ${calc.totalTjs} TJS`;
   }
 
   async function checkLicenseOnline() {
@@ -351,6 +368,8 @@ export function setupCloudWorkspace(article, group, school) {
         extra_positions: m?.extra_positions ?? [],
         role: m?.role ?? '',
         max_devices: devRes?.max_devices ?? m?.max_devices ?? 1,
+        aliya_enabled: Boolean(m?.aliya_enabled),
+        aliya_expires_at: m?.aliya_expires_at ?? null,
         is_super_admin: Boolean(ctx?.is_super_admin),
         deviceBlocked: isBlockedDevice,
         accountDisabled: isDisabledAccount || m?.account_active === false,
@@ -453,6 +472,7 @@ export function setupCloudWorkspace(article, group, school) {
       if (plans?.length) activePlan = plans[0];
       if (tariffs?.length) roleTariffs = tariffs;
     } catch {}
+    aliyaToggle.checked = Boolean(chosen?.aliya_enabled);
     rebuildPositionSelectors();
     renderLabels();
     if (selectedOrgId) {
@@ -483,6 +503,9 @@ export function setupCloudWorkspace(article, group, school) {
     copyPhoneBtn.textContent = t('copyPhone');
     posLbl.textContent = t('primaryPosLbl');
     extraLbl.textContent = t('extraPosLbl');
+    aliyaTxt.textContent = tg()
+      ? ` Функсияи Алия (+${ALIYA_ADDON_PRICE_TJS} сомонӣ / моҳ)`
+      : ` Функция Алия (+${ALIYA_ADDON_PRICE_TJS} сомони / мес)`;
     for (const opt of provSelect.options) {
       const pair = providerLabels[opt.value];
       if (pair) opt.textContent = pair[tg() ? 0 : 1];
@@ -518,6 +541,11 @@ export function setupCloudWorkspace(article, group, school) {
     selectedExtras.delete(posSelect.value);
     manualAmountOverride = false;
     rebuildPositionSelectors();
+  });
+
+  aliyaToggle.addEventListener('change', () => {
+    manualAmountOverride = false;
+    updateTariffSummary();
   });
 
   amtInput.addEventListener('input', () => {
@@ -620,6 +648,7 @@ export function setupCloudWorkspace(article, group, school) {
         planCode: activePlan.code,
         primaryPosition: posSelect.value || cabinetId || null,
         extraPositions: [...selectedExtras],
+        includeAliya: Boolean(aliyaToggle.checked),
       });
       statusMessage = t('receiptSent');
       receiptForm.reset();

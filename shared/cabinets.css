@@ -198,6 +198,10 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
 .aliya-opt{padding:3px 8px;border-radius:7px;margin:2px 0;font-size:13px;background:rgba(255,255,255,.04)}
 .aliya-opt-ok{background:rgba(46,160,67,.18);border:1px solid rgba(63,185,80,.4);color:#bbf7d0}
 .aliya-key{margin-top:8px;padding:7px 10px;border-radius:9px;background:rgba(232,201,109,.12);border-left:3px solid var(--reader-gold);font-size:13px}
+.sm-upd-trigger{position:relative;display:inline-flex;align-items:center;gap:4px}
+.sm-upd-badge{width:8px;height:8px;border-radius:50%;background:#e05246;display:inline-block;box-shadow:0 0 0 2px var(--paper,#fff)}
+.sm-rail-group{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#9fc0b0;padding:12px 12px 2px;font-weight:750;opacity:.85}
+#cabinetRailNav a{display:flex;align-items:center;gap:6px;line-height:1.3;overflow-wrap:anywhere}
 .aliya-tbl-wrap{overflow-x:auto;margin:8px 0}
 .aliya-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
 .aliya-tbl th,.aliya-tbl td{border:1px solid var(--reader-line);padding:5px 8px;text-align:left}

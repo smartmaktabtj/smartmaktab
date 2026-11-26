@@ -12,7 +12,7 @@ final class SmartMaktabDb extends SQLiteOpenHelper {
  private static final String DB_NAME = "smartmaktab.db";
  private static final int DB_VERSION = 1;
  private static final String KEY_PATTERN = "[A-Za-z0-9._:-]{1,128}";
- private static final String ROUTE_PATTERN = "cabinets/(?:[a-z-]+/)*[a-z-]+\\.html\\?(?:school=demo-[a-z0-9]+&)?lang=(?:tg|ru)";
+ private static final String ROUTE_PATTERN = "cabinets/(?:[a-z-]+/)*[a-z-]+\\.html\\?(?:school=[a-z0-9-]+&)?lang=(?:tg|ru)";
 
  SmartMaktabDb(Context context) {
   super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
@@ -93,7 +93,7 @@ final class SmartMaktabDb extends SQLiteOpenHelper {
  synchronized boolean saveResumeSession(String role, String school, String lang, String route) {
   if (!validRoute(route)) return false;
   String safeRole = role != null && role.matches("[a-z0-9-]{1,64}") ? role : "";
-  String safeSchool = school != null && school.matches("demo-[a-z0-9]{1,24}") ? school : "";
+  String safeSchool = school != null && school.matches("[a-z0-9-]{1,64}") ? school : "";
   String safeLang = "ru".equals(lang) ? "ru" : "tg";
   SQLiteDatabase db = getWritableDatabase();
   ContentValues cv = new ContentValues();

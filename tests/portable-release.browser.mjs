@@ -1,14 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium,devices} from 'playwright';
-import {fillRoleFields,openView,backView} from './onboarding-fixtures.mjs';
+import {fillStartupProfile,openView,backView} from './onboarding-fixtures.mjs';
 const site=process.env.SM_BASE_URL??'http://localhost:4180';
 async function ready(page){
- await page.locator('[data-level=school]').click();await page.locator('#primaryChoices input[value=school-teacher]').check();
+ await page.locator('#goToRegister').click();await page.locator('#primaryChoices input[value=school-teacher]').check();
  await page.locator('#toExtras').click();await page.locator('#toProfile').click();
- await page.locator('#firstName').fill('Озмоиш');await page.locator('#lastName').fill('Синф');
- await fillRoleFields(page.locator('[data-step="4"]'),{teacherClass:'5'});
- await page.locator('#toReview').click();await page.locator('#schoolSearch').fill('88');
+ await fillStartupProfile(page,{first:'Озмоиш',last:'Синф',teacherClass:'5'});
+ await page.locator('#toSchoolStep').click();await page.locator('#schoolSearch').fill('88');
  const button=page.locator('#begin');assert.equal(await button.isEnabled(),true);
  assert.ok(await button.evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));
  return button;

@@ -20,6 +20,21 @@ export async function fillRoleFields(scope,{teacherClass='5Б'}={}){
  }
  if(role==='school-library-head')await profile.locator('[data-setup-group=libraryFunds]').first().check();
 }
+export async function fillStartupProfile(scope,{first='Демо',last='Озмоиш',birthYear='1985',gender='male',specialty='Педагогика',eduYears='10',education='higher',login='',password='',teacherClass='5Б'}={}){
+ await scope.locator('#firstName').fill(first);
+ await scope.locator('#lastName').fill(last);
+ await scope.locator('#birthYear').fill(birthYear);
+ await scope.locator('#genderSelect').selectOption(gender);
+ await scope.locator('#specialtyInput').fill(specialty);
+ await scope.locator('#eduYearsInput').fill(eduYears);
+ await scope.locator('#educationSelect').selectOption(education);
+ if(login){
+  await scope.locator('#regLogin').fill(login);
+  await scope.locator('#regPassword').fill(password||'Pass123!');
+  await scope.locator('#regPassword2').fill(password||'Pass123!');
+ }
+ await fillRoleFields(scope.locator('[data-step="3"]'),{teacherClass});
+}
 export async function chooseInitialSchool(page,id='demo-a'){
  await page.locator('#schoolChoice').selectOption(id);
  await page.locator('#begin').click();

@@ -6,7 +6,8 @@ const read=path=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
 test('startup embeds exactly the active registry without publishing earlier versions',async()=>{
  const [html,registry]=await Promise.all(['index.html','shared/cabinet-registry.json'].map(read));
  assert.deepEqual(JSON.parse(Buffer.from(html.match(/id="roleData" data-roles="([^"]+)"/)[1],'base64')),JSON.parse(registry));
- assert.match(html,/data-level="raesat"[\s\S]*data-level="maorif"[\s\S]*data-level="school"/);
+ assert.match(html,/id="loginForm"[\s\S]*id="goToRegister"[\s\S]*id="goAuthorityLogin"/);
+ assert.match(html,/id="startupUpdateMenu"[\s\S]*id="aliyaAddonToggle"[\s\S]*id="totalPriceAmount"/);
  assert.doesNotMatch(html,/href="\.\/(dashboard\.html|onboarding\/index\.html|dev\/)/);
  assert.match(html,/id="themeToggle"/);
  assert.doesNotMatch(html,/@@ROLE_DATA@@|@@VIEWER_DATA@@|@@STARTUP_JS@@|<script[^>]+src=/);

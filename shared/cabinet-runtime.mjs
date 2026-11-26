@@ -3,9 +3,9 @@ const ctxNode=document.getElementById('sm-viewer-context');
 export const viewerContext=ctxNode?JSON.parse(ctxNode.textContent):null;
 export const offlineViewer=!!viewerContext||window.origin==='null'||!['http:','https:','smapp:'].includes(location.protocol);
 const memory=new Map(Object.entries(viewerContext?.store??{}));
-const prefix='smartmaktab.demo.';
+const canPostKey=key=>/^smartmaktab\.(?:demo|profile|cloud|active-cabinet)\.[a-z0-9_.-]{2,100}$/.test(key);
 const activeKey='smartmaktab.active-cabinet.v1';
-const routePattern=/^cabinets\/(?:[a-z-]+\/)*[a-z-]+\.html\?(?:school=demo-[a-z0-9]+&)?lang=(?:tg|ru)$/;
+const routePattern=/^cabinets\/(?:[a-z-]+\/)*[a-z-]+\.html\?(?:school=[a-z0-9-]+&)?lang=(?:tg|ru)$/;
 const sqlite=()=>typeof globalThis.SmartMaktabSqlite?.getItem==='function'?globalThis.SmartMaktabSqlite:null;
 function tell(payload){if(viewerContext)parent.postMessage({channel:viewerContext.channel,...payload},'*');}
 export function publishLanguage(value){tell({type:'language',value});}
@@ -20,13 +20,13 @@ export const persistentStore={
  },
  setItem(key,value){
   const text=String(value);
-  if(offlineViewer){memory.set(key,text);if(key.startsWith(prefix))tell({type:'store',key,value:text});return;}
+  if(offlineViewer){memory.set(key,text);if(canPostKey(key))tell({type:'store',key,value:text});return;}
   try{localStorage.setItem(key,text);}catch{}
   try{sqlite()?.setItem?.(key,text);}catch{}
   memory.set(key,text);
  },
  removeItem(key){
-  if(offlineViewer){memory.delete(key);if(key.startsWith(prefix))tell({type:'remove',key});return;}
+  if(offlineViewer){memory.delete(key);if(canPostKey(key))tell({type:'remove',key});return;}
   try{localStorage.removeItem(key);}catch{}
   try{sqlite()?.removeItem?.(key);}catch{}
   memory.delete(key);
@@ -49,7 +49,7 @@ export const tabStorage={
    try{sqlite()?.setItem?.(key,text);}catch{}
    return;
   }
-  memory.set(key,text);if(key.startsWith(prefix))tell({type:'store',key,value:text});
+  memory.set(key,text);if(canPostKey(key))tell({type:'store',key,value:text});
  },
  removeItem(key){
   if(!offlineViewer){
@@ -58,7 +58,7 @@ export const tabStorage={
    try{sqlite()?.removeItem?.(key);}catch{}
    return;
   }
-  memory.delete(key);if(key.startsWith(prefix))tell({type:'remove',key});
+  memory.delete(key);if(canPostKey(key))tell({type:'remove',key});
  }
 };
 export function saveActiveResume({role='',school='',lang='tg',route=''}){

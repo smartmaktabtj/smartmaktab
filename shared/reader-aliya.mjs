@@ -1,3 +1,4 @@
+import { persistentStore } from './cabinet-runtime.mjs';
 import { DEFAULT_ALIYA_GATEWAY, extractAliyaTopic, gatewayEnabled, generateGatewayPdf, isLocalGateway, runGateway } from './reader-gateway.mjs';
 import { readerStore } from './reader-memory.mjs';
 import { examplesForTerms, summarizeReaderText, termsFromText } from './reader-text.mjs';
@@ -338,8 +339,28 @@ export function makeReaderAliya(host, readContext, onClose) {
   let seq = 0, busy = false, kind = '', bookKey = '', translating = null, chosen = false, lastPage = 0, request = null, selectedButton = null, answerBody = null;
   const chatHistory = [];
 
+  const hasAliyaAddonAccess = () => {
+    try {
+      const profRaw = persistentStore.getItem('smartmaktab.profile.v1');
+      const sessRaw = persistentStore.getItem('smartmaktab.cloud.session.v1');
+      const orgId = persistentStore.getItem('smartmaktab.cloud.last_org.v1') || '';
+      const licRaw = orgId ? persistentStore.getItem(`smartmaktab.license.v1.${orgId}`) : '';
+      if (licRaw) {
+        const lic = JSON.parse(licRaw);
+        if (lic?.is_super_admin) return true;
+        if (typeof lic?.aliya_enabled === 'boolean') return lic.aliya_enabled;
+      }
+      if (profRaw) {
+        const prof = JSON.parse(profRaw);
+        if (typeof prof?.includeAliya === 'boolean' && sessRaw) return prof.includeAliya;
+      }
+    } catch {}
+    return true;
+  };
+
   const syncCloudState = val => {
-    const flag = !!val && gatewayEnabled;
+    const allowed = hasAliyaAddonAccess();
+    const flag = !!val && gatewayEnabled && allowed;
     cloud.checked = flag;
     cloudBarToggle.checked = flag;
     try {
@@ -569,16 +590,28 @@ export function makeReaderAliya(host, readContext, onClose) {
     for (const [idx, option] of [...qStyle.options].entries())
       option.textContent = [local('Бо ҷавоб ва шарҳ', 'С ответом и пояснением'), local('Танҳо калид дар охир', 'Только ключи в конце')][idx];
 
+    const aliyaAllowed = hasAliyaAddonAccess();
     const gwLabel = isLocalGateway() ? 'localhost' : DEFAULT_ALIYA_GATEWAY.replace(/^https:\/\//, '');
-    cloudText.textContent = local(
-      `Алия AI (${gwLabel}): матн ё акси саҳифаро ба сервери ИИ барои таҳлили пурра, OCR, тест ва тарҷума мефиристад.`,
-      `Алия ИИ (${gwLabel}): отправляет текст или снимок страницы в ИИ-шлюз Kitobkhona для полного анализа, OCR, тестов и перевода.`
-    );
-    cloudBarText.textContent = local(
-      `✦ Алия AI (Kitobkhona) — ИИ-таҳлил, OCR скан ва содироти Word/PDF`,
-      `✦ Алия ИИ (Kitobkhona) — полный ИИ-разбор, OCR сканов и экспорт Word/PDF`
-    );
-    cloud.disabled = cloudBarToggle.disabled = busy;
+    cloudText.textContent = aliyaAllowed
+      ? local(
+          `Алия AI (${gwLabel}): матн ё акси саҳифаро ба сервери ИИ барои таҳлили пурра, OCR, тест ва тарҷума мефиристад.`,
+          `Алия ИИ (${gwLabel}): отправляет текст или снимок страницы в ИИ-шлюз Kitobkhona для полного анализа, OCR, тестов и перевода.`
+        )
+      : local(
+          `Функсияи «Алия AI» (+30 сомонӣ / моҳ) ба нақшаи шумо дохил нест. Онро дар «Профил → Обуна ва пардохт» фаъол кунед.`,
+          `Функция «Алия ИИ» (+30 сомони / мес) не включена в ваш тариф. Подключите её в разделе «Профиль → Подписка и оплата».`
+        );
+    cloudBarText.textContent = aliyaAllowed
+      ? local(
+          `✦ Алия AI (Kitobkhona) — ИИ-таҳлил, OCR скан ва содироти Word/PDF`,
+          `✦ Алия ИИ (Kitobkhona) — полный ИИ-разбор, OCR сканов и экспорт Word/PDF`
+        )
+      : local(
+          `🔒 Алия AI (+30 сомонӣ / моҳ) — дар «Профил → Обуна» фаъол нест`,
+          `🔒 Алия ИИ (+30 сомони / мес) — не включена в тарифе (см. Профиль → Подписка)`
+        );
+    if (!aliyaAllowed) cloud.checked = cloudBarToggle.checked = false;
+    cloud.disabled = cloudBarToggle.disabled = busy || !aliyaAllowed;
     context.textContent = '';
     context.hidden = true;
 
@@ -631,7 +664,7 @@ export function makeReaderAliya(host, readContext, onClose) {
     kind = '';
     let savedCloud = false;
     try { savedCloud = readerStore.get('prefs', 'aliya_cloud') === '1'; } catch {}
-    cloud.checked = cloudBarToggle.checked = gatewayEnabled && savedCloud;
+    cloud.checked = cloudBarToggle.checked = gatewayEnabled && savedCloud && hasAliyaAddonAccess();
     message.textContent = '';
     answerBody = null;
     empty.replaceChildren(mark(), el('span'));
@@ -763,7 +796,7 @@ export function makeReaderAliya(host, readContext, onClose) {
     box.scrollIntoView({ block: 'nearest' });
 
     try {
-      const useCloud = gatewayEnabled && cloud.checked;
+      const useCloud = gatewayEnabled && cloud.checked && hasAliyaAddonAccess();
       const controller = useCloud ? new AbortController() : null;
       request = controller;
       const chunks = [];

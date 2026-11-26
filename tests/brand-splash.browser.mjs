@@ -2,14 +2,14 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
-import {fillRoleFields} from './onboarding-fixtures.mjs';
+import {fillStartupProfile} from './onboarding-fixtures.mjs';
 const base=process.env.SM_BASE_URL??'http://localhost:4180';
 async function toSchool(page){
- await page.locator('[data-level=school]').click();
+ await page.locator('#goToRegister').click();
  await page.locator('#primaryChoices input[value=school-academic-deputy]').check();
  await page.locator('#toExtras').click();await page.locator('#toProfile').click();
- await page.locator('#firstName').fill('Демо');await page.locator('#lastName').fill('Проверка');
- await fillRoleFields(page.locator('[data-step="4"]'));await page.locator('#toReview').click();
+ await fillStartupProfile(page,{first:'Демо',last:'Проверка'});
+ await page.locator('#toSchoolStep').click();
  await page.locator('#schoolSearch').fill('88');
  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
 }

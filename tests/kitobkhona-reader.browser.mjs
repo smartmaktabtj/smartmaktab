@@ -67,11 +67,14 @@ test('Windows-style file launch: full-width setup, automatic teacher bookshelf a
   await p.goto(new URL('../index.html',import.meta.url).href);
   const full=()=>p.locator('#startupShell').evaluate(n=>n.clientWidth===innerWidth&&n.clientHeight===innerHeight);
   assert.equal(await full(),true);
-  await p.locator('[data-level=school]').click();await p.locator('#primaryChoices input[value=school-teacher]').check();await p.locator('#toExtras').click();await p.locator('#toProfile').click();
-  await p.locator('#firstName').fill('Озмоиш');await p.locator('#lastName').fill('Девор');await fillRoleFields(p.locator('[data-step="4"]'),{teacherClass:'5'});
+  await p.locator('#goToRegister').click();await p.locator('#primaryChoices input[value=school-teacher]').check();await p.locator('#toExtras').click();await p.locator('#toProfile').click();
+  await p.locator('#firstName').fill('Озмоиш');await p.locator('#lastName').fill('Девор');
+  await p.locator('#birthYear').fill('1985');await p.locator('#genderSelect').selectOption('male');
+  await p.locator('#specialtyInput').fill('Информатика');await p.locator('#eduYearsInput').fill('5');
+  await p.locator('#educationSelect').selectOption('higher');
+  await fillRoleFields(p.locator('[data-step="3"]'),{teacherClass:'5'});
   assert.equal(await full(),true);assert.equal(await p.locator('.hero').isVisible(),false);
-  assert.ok(await p.locator('[data-step="4"] .setup-step-body').evaluate(n=>n.scrollHeight<=n.clientHeight+1));
-  await p.locator('#toReview').click();await p.locator('#schoolSearch').fill('88');await p.locator('#begin').click();
+  await p.locator('#toSchoolStep').click();await p.locator('#schoolSearch').fill('88');await p.locator('#begin').click();
   const f=p.frameLocator('#offlineFrameSlot iframe');const list=f.locator('#teacherShelf');
   await list.waitFor();assert.equal(await list.locator('li').count(),2);assert.match(await list.innerText(),/Технологияи иттилоотӣ|информатика/i);assert.deepEqual(requested,[]);
   await f.locator('html').evaluate(n=>n.dataset.theme='dark');

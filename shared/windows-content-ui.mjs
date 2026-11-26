@@ -88,6 +88,9 @@ export function mountWindowsContent(article, views) {
           .filter(Boolean)
           .join(' · ');
 
+    if (state.payload?.cabinets || state.payload?.customRoles) {
+      document.dispatchEvent(new CustomEvent('sm:content-updated', { detail: state.payload }));
+    }
     const cats = state.payload?.cabinets?.[article.dataset.cabinetId] ?? [];
     filterWrap.hidden = !cats.length;
     const needle = filterInput.value.trim().toLocaleLowerCase('ru');
@@ -162,6 +165,12 @@ export function mountWindowsContent(article, views) {
   usb.addEventListener('click', () => void apply(api.importContent));
   check.addEventListener('click', () => void apply(api.checkContent));
   online.addEventListener('click', () => void apply(api.fetchContent));
+  document.addEventListener('sm:content-updated', ev => {
+    if (ev.detail && ev.detail !== state.payload) {
+      state = { ...state, payload: ev.detail };
+      render();
+    }
+  });
   document.addEventListener('cabinet:language', render);
   render();
   void api.contentStatus().then(

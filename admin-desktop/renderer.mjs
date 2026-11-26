@@ -9,36 +9,146 @@ const GROUP_LABELS = {
   republic: 'Ҷумҳурӣ / Республика',
 };
 
+const ICON_OPTIONS = [
+  ['folder', '📁 Папка (folder)'],
+  ['document', '📄 Документ (document)'],
+  ['book', '📚 Книга (book)'],
+  ['info', 'ℹ️ Справка (info)'],
+  ['calendar', '📅 Календарь (calendar)'],
+  ['chart', '📊 Отчёты и графики (chart)'],
+  ['settings', '⚙️ Настройки (settings)'],
+  ['users', '👥 Кадры / Люди (users)'],
+  ['money', '💰 Финансы (money)'],
+  ['school', '🏫 Школа (school)'],
+];
+
+const ICON_GLYPHS = {
+  folder: '📁',
+  document: '📄',
+  book: '📚',
+  info: 'ℹ️',
+  calendar: '📅',
+  chart: '📊',
+  settings: '⚙️',
+  users: '👥',
+  money: '💰',
+  school: '🏫',
+};
+
 const state = {
-  roles: [],
+  baseRoles: [],
+  customRoles: [],
+  roleOverrides: {},
+  hiddenRoleIds: [],
   cloud: null,
   settings: null,
   limitBytes: 262144,
   activeRoleId: '',
   pack: { schema: 1, sequence: 1, cabinets: {} },
+  lastPublishedPack: null,
   sbToken: '',
   sbUser: null,
   expectedCloudSeq: null,
   lastSavedRevisionId: null,
   revisions: [],
   validTimer: null,
+  saveTimer: null,
+  editingRoleId: null,
+  pvCatId: null,
+  pvSecId: null,
 };
+
+function allActiveRoles() {
+  const hidden = new Set(state.hiddenRoleIds || []);
+  const combined = [];
+  for (const r of state.baseRoles) {
+    if (hidden.has(r.id)) continue;
+    const ov = state.roleOverrides?.[r.id];
+    combined.push({
+      ...r,
+      title: ov?.titleRu || r.title,
+      titleTg: ov?.titleTg || r.title,
+      description: ov?.titleTg ? `${ov.titleTg} / ${ov.titleRu || r.title}` : r.description,
+      group: ov?.group || r.group,
+      isCustom: false,
+    });
+  }
+  for (const cr of state.customRoles || []) {
+    if (hidden.has(cr.id)) continue;
+    combined.push({
+      id: cr.id,
+      number: '★',
+      title: cr.title?.ru || cr.title?.tg || cr.id,
+      titleTg: cr.title?.tg || cr.title?.ru || cr.id,
+      description: cr.title?.tg || '',
+      group: cr.group || 'school',
+      isCustom: true,
+    });
+  }
+  return combined;
+}
 
 function cleanPackForWire(pack) {
   const cabinets = {};
   for (const [role, list] of Object.entries(pack.cabinets || {})) {
-    if (Array.isArray(list) && list.length > 0) cabinets[role] = list;
+    if (!Array.isArray(list) || list.length === 0) continue;
+    cabinets[role] = list.map(cat => ({
+      id: cat.id,
+      title: { tg: cat.title?.tg || '', ru: cat.title?.ru || '' },
+      icon: cat.icon || 'folder',
+      sections: (cat.sections || []).map(s => {
+        const cleanSec = {
+          id: s.id,
+          title: { tg: s.title?.tg || '', ru: s.title?.ru || '' },
+          text: { tg: s.text?.tg || '', ru: s.text?.ru || '' },
+        };
+        if (s.docxName && s.docxBase64) {
+          cleanSec.docxName = s.docxName;
+          cleanSec.docxBase64 = s.docxBase64;
+        }
+        return cleanSec;
+      }),
+    }));
   }
-  return {
+  const out = {
     schema: 1,
     sequence: Math.max(1, Math.floor(Number(pack.sequence) || 1)),
     cabinets,
   };
+  if (Array.isArray(state.customRoles) && state.customRoles.length > 0) {
+    out.customRoles = state.customRoles.map(r => ({
+      id: r.id,
+      title: { tg: r.title?.tg || '', ru: r.title?.ru || '' },
+      group: r.group || 'school',
+    }));
+  }
+  return out;
 }
 
-function scheduleValidate() {
+function persistedSnapshot() {
+  return {
+    pack: cleanPackForWire(state.pack),
+    customRoles: state.customRoles,
+    roleOverrides: state.roleOverrides,
+    hiddenRoleIds: state.hiddenRoleIds,
+    lastPublishedPack: state.lastPublishedPack,
+  };
+}
+
+function scheduleSaveAndValidate() {
+  const badge = $('saveStateBadge');
+  badge.textContent = 'Сохранение…';
   clearTimeout(state.validTimer);
   state.validTimer = setTimeout(() => void runValidate(), 120);
+  clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(async () => {
+    try {
+      await api.saveData(persistedSnapshot());
+      badge.textContent = 'Автосохранено ✓';
+    } catch {
+      badge.textContent = 'Ошибка сохранения';
+    }
+  }, 350);
 }
 
 async function runValidate() {
@@ -81,23 +191,40 @@ function updateTopBadges() {
   $('seqInput').value = String(state.pack.sequence);
 }
 
+function openRoleModal(roleToEdit = null) {
+  state.editingRoleId = roleToEdit ? roleToEdit.id : null;
+  $('dlgRoleTitle').textContent = roleToEdit ? `Редактировать роль: ${roleToEdit.title}` : 'Добавить новую роль';
+  $('roleIdInput').value = roleToEdit ? roleToEdit.id : '';
+  $('roleIdInput').disabled = Boolean(roleToEdit);
+  $('roleGroupInput').value = roleToEdit?.group || 'school';
+  $('roleTitleTg').value = roleToEdit?.titleTg || roleToEdit?.title || '';
+  $('roleTitleRu').value = roleToEdit?.title || '';
+  $('roleFormErr').textContent = '';
+  $('dlgRole').showModal();
+}
+
 function renderRoleList() {
   const search = $('roleSearch').value.trim().toLocaleLowerCase('ru');
   const group = $('groupFilter').value;
   const container = $('roleList');
   container.replaceChildren();
+  const roles = allActiveRoles();
 
-  for (const r of state.roles) {
+  for (const r of roles) {
     if (group !== 'all' && r.group !== group) continue;
-    const hay = `${r.title} ${r.description} ${r.id}`.toLocaleLowerCase('ru');
+    const hay = `${r.title} ${r.titleTg || ''} ${r.description || ''} ${r.id}`.toLocaleLowerCase('ru');
     if (search && !hay.includes(search)) continue;
 
     const cats = state.pack.cabinets[r.id] || [];
+    const row = document.createElement('div');
+    row.className = `role-row${r.id === state.activeRoleId ? ' active' : ''}`;
+
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = `role-item${r.id === state.activeRoleId ? ' active' : ''}`;
+    btn.className = 'role-item';
 
     const left = document.createElement('div');
+    left.style.minWidth = '0';
     const t = document.createElement('span');
     t.className = 'r-title';
     t.textContent = `${r.number}. ${r.title}`;
@@ -109,14 +236,46 @@ function renderRoleList() {
     const badge = document.createElement('span');
     badge.className = `role-badge${cats.length ? ' has' : ''}`;
     badge.textContent = String(cats.length);
-
     btn.append(left, badge);
     btn.addEventListener('click', () => {
       state.activeRoleId = r.id;
       renderRoleList();
       renderEditor();
     });
-    container.append(btn);
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn-sm';
+    editBtn.title = 'Редактировать роль';
+    editBtn.textContent = '✎';
+    editBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openRoleModal(r);
+    });
+
+    row.append(btn, editBtn);
+    if (r.isCustom) {
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn btn-sm btn-danger';
+      delBtn.title = 'Удалить роль';
+      delBtn.textContent = '🗑';
+      delBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (!confirm(`Удалить роль «${r.title}» (${r.id}) и её категории из пакета?`)) return;
+        state.customRoles = state.customRoles.filter(x => x.id !== r.id);
+        delete state.pack.cabinets[r.id];
+        if (state.activeRoleId === r.id) {
+          state.activeRoleId = allActiveRoles()[0]?.id || '';
+        }
+        renderRoleList();
+        renderEditor();
+        scheduleSaveAndValidate();
+      });
+      row.append(delBtn);
+    }
+
+    container.append(row);
   }
 }
 
@@ -128,11 +287,11 @@ function ensureRoleCats(roleId) {
 function renderEditor() {
   const pane = $('editorPane');
   pane.replaceChildren();
-  const role = state.roles.find(r => r.id === state.activeRoleId);
+  const role = allActiveRoles().find(r => r.id === state.activeRoleId);
   if (!role) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Выберите роль в левом списке, чтобы редактировать категории и разделы пакета .smupdate.';
+    empty.textContent = 'Выберите роль в левом списке или добавьте новую через «+ Роль».';
     pane.append(empty);
     return;
   }
@@ -143,10 +302,20 @@ function renderEditor() {
   head.className = 'editor-head';
   const titleBox = document.createElement('div');
   const h2 = document.createElement('h2');
-  h2.textContent = `${role.title} (${role.description})`;
+  h2.textContent = `${role.title} (${role.titleTg || role.description})`;
   const sm = document.createElement('small');
   sm.textContent = `Cabinet ID: ${role.id} · ${cats.length} / 20 категорий`;
   titleBox.append(h2, sm);
+
+  const headBtns = document.createElement('div');
+  headBtns.style.display = 'flex';
+  headBtns.style.gap = '8px';
+
+  const pvBtn = document.createElement('button');
+  pvBtn.type = 'button';
+  pvBtn.className = 'btn';
+  pvBtn.textContent = '👁 Предпросмотр этой роли';
+  pvBtn.addEventListener('click', () => openPreviewModal(role.id));
 
   const addCatBtn = document.createElement('button');
   addCatBtn.type = 'button';
@@ -157,27 +326,29 @@ function renderEditor() {
     const n = cats.length + 1;
     cats.push({
       id: `category-${n}`,
-      title: { tg: `Маводи нав ${n}`, ru: `Новый раздел ${n}` },
+      title: { tg: `Маводи нав ${n}`, ru: `Новая категория ${n}` },
       icon: 'folder',
       sections: [
         {
           id: `item-${n}-1`,
           title: { tg: 'Дастур ва намуна', ru: 'Инструкция и образец' },
-          text: { tg: 'Матни расмӣ ба забони тоҷикӣ…', ru: 'Официальный текст на русском языке…' },
+          text: { tg: 'Матни пурра ба забони тоҷикӣ…', ru: 'Подробный текст на русском языке…' },
         },
       ],
     });
     renderRoleList();
     renderEditor();
-    scheduleValidate();
+    scheduleSaveAndValidate();
   });
-  head.append(titleBox, addCatBtn);
+
+  headBtns.append(pvBtn, addCatBtn);
+  head.append(titleBox, headBtns);
   pane.append(head);
 
   if (!cats.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.innerHTML = 'Для этого кабинета пока нет материалов в данном пакете.<br><br>Нажмите <strong>«+ Добавить категорию»</strong>, чтобы создать первую папку с документами или инструкциями.';
+    empty.innerHTML = 'Для этого кабинета пока нет категорий.<br><br>Нажмите <strong>«+ Добавить категорию»</strong>, чтобы создать папки, подкатегории и шаблоны DOCX.';
     pane.append(empty);
     return;
   }
@@ -189,7 +360,7 @@ function renderEditor() {
     const hdr = document.createElement('div');
     hdr.className = 'cat-header';
     const lbl = document.createElement('strong');
-    lbl.textContent = `Категория #${cIdx + 1}: ${cat.title?.ru || cat.id}`;
+    lbl.textContent = `${ICON_GLYPHS[cat.icon] || '📁'} Категория #${cIdx + 1}: ${cat.title?.ru || cat.id}`;
     const cBtns = document.createElement('div');
     cBtns.style.display = 'flex';
     cBtns.style.gap = '6px';
@@ -202,7 +373,7 @@ function renderEditor() {
     upBtn.addEventListener('click', () => {
       [cats[cIdx - 1], cats[cIdx]] = [cats[cIdx], cats[cIdx - 1]];
       renderEditor();
-      scheduleValidate();
+      scheduleSaveAndValidate();
     });
 
     const dnBtn = document.createElement('button');
@@ -213,7 +384,7 @@ function renderEditor() {
     dnBtn.addEventListener('click', () => {
       [cats[cIdx], cats[cIdx + 1]] = [cats[cIdx + 1], cats[cIdx]];
       renderEditor();
-      scheduleValidate();
+      scheduleSaveAndValidate();
     });
 
     const delBtn = document.createElement('button');
@@ -224,14 +395,13 @@ function renderEditor() {
       cats.splice(cIdx, 1);
       renderRoleList();
       renderEditor();
-      scheduleValidate();
+      scheduleSaveAndValidate();
     });
 
     cBtns.append(upBtn, dnBtn, delBtn);
     hdr.append(lbl, cBtns);
     card.append(hdr);
 
-    // Category meta grid
     const row1 = document.createElement('div');
     row1.className = 'grid-3';
 
@@ -243,24 +413,28 @@ function renderEditor() {
     inId.maxLength = 64;
     inId.addEventListener('input', () => {
       cat.id = inId.value.trim();
-      scheduleValidate();
+      scheduleSaveAndValidate();
     });
     fId.append(inId);
 
     const fIcon = document.createElement('div');
     fIcon.className = 'field';
-    fIcon.innerHTML = '<label>Иконка</label>';
+    fIcon.innerHTML = '<label>Иконка категории (10 вариантов)</label>';
     const selIcon = document.createElement('select');
-    for (const [val, txt] of [['folder', '▤ Папка (folder)'], ['document', '▧ Документ (document)'], ['book', '▥ Книга (book)'], ['info', 'ⓘ Справка (info)']]) {
+    for (const [val, txt] of ICON_OPTIONS) {
       selIcon.add(new Option(txt, val));
     }
     selIcon.value = cat.icon || 'folder';
-    selIcon.addEventListener('change', () => { cat.icon = selIcon.value; scheduleValidate(); });
+    selIcon.addEventListener('change', () => {
+      cat.icon = selIcon.value;
+      lbl.textContent = `${ICON_GLYPHS[cat.icon] || '📁'} Категория #${cIdx + 1}: ${cat.title?.ru || cat.id}`;
+      scheduleSaveAndValidate();
+    });
     fIcon.append(selIcon);
 
     const fAutoId = document.createElement('div');
     fAutoId.className = 'field';
-    fAutoId.innerHTML = '<label>Удобный ID из названия</label>';
+    fAutoId.innerHTML = '<label>Сформировать ID из названия</label>';
     const btnAutoId = document.createElement('button');
     btnAutoId.type = 'button';
     btnAutoId.className = 'btn btn-sm';
@@ -269,7 +443,7 @@ function renderEditor() {
       const slug = await api.slugId(cat.title?.ru || cat.title?.tg, `cat-${cIdx + 1}`);
       cat.id = slug;
       inId.value = slug;
-      scheduleValidate();
+      scheduleSaveAndValidate();
     });
     fAutoId.append(btnAutoId);
     row1.append(fId, fIcon, fAutoId);
@@ -278,30 +452,29 @@ function renderEditor() {
     row2.className = 'grid-2';
     const fTg = document.createElement('div');
     fTg.className = 'field';
-    fTg.innerHTML = '<label>Номгӯ (Тоҷикӣ, макс. 80)</label>';
+    fTg.innerHTML = '<label>Номгӯ (Тоҷикӣ, ≤ 80)</label>';
     const inTg = document.createElement('input');
     inTg.value = cat.title?.tg || '';
     inTg.maxLength = 80;
-    inTg.addEventListener('input', () => { cat.title.tg = inTg.value; scheduleValidate(); });
+    inTg.addEventListener('input', () => { cat.title.tg = inTg.value; scheduleSaveAndValidate(); });
     fTg.append(inTg);
 
     const fRu = document.createElement('div');
     fRu.className = 'field';
-    fRu.innerHTML = '<label>Название (Русский, макс. 80)</label>';
+    fRu.innerHTML = '<label>Название (Русский, ≤ 80)</label>';
     const inRu = document.createElement('input');
     inRu.value = cat.title?.ru || '';
     inRu.maxLength = 80;
     inRu.addEventListener('input', () => {
       cat.title.ru = inRu.value;
-      lbl.textContent = `Категория #${cIdx + 1}: ${cat.title.ru || cat.id}`;
-      scheduleValidate();
+      lbl.textContent = `${ICON_GLYPHS[cat.icon] || '📁'} Категория #${cIdx + 1}: ${cat.title.ru || cat.id}`;
+      scheduleSaveAndValidate();
     });
     fRu.append(inRu);
     row2.append(fTg, fRu);
 
     card.append(row1, row2);
 
-    // Sections list
     if (!Array.isArray(cat.sections)) cat.sections = [];
     cat.sections.forEach((sec, sIdx) => {
       const box = document.createElement('div');
@@ -310,10 +483,32 @@ function renderEditor() {
       const sBar = document.createElement('div');
       sBar.className = 'section-bar';
       const sLbl = document.createElement('strong');
-      sLbl.textContent = `Материал #${sIdx + 1}: ${sec.title?.ru || sec.id}`;
+      sLbl.textContent = `Подкатегория #${sIdx + 1}: ${sec.title?.ru || sec.id}`;
       const sBtns = document.createElement('div');
       sBtns.style.display = 'flex';
       sBtns.style.gap = '5px';
+
+      const sUp = document.createElement('button');
+      sUp.type = 'button';
+      sUp.className = 'btn btn-sm';
+      sUp.textContent = '▲';
+      sUp.disabled = sIdx === 0;
+      sUp.addEventListener('click', () => {
+        [cat.sections[sIdx - 1], cat.sections[sIdx]] = [cat.sections[sIdx], cat.sections[sIdx - 1]];
+        renderEditor();
+        scheduleSaveAndValidate();
+      });
+
+      const sDn = document.createElement('button');
+      sDn.type = 'button';
+      sDn.className = 'btn btn-sm';
+      sDn.textContent = '▼';
+      sDn.disabled = sIdx === cat.sections.length - 1;
+      sDn.addEventListener('click', () => {
+        [cat.sections[sIdx], cat.sections[sIdx + 1]] = [cat.sections[sIdx + 1], cat.sections[sIdx]];
+        renderEditor();
+        scheduleSaveAndValidate();
+      });
 
       const sDel = document.createElement('button');
       sDel.type = 'button';
@@ -322,9 +517,9 @@ function renderEditor() {
       sDel.addEventListener('click', () => {
         cat.sections.splice(sIdx, 1);
         renderEditor();
-        scheduleValidate();
+        scheduleSaveAndValidate();
       });
-      sBtns.append(sDel);
+      sBtns.append(sUp, sDn, sDel);
       sBar.append(sLbl, sBtns);
 
       const sr1 = document.createElement('div');
@@ -332,11 +527,11 @@ function renderEditor() {
 
       const fsId = document.createElement('div');
       fsId.className = 'field';
-      fsId.innerHTML = '<label>ID раздела</label>';
+      fsId.innerHTML = '<label>ID подкатегории</label>';
       const insId = document.createElement('input');
       insId.value = sec.id || '';
       insId.maxLength = 64;
-      insId.addEventListener('input', () => { sec.id = insId.value.trim(); scheduleValidate(); });
+      insId.addEventListener('input', () => { sec.id = insId.value.trim(); scheduleSaveAndValidate(); });
       fsId.append(insId);
 
       const fsTg = document.createElement('div');
@@ -345,7 +540,7 @@ function renderEditor() {
       const insTg = document.createElement('input');
       insTg.value = sec.title?.tg || '';
       insTg.maxLength = 100;
-      insTg.addEventListener('input', () => { sec.title.tg = insTg.value; scheduleValidate(); });
+      insTg.addEventListener('input', () => { sec.title.tg = insTg.value; scheduleSaveAndValidate(); });
       fsTg.append(insTg);
 
       const fsRu = document.createElement('div');
@@ -356,8 +551,8 @@ function renderEditor() {
       insRu.maxLength = 100;
       insRu.addEventListener('input', () => {
         sec.title.ru = insRu.value;
-        sLbl.textContent = `Материал #${sIdx + 1}: ${sec.title.ru || sec.id}`;
-        scheduleValidate();
+        sLbl.textContent = `Подкатегория #${sIdx + 1}: ${sec.title.ru || sec.id}`;
+        scheduleSaveAndValidate();
       });
       fsRu.append(insRu);
       sr1.append(fsId, fsTg, fsRu);
@@ -379,7 +574,7 @@ function renderEditor() {
       taTg.addEventListener('input', () => {
         sec.text.tg = taTg.value;
         cntTg.textContent = `${taTg.value.length} / 4000`;
-        scheduleValidate();
+        scheduleSaveAndValidate();
       });
       ftTg.append(lblTg, taTg);
 
@@ -397,12 +592,52 @@ function renderEditor() {
       taRu.addEventListener('input', () => {
         sec.text.ru = taRu.value;
         cntRu.textContent = `${taRu.value.length} / 4000`;
-        scheduleValidate();
+        scheduleSaveAndValidate();
       });
       ftRu.append(lblRu, taRu);
 
       sr2.append(ftTg, ftRu);
-      box.append(sBar, sr1, sr2);
+
+      // DOCX optional attachment row
+      const docxRow = document.createElement('div');
+      docxRow.className = 'docx-row';
+      const pickDocxBtn = document.createElement('button');
+      pickDocxBtn.type = 'button';
+      pickDocxBtn.className = 'btn btn-sm';
+      pickDocxBtn.textContent = sec.docxName ? '📄 Заменить .docx' : '📎 Прикрепить .docx шаблон';
+      pickDocxBtn.addEventListener('click', async () => {
+        try {
+          const picked = await api.pickDocx();
+          if (picked.canceled) return;
+          sec.docxName = picked.docxName;
+          sec.docxBase64 = picked.docxBase64;
+          renderEditor();
+          scheduleSaveAndValidate();
+        } catch (err) {
+          alert(err.message || 'Не удалось прикрепить .docx');
+        }
+      });
+      docxRow.append(pickDocxBtn);
+
+      if (sec.docxName && sec.docxBase64) {
+        const pill = document.createElement('span');
+        pill.className = 'docx-pill';
+        const approxKb = Math.max(1, Math.round((sec.docxBase64.length * 0.75) / 1024));
+        pill.textContent = `${sec.docxName} (~${approxKb} КБ)`;
+        const clearDocx = document.createElement('button');
+        clearDocx.type = 'button';
+        clearDocx.className = 'btn btn-sm btn-danger';
+        clearDocx.textContent = 'Убрать .docx';
+        clearDocx.addEventListener('click', () => {
+          delete sec.docxName;
+          delete sec.docxBase64;
+          renderEditor();
+          scheduleSaveAndValidate();
+        });
+        docxRow.append(pill, clearDocx);
+      }
+
+      box.append(sBar, sr1, sr2, docxRow);
       card.append(box);
     });
 
@@ -410,22 +645,109 @@ function renderEditor() {
     addSecBtn.type = 'button';
     addSecBtn.className = 'btn btn-sm';
     addSecBtn.style.marginTop = '10px';
-    addSecBtn.textContent = '+ Добавить раздел в эту категорию';
+    addSecBtn.textContent = '+ Добавить подкатегорию';
     addSecBtn.disabled = cat.sections.length >= 20;
     addSecBtn.addEventListener('click', () => {
       const k = cat.sections.length + 1;
       cat.sections.push({
         id: `section-${k}`,
-        title: { tg: `Қисми ${k}`, ru: `Раздел ${k}` },
+        title: { tg: `Қисми ${k}`, ru: `Подкатегория ${k}` },
         text: { tg: 'Матн…', ru: 'Текст…' },
       });
       renderEditor();
-      scheduleValidate();
+      scheduleSaveAndValidate();
     });
     card.append(addSecBtn);
 
     pane.append(card);
   });
+}
+
+// Live Client Preview Modal
+function openPreviewModal(initialRoleId) {
+  const roles = allActiveRoles();
+  const sel = $('pvRoleSelect');
+  sel.replaceChildren();
+  for (const r of roles) {
+    const count = (state.pack.cabinets[r.id] || []).length;
+    sel.add(new Option(`${r.title}${count ? ` (${count})` : ''}`, r.id));
+  }
+  sel.value = initialRoleId && roles.some(r => r.id === initialRoleId) ? initialRoleId : (state.activeRoleId || roles[0]?.id || '');
+  state.pvCatId = null;
+  state.pvSecId = null;
+  renderPreview();
+  $('dlgPreview').showModal();
+}
+
+function renderPreview() {
+  const roleId = $('pvRoleSelect').value;
+  const lang = $('pvLangSelect').value === 'ru' ? 'ru' : 'tg';
+  const theme = $('pvThemeSelect').value === 'dark' ? 'dark' : 'light';
+  const canvas = $('pvCanvas');
+  canvas.className = `pv-canvas${theme === 'dark' ? ' dark' : ''}`;
+
+  const cats = state.pack.cabinets[roleId] || [];
+  const sidebar = $('pvSidebar');
+  const content = $('pvContent');
+  sidebar.replaceChildren();
+  content.replaceChildren();
+
+  if (!cats.length) {
+    sidebar.innerHTML = `<small style="opacity:.7">${lang === 'tg' ? 'Бахшҳо нестанд' : 'Категории ещё не добавлены'}</small>`;
+    content.innerHTML = `<h4>${lang === 'tg' ? 'Пешнамоиш холӣ аст' : 'Предпросмотр пуст'}</h4><p>${lang === 'tg' ? 'Барои ин вазифа дар таҳриргар категория илова кунед.' : 'Добавьте категорию для этой должности в редакторе.'}</p>`;
+    return;
+  }
+
+  let activeCat = cats.find(c => c.id === state.pvCatId) || cats[0];
+  state.pvCatId = activeCat.id;
+  let activeSec = (activeCat.sections || []).find(s => s.id === state.pvSecId) || activeCat.sections?.[0] || null;
+  state.pvSecId = activeSec?.id || null;
+
+  for (const cat of cats) {
+    const cBtn = document.createElement('button');
+    cBtn.type = 'button';
+    cBtn.className = 'pv-cat-btn';
+    cBtn.textContent = `${ICON_GLYPHS[cat.icon] || '📁'} ${cat.title?.[lang] || cat.id}`;
+    cBtn.addEventListener('click', () => {
+      state.pvCatId = cat.id;
+      state.pvSecId = cat.sections?.[0]?.id || null;
+      renderPreview();
+    });
+    sidebar.append(cBtn);
+
+    if (cat.id === activeCat.id && Array.isArray(cat.sections) && cat.sections.length) {
+      const sList = document.createElement('div');
+      sList.className = 'pv-sec-list';
+      for (const sec of cat.sections) {
+        const sBtn = document.createElement('button');
+        sBtn.type = 'button';
+        sBtn.className = `pv-sec-btn${sec.id === activeSec?.id ? ' active' : ''}`;
+        sBtn.textContent = sec.title?.[lang] || sec.id;
+        sBtn.addEventListener('click', () => {
+          state.pvSecId = sec.id;
+          renderPreview();
+        });
+        sList.append(sBtn);
+      }
+      sidebar.append(sList);
+    }
+  }
+
+  if (activeSec) {
+    const h4 = document.createElement('h4');
+    h4.textContent = `${ICON_GLYPHS[activeCat.icon] || '📁'} ${activeCat.title?.[lang] || ''} — ${activeSec.title?.[lang] || activeSec.id}`;
+    const pre = document.createElement('pre');
+    pre.textContent = activeSec.text?.[lang] || '';
+    content.append(h4, pre);
+    if (activeSec.docxName) {
+      const badge = document.createElement('div');
+      badge.className = 'docx-pill';
+      badge.style.display = 'inline-block';
+      badge.style.marginTop = '14px';
+      badge.textContent = `📥 ${lang === 'tg' ? 'Боргирии намуна:' : 'Скачать шаблон:'} ${activeSec.docxName}`;
+      content.append(badge);
+    }
+  }
 }
 
 // Supabase REST helpers
@@ -475,12 +797,13 @@ async function loadCloudRevisions() {
     loadBtn.textContent = 'Загрузить в редактор';
     loadBtn.addEventListener('click', () => {
       state.pack = structuredClone(r.payload);
+      if (Array.isArray(r.payload?.customRoles)) state.customRoles = structuredClone(r.payload.customRoles);
       state.expectedCloudSeq = r.sequence;
       state.lastSavedRevisionId = r.id;
       updateTopBadges();
       renderRoleList();
       renderEditor();
-      scheduleValidate();
+      scheduleSaveAndValidate();
       $('dlgCloud').close();
     });
 
@@ -502,7 +825,7 @@ async function loadCloudRevisions() {
         updateTopBadges();
         renderRoleList();
         renderEditor();
-        scheduleValidate();
+        scheduleSaveAndValidate();
         await loadCloudRevisions();
       } catch (err) {
         alert(`Ошибка отката: ${err.message}`);
@@ -523,18 +846,27 @@ function populateSettingsDialog() {
   $('keyStatusText').textContent = s.hasPrivateKey ? 'Приватный ключ загружен и защищён в локальном хранилище.' : 'Приватный ключ отсутствует — выберите или сгенерируйте его.';
   $('cfgRepo').value = s.ownerRepo || 'smartmaktabtj/smartmaktab';
   $('cfgBranch').value = s.branch || 'main';
-  $('cfgFeedPath').value = s.branchFeedPath || '';
+  $('cfgFeedPath').value = s.branchFeedPath ?? 'updates/latest.smupdate';
   $('cfgToken').value = '';
   $('cfgToken').placeholder = s.hasGithubToken ? '•••••• (уже сохранён; введите новый только для замены)' : 'ghp_…';
 }
 
 async function bootstrap() {
   const data = await api.init();
-  state.roles = data.roles;
+  state.baseRoles = data.roles;
   state.cloud = data.cloud;
   state.settings = data.settings;
   state.limitBytes = data.limitBytes;
-  state.activeRoleId = state.roles[0]?.id || '';
+
+  if (data.savedData) {
+    state.pack = data.savedData.pack || { schema: 1, sequence: 1, cabinets: {} };
+    state.customRoles = data.savedData.customRoles || [];
+    state.roleOverrides = data.savedData.roleOverrides || {};
+    state.hiddenRoleIds = data.savedData.hiddenRoleIds || [];
+    state.lastPublishedPack = data.savedData.lastPublishedPack || null;
+  }
+
+  state.activeRoleId = allActiveRoles()[0]?.id || '';
   $('sbEmail').value = data.settings.supabaseEmail || '';
 
   updateTopBadges();
@@ -542,7 +874,6 @@ async function bootstrap() {
   renderEditor();
   await runValidate();
 
-  // Bind UI controls
   document.querySelectorAll('[data-close-dlg]').forEach(b => {
     b.addEventListener('click', () => $(b.dataset.closeDlg).close());
   });
@@ -550,14 +881,89 @@ async function bootstrap() {
   $('groupFilter').addEventListener('change', renderRoleList);
   $('seqInput').addEventListener('input', () => {
     state.pack.sequence = Math.max(1, Math.floor(Number($('seqInput').value) || 1));
-    scheduleValidate();
+    scheduleSaveAndValidate();
   });
   $('btnSeqBump').addEventListener('click', () => {
     state.pack.sequence = (Number(state.pack.sequence) || 1) + 1;
     $('seqInput').value = String(state.pack.sequence);
-    scheduleValidate();
+    scheduleSaveAndValidate();
   });
 
+  // Role CRUD modal handlers
+  $('btnAddRole').addEventListener('click', () => openRoleModal(null));
+  $('btnRoleAutoId').addEventListener('click', async () => {
+    if ($('roleIdInput').disabled) return;
+    const raw = $('roleTitleRu').value || $('roleTitleTg').value;
+    $('roleIdInput').value = await api.slugId(raw, 'custom-role');
+  });
+  $('btnSaveRole').addEventListener('click', () => {
+    const id = $('roleIdInput').value.trim();
+    const group = $('roleGroupInput').value;
+    const titleTg = $('roleTitleTg').value.trim();
+    const titleRu = $('roleTitleRu').value.trim();
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) {
+      $('roleFormErr').textContent = 'ID должен содержать только латинские буквы, цифры и дефис.';
+      return;
+    }
+    if (!titleTg || !titleRu) {
+      $('roleFormErr').textContent = 'Заполните названия на таджикском и русском.';
+      return;
+    }
+    if (state.editingRoleId) {
+      const customIdx = state.customRoles.findIndex(r => r.id === state.editingRoleId);
+      if (customIdx >= 0) {
+        state.customRoles[customIdx] = { id, title: { tg: titleTg, ru: titleRu }, group };
+      } else {
+        state.roleOverrides[id] = { titleTg, titleRu, group };
+      }
+    } else {
+      if (allActiveRoles().some(r => r.id === id)) {
+        $('roleFormErr').textContent = `Роль с ID "${id}" уже существует.`;
+        return;
+      }
+      state.customRoles.push({ id, title: { tg: titleTg, ru: titleRu }, group });
+      state.activeRoleId = id;
+    }
+    $('dlgRole').close();
+    renderRoleList();
+    renderEditor();
+    scheduleSaveAndValidate();
+  });
+
+  // Preview handlers
+  $('btnPreview').addEventListener('click', () => openPreviewModal(state.activeRoleId));
+  $('pvRoleSelect').addEventListener('change', () => { state.pvCatId = null; state.pvSecId = null; renderPreview(); });
+  $('pvLangSelect').addEventListener('change', renderPreview);
+  $('pvThemeSelect').addEventListener('change', renderPreview);
+
+  // JSON export / import
+  $('btnExportJson').addEventListener('click', async () => {
+    try {
+      const res = await api.exportJson(persistedSnapshot());
+      if (!res.canceled) alert(`Проект сохранён: ${res.filePath}`);
+    } catch (err) {
+      alert(`Ошибка экспорта JSON: ${err.message}`);
+    }
+  });
+  $('btnImportJson').addEventListener('click', async () => {
+    try {
+      const res = await api.importJson();
+      if (res.canceled) return;
+      state.pack = res.data.pack || { schema: 1, sequence: 1, cabinets: {} };
+      state.customRoles = res.data.customRoles || [];
+      state.roleOverrides = res.data.roleOverrides || {};
+      state.hiddenRoleIds = res.data.hiddenRoleIds || [];
+      state.lastPublishedPack = res.data.lastPublishedPack || state.lastPublishedPack;
+      updateTopBadges();
+      renderRoleList();
+      renderEditor();
+      scheduleSaveAndValidate();
+    } catch (err) {
+      alert(`Ошибка импорта JSON: ${err.message}`);
+    }
+  });
+
+  // Settings & Ed25519
   $('btnSettings').addEventListener('click', () => { populateSettingsDialog(); $('dlgSettings').showModal(); });
   $('btnPickKey').addEventListener('click', async () => {
     const res = await api.pickKeyFile();
@@ -565,7 +971,12 @@ async function bootstrap() {
   });
   $('btnGenKey').addEventListener('click', async () => {
     const res = await api.generateKeys();
-    if (!res.canceled) { state.settings = res.settings; populateSettingsDialog(); updateTopBadges(); alert(`Ключи сохранены!\n\nФайл: ${res.filePath}\n\nСкопируйте SM_CONTENT_PUBLIC_KEY из поля ниже в GitHub Variables.`); }
+    if (!res.canceled) {
+      state.settings = res.settings;
+      populateSettingsDialog();
+      updateTopBadges();
+      alert(`Ключи сохранены!\n\nФайл: ${res.filePath}\n\nСкопируйте SM_CONTENT_PUBLIC_KEY из поля ниже в GitHub Variables.`);
+    }
   });
   $('btnSaveSettings').addEventListener('click', async () => {
     const patch = {
@@ -580,6 +991,7 @@ async function bootstrap() {
     $('dlgSettings').close();
   });
 
+  // Cloud Sync
   $('btnCloud').addEventListener('click', () => $('dlgCloud').showModal());
   $('btnSbLogin').addEventListener('click', async () => {
     const email = $('sbEmail').value.trim();
@@ -623,42 +1035,74 @@ async function bootstrap() {
       state.expectedCloudSeq = row.sequence;
       state.lastSavedRevisionId = row.id;
       updateTopBadges();
+      scheduleSaveAndValidate();
       await loadCloudRevisions();
     } catch (err) {
       alert(`Конфликт или ошибка сохранения: ${err.message}`);
     }
   });
 
+  // Open .smupdate
   $('btnOpen').addEventListener('click', async () => {
     try {
       const res = await api.openSmupdate();
       if (res.canceled) return;
       state.pack = res.payload;
+      if (Array.isArray(res.payload?.customRoles)) state.customRoles = structuredClone(res.payload.customRoles);
       updateTopBadges();
       renderRoleList();
       renderEditor();
-      await runValidate();
+      scheduleSaveAndValidate();
     } catch (err) {
       alert(`Не удалось открыть .smupdate: ${err.message}`);
     }
   });
 
+  // Sign & Save local .smupdate
   $('btnSaveFile').addEventListener('click', async () => {
     const check = await runValidate();
     if (!check.ok) { alert(`Исправьте схему:\n${check.error}`); return; }
     try {
-      const res = await api.saveSmupdate(cleanPackForWire(state.pack));
-      if (!res.canceled) alert(`Подписано и сохранено!\n\nФайл: ${res.filePath}\nРазмер: ${res.bytes} байт\nSHA-256: ${res.sha256}`);
+      const wire = cleanPackForWire(state.pack);
+      const res = await api.saveSmupdate(wire);
+      if (!res.canceled) {
+        state.lastPublishedPack = structuredClone(wire);
+        scheduleSaveAndValidate();
+        alert(`Подписано и сохранено!\n\nФайл: ${res.filePath}\nРазмер: ${res.bytes} байт\nSHA-256: ${res.sha256}`);
+      }
     } catch (err) {
       alert(`Ошибка подписи: ${err.message}`);
     }
   });
 
+  // Publish modal with live diff summary
   $('btnPublish').addEventListener('click', async () => {
     const check = await runValidate();
     if (!check.ok) { alert(`Исправьте схему:\n${check.error}`); return; }
-    $('pubTag').value = `content-v${state.pack.sequence}`;
-    $('pubName').value = `SmartMaktab Content v${state.pack.sequence}`;
+    const wire = cleanPackForWire(state.pack);
+    const roleTitles = Object.fromEntries(allActiveRoles().map(r => [r.id, r.title]));
+    const diffs = await api.diffPack({
+      prevPack: state.lastPublishedPack || { schema: 1, sequence: 0, cabinets: {} },
+      nextPack: wire,
+      roleTitles,
+    });
+    const diffList = $('pubDiffList');
+    diffList.replaceChildren();
+    if (!diffs.length) {
+      const li = document.createElement('li');
+      li.textContent = 'Нет отличий от последней опубликованной версии (или обновлена только нумерация).';
+      diffList.append(li);
+    } else {
+      for (const d of diffs) {
+        const li = document.createElement('li');
+        li.className = `diff-${d.kind}`;
+        li.textContent = d.text;
+        diffList.append(li);
+      }
+    }
+    $('pubTag').value = `content-v${wire.sequence}`;
+    $('pubName').value = `SmartMaktab Content v${wire.sequence}`;
+    $('pubNotes').value = diffs.map(d => d.text).join('\n');
     $('pubStatus').textContent = '';
     $('dlgPublish').showModal();
   });
@@ -672,6 +1116,8 @@ async function bootstrap() {
     try {
       const wire = cleanPackForWire(state.pack);
       const out = await api.publishGithub({ payload: wire, tag, releaseName, notes });
+      state.lastPublishedPack = structuredClone(wire);
+      scheduleSaveAndValidate();
       if (state.sbToken) {
         if (state.lastSavedRevisionId && state.expectedCloudSeq === wire.sequence) {
           await sbFetch('/rest/v1/rpc/admin_mark_content_published', {
