@@ -221,13 +221,11 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
 
     await page.goto(`${adminSrv.url}/admin/index.html#access_token=mock_jwt&refresh_token=mock_ref`);
     await page.locator('#admWorkspace:not([hidden])').waitFor();
-    await page.locator('#orgHierarchyBox > summary').click();
     await page.locator('#orgHierarchyTree').waitFor();
-    const treeText = await page.locator('#orgHierarchyTree').innerText();
-    assert.match(treeText, /Раёсати маорифи Суғд/);
+    await page.waitForFunction(() => (document.getElementById('orgHierarchyTree')?.textContent || '').includes('Раёсати маорифи Суғд'));
 
     // Expand Raesat node -> click "+ Мактаби нав" under Maorif node -> verify form prefill
-    await page.locator('#orgHierarchyTree summary').first().click();
+    await page.locator('#orgHierarchyTree > details.adm-tree-node > summary').first().click();
     await page.getByRole('button', { name: '+ Мактаби нав' }).first().click();
     assert.equal(await page.locator('#orgTypePreset').inputValue(), 'school');
     assert.equal(await page.locator('#orgRegion').inputValue(), 'Вилояти Суғд');
