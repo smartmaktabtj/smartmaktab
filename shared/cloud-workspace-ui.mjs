@@ -337,7 +337,7 @@ export function setupCloudWorkspace(article, group, school) {
     if (!manualAmountOverride) {
       amtInput.value = String(calc.totalTjs);
     }
-    const aliyaPart = includeAliya ? ` + Алия (${calc.aliyaTjs} TJS)` : '';
+    const aliyaPart = includeAliya ? ` + Алия (${calc.aliyaPrice} TJS)` : '';
     tariffCalcLine.textContent = tg()
       ? `Тарофаи интихобшуда: ${calc.basePrice} TJS + ${extras.length} вазифаи иловагӣ (${calc.extrasPrice} TJS)${aliyaPart} = Ҳамагӣ ${calc.totalTjs} TJS`
       : `Выбранный тариф: ${calc.basePrice} TJS + ${extras.length} доп. должн. (${calc.extrasPrice} TJS)${aliyaPart} = Итого ${calc.totalTjs} TJS`;

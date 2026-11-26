@@ -170,6 +170,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
   assert.equal(await page.locator('#profileClasses').textContent(),'5Б · Информатика');
   assert.equal(await page.locator('#profileInstruction').textContent(),'Таджикский');
   await page.locator('#teacherSchoolLinks a').click();
+  await page.waitForURL('**/teacher.html?school=demo-b&lang=ru');
   await page.locator('#workspaceSwitch').selectOption('school-library-head');
   await page.waitForURL('**/library-head.html?school=demo-a&lang=ru');
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);

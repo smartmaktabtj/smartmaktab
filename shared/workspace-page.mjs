@@ -182,8 +182,9 @@ function createProfileManager(cabinetId,tg,label,onOpenCloud){
   fMethod.sp.textContent=label('Название методического объединения','Номи иттиҳодияи методӣ');
   fLangs.sp.textContent=label('Языки','Забонҳо');
   saveBtn.textContent=label('Сохранить анкету профиля','Сабти маълумоти профил');
-  loadData();
+  refreshOptions();
  }
+ loadData();
 
  posSelect.addEventListener('change',()=>{editingRoleId=posSelect.value;statusEl.textContent='';loadData();});
  inheritCb.addEventListener('change',()=>{
@@ -454,7 +455,7 @@ export function setupWorkspace({configured,school}){
  });
  $('workspacePrint').addEventListener('click',event=>{if(snapshot)printCabinetSheet(event.currentTarget);});
  document.addEventListener('cabinet:language',sync);
- document.addEventListener('cabinet:school',()=>{if(snapshot){snapshot=null;$('workspaceSheet').hidden=true;}$('workspaceDraftStatus').textContent='';sync();});
+ document.addEventListener('cabinet:school',()=>{if(snapshot){snapshot=null;$('workspaceSheet').hidden=true;}$('workspaceDraftStatus').textContent='';profCard.loadData();sync();});
  sync();
  if(!configured)views.open('workspaceSettings',toggle,{focus:false});
 }
