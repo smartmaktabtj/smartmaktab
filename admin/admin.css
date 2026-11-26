@@ -37,7 +37,7 @@ body {
 .adm-brand p { margin: 2px 0 0; font-size: 0.85rem; color: var(--sub); }
 
 .adm-main {
-  max-width: 1120px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 20px 16px 40px;
   display: grid;
@@ -59,13 +59,47 @@ body {
   gap: 10px;
 }
 
+.adm-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  margin: 14px 0 6px;
+  background: #f8faf8;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  align-items: end;
+}
+
 .adm-field {
   display: grid;
   gap: 4px;
   font-size: 0.88rem;
+  min-width: 0;
 }
 
 .adm-field span { font-weight: 600; color: var(--sub); }
+
+.adm-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.adm-inline > input,
+.adm-inline > select {
+  flex: 1;
+}
+
+.adm-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: var(--ink);
+  cursor: pointer;
+}
 
 input, select, textarea {
   font: inherit;
@@ -94,12 +128,18 @@ button.btn {
   color: #fff;
   padding: 8px 14px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 button.btn.alt {
   background: var(--panel);
   color: var(--ink);
   border-color: var(--line);
+}
+
+button.btn.sm {
+  padding: 5px 10px;
+  font-size: 0.82rem;
 }
 
 button.btn.danger {
@@ -121,7 +161,7 @@ button.btn:disabled { opacity: 0.55; cursor: default; }
   border-color: var(--accent);
 }
 
-.adm-table-wrap { overflow-x: auto; margin-top: 12px; }
+.adm-table-wrap { overflow-x: auto; margin-top: 10px; }
 table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--sub); font-weight: 600; white-space: nowrap; }
@@ -135,6 +175,48 @@ th { color: var(--sub); font-weight: 600; white-space: nowrap; }
 
 .adm-status.error { background: var(--danger-bg); color: var(--danger); }
 .adm-status.warn { background: var(--warn-bg); color: var(--warn); }
+
+.adm-edit-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.adm-issued {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #96c7aa;
+  background: #f2faf5;
+  display: grid;
+  gap: 6px;
+}
+
+.adm-issued pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.86rem;
+  white-space: pre-wrap;
+}
+
+.adm-meta {
+  font-size: 0.84rem;
+  color: var(--sub);
+  margin: 4px 0 0;
+}
 
 .pill {
   display: inline-block;

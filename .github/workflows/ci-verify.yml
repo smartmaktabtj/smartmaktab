@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
       - run: npm ci --no-audit --no-fund
       - run: |
-          for f in shared/*.mjs cabinets/school/*.mjs admin/*.mjs startup/wizard.js native/windows/main.cjs; do
+          for f in shared/*.mjs cabinets/school/*.mjs admin/*.mjs startup/wizard.js native/windows/main.cjs admin-desktop/*.cjs admin-desktop/*.mjs; do
             node --check "$f"
           done
       - run: npm test
