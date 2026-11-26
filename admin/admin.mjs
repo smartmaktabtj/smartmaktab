@@ -39,6 +39,10 @@ const copy = {
     tabPlans: 'Тарифҳои вазифаҳо ва реквизитҳо',
     tabPayments: 'Чекҳои пардохт (OCR)',
     orgsHint: 'Ин ҷо сохтори маъмуриро идора кунед: Раёсат (вилоят) → Шуъбаи маориф (шаҳр/ноҳия) → Мактаб. Барои тағйир тугмаи «Таҳрир» ва барои нест кардан «Нест кардан»-ро пахш кунед.',
+    hierarchyTitle: 'Дарахти сохтори ҳудудӣ (Раёсат → Маориф → Мактаб)',
+    addMaorifUnder: '+ Маорифи нав',
+    addSchoolUnder: '+ Мактаби нав',
+    unlinkedOrgs: 'Муассисаҳои бе волид',
     rolesHint: 'Барои пешгирии суиистифода (тақсими 1 логину парол ба 20 омӯзгор), дар ин бахш шумораи дастгоҳҳо (одатан 1) ва шумораи вазифаҳои иловагиро барои ҳар як корбар маҳдуд кунед.',
     licensesHint: 'Иҷозатнома муҳлати дастрасии муассиса, давраи имтиёзии офлайн (30 рӯз) ва шумораи умумии логинҳоро барои як мактаб муайян мекунад.',
     plansHint: 'Нархи инфиродӣ барои ҳар як вазифа (асосӣ ва иловагӣ), шумораи дастгоҳҳо ва иҷозати гирифтани логину пароли алоҳидаро ин ҷо муқаррар намоед.',
@@ -204,6 +208,10 @@ const copy = {
     tabPlans: 'Тарифы должностей и реквизиты',
     tabPayments: 'Чеки оплаты (OCR)',
     orgsHint: 'Здесь настраивается иерархия: Управление (область) → Отдел образования (район/город) → Школа. Вы можете добавить, отредактировать или полностью удалить любую организацию.',
+    hierarchyTitle: 'Дерево территориальной иерархии (Раёсат → Маориф → Школа)',
+    addMaorifUnder: '+ Добавить Маориф',
+    addSchoolUnder: '+ Добавить школу',
+    unlinkedOrgs: 'Организации без привязки',
     rolesHint: 'Контроль доступа и защита от передачи одного пароля 20 учителям: задайте кому выдаётся логин, какую должность и сколько доп. кабинетов он открывает, и на скольких устройствах (обычно 1) работает логин.',
     licensesHint: 'Лицензия задаёт срок доступа организации, льготный офлайн-период (30 дней) и квоту — сколько всего отдельных логинов и должностей разрешено этой школе.',
     plansHint: 'Настройте индивидуальную цену (основную и как дополнительная должность), срок действия, лимит устройств и право получения отдельного логина для каждой из 54 должностей.',
@@ -847,8 +855,116 @@ function filteredOrgs() {
   });
 }
 
+function renderHierarchyTree() {
+  const treeEl = $('orgHierarchyTree');
+  if (!treeEl) return;
+  const raesats = orgs.filter(o => orgTypeKey(o) === 'raesat').sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const maorifs = orgs.filter(o => orgTypeKey(o) === 'maorif').sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const schools = orgs.filter(o => orgTypeKey(o) === 'school').sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+  const prefillChild = (preset, parentOrg) => {
+    resetOrgEditor();
+    $('orgTypePreset').value = preset;
+    $('orgRegion').value = parentOrg.region_name || '';
+    $('orgDistrict').value = preset === 'school' ? (parentOrg.district_name || '') : '';
+    renderOrgParentOptions(parentOrg.id);
+    $('orgName').focus();
+  };
+
+  const makeLeaf = sch => {
+    const row = document.createElement('div');
+    row.className = 'adm-tree-leaf';
+    const lbl = document.createElement('span');
+    lbl.textContent = `🏫 ${sch.name}${sch.school_code ? ` (${sch.school_code})` : ''}`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn alt sm';
+    btn.textContent = t('editOrg');
+    btn.addEventListener('click', () => startEditingOrg(sch));
+    row.append(lbl, btn);
+    return row;
+  };
+
+  const makeMaorifNode = mao => {
+    const childSchools = schools.filter(s => s.parent_id === mao.id || (!s.parent_id && s.district_name && s.district_name === mao.district_name));
+    const det = document.createElement('details');
+    det.className = 'adm-tree-node';
+    const sum = document.createElement('summary');
+    const title = document.createElement('span');
+    title.textContent = `🏢 ${mao.name} · ${childSchools.length}`;
+    const btnRow = document.createElement('span');
+    btnRow.className = 'adm-row';
+    btnRow.style.marginTop = '0';
+    const addSchBtn = document.createElement('button');
+    addSchBtn.type = 'button';
+    addSchBtn.className = 'btn sm';
+    addSchBtn.textContent = t('addSchoolUnder');
+    addSchBtn.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); prefillChild('school', mao); });
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn alt sm';
+    editBtn.textContent = t('editOrg');
+    editBtn.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); startEditingOrg(mao); });
+    btnRow.append(addSchBtn, editBtn);
+    sum.append(title, btnRow);
+
+    const kids = document.createElement('div');
+    kids.className = 'adm-tree-children';
+    kids.replaceChildren(...(childSchools.length ? childSchools.map(makeLeaf) : []));
+    det.append(sum, kids);
+    return det;
+  };
+
+  const nodes = raesats.map(rae => {
+    const childMaorifs = maorifs.filter(m => m.parent_id === rae.id || (!m.parent_id && m.region_name && m.region_name === rae.region_name));
+    const totalSchools = childMaorifs.reduce((acc, m) => acc + schools.filter(s => s.parent_id === m.id || (!s.parent_id && s.district_name === m.district_name)).length, 0);
+    const det = document.createElement('details');
+    det.className = 'adm-tree-node';
+    const sum = document.createElement('summary');
+    const title = document.createElement('span');
+    title.textContent = `🏛 ${rae.name} (${childMaorifs.length} / ${totalSchools})`;
+    const btnRow = document.createElement('span');
+    btnRow.className = 'adm-row';
+    btnRow.style.marginTop = '0';
+    const addMaoBtn = document.createElement('button');
+    addMaoBtn.type = 'button';
+    addMaoBtn.className = 'btn sm';
+    addMaoBtn.textContent = t('addMaorifUnder');
+    addMaoBtn.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); prefillChild('maorif', rae); });
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn alt sm';
+    editBtn.textContent = t('editOrg');
+    editBtn.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); startEditingOrg(rae); });
+    btnRow.append(addMaoBtn, editBtn);
+    sum.append(title, btnRow);
+
+    const kids = document.createElement('div');
+    kids.className = 'adm-tree-children';
+    kids.replaceChildren(...childMaorifs.map(makeMaorifNode));
+    det.append(sum, kids);
+    return det;
+  });
+
+  const orphanMaorifs = maorifs.filter(m => !raesats.some(r => m.parent_id === r.id || (!m.parent_id && m.region_name && m.region_name === r.region_name)));
+  const orphanSchools = schools.filter(s => !maorifs.some(m => s.parent_id === m.id || (!s.parent_id && s.district_name && s.district_name === m.district_name)));
+  if (orphanMaorifs.length || orphanSchools.length) {
+    const det = document.createElement('details');
+    det.className = 'adm-tree-node';
+    const sum = document.createElement('summary');
+    sum.textContent = `${t('unlinkedOrgs')} (${orphanMaorifs.length + orphanSchools.length})`;
+    const kids = document.createElement('div');
+    kids.className = 'adm-tree-children';
+    kids.replaceChildren(...orphanMaorifs.map(makeMaorifNode), ...orphanSchools.map(makeLeaf));
+    det.append(sum, kids);
+    nodes.push(det);
+  }
+  treeEl.replaceChildren(...nodes);
+}
+
 function renderTables() {
   // 1. Организации
+  renderHierarchyTree();
   const shownOrgs = filteredOrgs();
   $('orgsCountInfo').textContent = t('showingCount').replace('{shown}', String(shownOrgs.length)).replace('{total}', String(orgs.length));
 

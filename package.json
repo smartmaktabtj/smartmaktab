@@ -24,7 +24,8 @@
     "test:school-forms:browser": "node --test tests/school-forms.browser.mjs",
     "test:update-operations:browser": "node --test tests/update-operations.browser.mjs",
     "test:portable:browser": "node --test tests/portable-release.browser.mjs",
-    "test:kitobkhona-reader:browser": "node --test tests/kitobkhona-reader.browser.mjs"
+    "test:kitobkhona-reader:browser": "node --test tests/kitobkhona-reader.browser.mjs",
+    "test:phase2:browser": "node --test tests/phase2.browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.100.1",

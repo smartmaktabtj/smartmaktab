@@ -4,6 +4,7 @@ import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
 import {setupDocxTemplates} from './docx-templates-ui.mjs';
 import {setupCloudWorkspace} from './cloud-workspace-ui.mjs';
+import {setupPhase2Panels} from './phase2-panels.mjs';
 import {createCloudClient} from './cloud-client.mjs';
 import {getCloudConfig} from './cloud-config.mjs';
 import {cabinetFormAction,printCabinetSheet,clearActiveResume,appRoot,openCabinetView,persistentStore,tabStorage} from './cabinet-runtime.mjs';
@@ -296,6 +297,7 @@ export function setupWorkspace({configured,school}){
   const id=anchor.hash.slice(1);if(anchor.hidden||id==='cabinetHome'||Object.hasOwn(entries,id))continue;const panel=$(id);if(!panel)continue;
   const entry=anchor.querySelector('[data-tg]')??anchor;views.shortcut(id,entry.textContent.trim(),entry.dataset.tg??entry.textContent.trim(),'◇');
  }
+ setupPhase2Panels(article,docs,school,views);
 
  // Dynamic Left Sidebar population: user multi-roles + Admin-added custom roles & categories from .smupdate
  function syncDynamicSidebar(payload){

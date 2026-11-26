@@ -76,6 +76,7 @@ jobs:
           run_bt test:library:browser
           run_bt test:kitobkhona-reader:browser
           run_bt test:portable:browser
+          run_bt test:phase2:browser
 
   android-java-compile:
     runs-on: ubuntu-24.04

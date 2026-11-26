@@ -103,9 +103,14 @@ async function mountRoleFields(id,container){
 function checkRoleFields(container){
  return container?.dataset.roleReady==='yes'?container.validateSetup?.()??null:null;
 }
+const DEFAULT_REGIONS=['Душанбе','Вилояти Суғд','Вилояти Хатлон','ВМКБ','Ноҳияҳои тобеи ҷумҳурӣ'];
+function readLocalCustomSchools(){
+ try{const v=JSON.parse(localStorage.getItem('smartmaktab.custom_schools.v1')||'[]');return Array.isArray(v)?v:[];}catch{return [];}
+}
 function buildMergedSchoolCatalog(){
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools:[];
- const entries=cloud.length
+ const localCustom=readLocalCustomSchools();
+ const base=cloud.length
   ? cloud.map(s=>({
      id:s.id,
      name:s.name+(s.district_name?` (${s.district_name})`:''),
@@ -113,7 +118,13 @@ function buildMergedSchoolCatalog(){
      raw:s,
     }))
   : schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:null}));
- return entries;
+ const seen=new Set(base.map(b=>b.id));
+ for(const c of localCustom){
+  if(c?.id&&!seen.has(c.id)){
+   base.push({id:c.id,name:c.name+(c.district_name?` (${c.district_name})`:''),isCloud:false,raw:c});
+  }
+ }
+ return base;
 }
 function filterMergedSchools(term){
  const q=String(term||'').trim().toLocaleLowerCase();
@@ -124,7 +135,27 @@ function filterMergedSchools(term){
 function resolveSchoolTitle(schoolId){
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools.find(s=>s.id===schoolId):null;
  if(cloud)return cloud.name;
+ const custom=readLocalCustomSchools().find(s=>s.id===schoolId);
+ if(custom)return custom.name;
  return schoolNames[schoolId]||schoolId;
+}
+function populateNewSchoolTerritory(){
+ const regSel=$('newSchoolRegion'),distList=$('newSchoolDistrictList');
+ if(!regSel||!distList)return;
+ const auths=Array.isArray(state.cloudAuthorities)?state.cloudAuthorities:[];
+ const regions=[...new Set([...auths.map(a=>a.region_name).filter(Boolean),...DEFAULT_REGIONS])];
+ const prevReg=regSel.value||state.newSchool?.region_name||'';
+ regSel.replaceChildren(new Option(fp('pick'),''),...regions.map(r=>new Option(r,r)));
+ if(regions.includes(prevReg))regSel.value=prevReg;
+ const curReg=regSel.value;
+ const districts=[...new Set(auths.filter(a=>a.authority_tier==='maorif'&&(!curReg||a.region_name===curReg)).map(a=>a.district_name).filter(Boolean))];
+ distList.replaceChildren(...districts.map(d=>Object.assign(document.createElement('option'),{value:d})));
+}
+function canSubmitStep4(){
+ if(state.creatingNewSchool){
+  return Boolean(clean(state.newSchool?.region_name)&&clean(state.newSchool?.district_name)&&clean(state.newSchool?.name).length>=2);
+ }
+ return Boolean(state.school);
 }
 function fillSchoolChoices(){
  const choice=$('schoolChoice'),items=filterMergedSchools($('schoolSearch').value);
@@ -134,7 +165,8 @@ function fillSchoolChoices(){
  choice.value=validIds.has(previous||state.school)?(previous||state.school):(items.length===1?items[0].id:'');
  state.school=choice.value;
  $('schoolNotice').textContent=items.length?'':fp('none');
- $('begin').disabled=!state.school;
+ populateNewSchoolTerritory();
+ $('begin').disabled=!canSubmitStep4();
 }
 function renderExtraSchools(){
  const list=$('extraSchools'),all=buildMergedSchoolCatalog();

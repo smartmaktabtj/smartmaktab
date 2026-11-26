@@ -100,12 +100,18 @@ Deno.serve(async (req: Request) => {
       : (typeof body.action === 'string' ? body.action.trim() : 'register');
 
     if (action === 'bootstrap' || action === 'list_schools') {
-      const [{ data: schools, error: schErr }, { data: tariffs, error: tarErr }] = await Promise.all([
+      const [{ data: schools, error: schErr }, { data: authorities, error: authErr }, { data: tariffs, error: tarErr }] = await Promise.all([
         adminClient
           .from('organizations')
-          .select('id,name,region_name,district_name,school_code')
+          .select('id,name,region_name,district_name,school_code,parent_id')
           .eq('kind', 'school')
           .order('name'),
+        adminClient
+          .from('organizations')
+          .select('id,name,authority_tier,region_name,district_name,parent_id')
+          .eq('kind', 'education_authority')
+          .order('region_name')
+          .order('district_name'),
         adminClient
           .from('role_tariffs')
           .select('position_code,group_code,access_role,title_tg,title_ru,base_price_tjs,extra_price_tjs,duration_days,sort_order')
@@ -114,9 +120,11 @@ Deno.serve(async (req: Request) => {
           .order('sort_order'),
       ]);
       if (schErr) return json(500, { error: schErr.message });
+      if (authErr) return json(500, { error: authErr.message });
       if (tarErr) return json(500, { error: tarErr.message });
       return json(200, {
         schools: schools ?? [],
+        authorities: authorities ?? [],
         tariffs: tariffs ?? [],
         aliya_price_tjs: 30,
       });
@@ -128,7 +136,10 @@ Deno.serve(async (req: Request) => {
 
     const loginParsed = normalizeLogin(typeof body.login === 'string' ? body.login : '');
     const password = typeof body.password === 'string' ? body.password : '';
-    const orgId = typeof body.organization_id === 'string' ? body.organization_id.trim() : '';
+    let orgId = typeof body.organization_id === 'string' ? body.organization_id.trim() : '';
+    const newSchoolRaw = body.new_school && typeof body.new_school === 'object' && !Array.isArray(body.new_school)
+      ? (body.new_school as Record<string, unknown>)
+      : null;
     const primaryPosition = typeof body.primary_position === 'string' ? body.primary_position.trim().toLowerCase() : '';
     const rawExtras = Array.isArray(body.extra_positions)
       ? body.extra_positions.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map(x => x.trim().toLowerCase())
@@ -147,7 +158,6 @@ Deno.serve(async (req: Request) => {
 
     if (!loginParsed.valid) return json(400, { error: 'invalid_login' });
     if (password.length < 6 || password.length > 128) return json(400, { error: 'password_too_short' });
-    if (!/^[0-9a-f-]{36}$/i.test(orgId)) return json(400, { error: 'invalid_school' });
     if (!SCHOOL_POSITIONS.has(primaryPosition)) return json(400, { error: 'invalid_primary_position' });
     if (!fullName) return json(400, { error: 'full_name_required' });
     for (const ex of extraPositions) {
@@ -156,13 +166,93 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const { data: orgRow } = await adminClient
-      .from('organizations')
-      .select('id,kind')
-      .eq('id', orgId)
-      .eq('kind', 'school')
-      .maybeSingle();
-    if (!orgRow) return json(404, { error: 'school_not_found' });
+    let createdSchoolId = '';
+    let resolvedSchool: Record<string, unknown> | null = null;
+    if (!/^[0-9a-f-]{36}$/i.test(orgId)) {
+      if (!newSchoolRaw) return json(400, { error: 'invalid_school' });
+      const schoolName = typeof newSchoolRaw.name === 'string' ? newSchoolRaw.name.trim().slice(0, 160) : '';
+      let regionName = typeof newSchoolRaw.region_name === 'string' ? newSchoolRaw.region_name.trim().slice(0, 120) : '';
+      let districtName = typeof newSchoolRaw.district_name === 'string' ? newSchoolRaw.district_name.trim().slice(0, 120) : '';
+      const schoolCode = typeof newSchoolRaw.school_code === 'string' ? newSchoolRaw.school_code.trim().slice(0, 40) : '';
+      let parentId = typeof newSchoolRaw.parent_id === 'string' && /^[0-9a-f-]{36}$/i.test(newSchoolRaw.parent_id.trim())
+        ? newSchoolRaw.parent_id.trim()
+        : '';
+
+      if (schoolName.length < 2) return json(400, { error: 'school_name_required' });
+
+      if (parentId) {
+        const { data: parentAuth } = await adminClient
+          .from('organizations')
+          .select('id,region_name,district_name,authority_tier')
+          .eq('id', parentId)
+          .eq('kind', 'education_authority')
+          .maybeSingle();
+        if (!parentAuth) return json(400, { error: 'invalid_parent_authority' });
+        if (!regionName && parentAuth.region_name) regionName = parentAuth.region_name;
+        if (!districtName && parentAuth.district_name) districtName = parentAuth.district_name;
+      } else if (districtName) {
+        const { data: matchedAuth } = await adminClient
+          .from('organizations')
+          .select('id,region_name,district_name')
+          .eq('kind', 'education_authority')
+          .eq('authority_tier', 'maorif')
+          .eq('district_name', districtName)
+          .limit(1)
+          .maybeSingle();
+        if (matchedAuth) {
+          parentId = matchedAuth.id;
+          if (!regionName && matchedAuth.region_name) regionName = matchedAuth.region_name;
+        }
+      }
+
+      if (!regionName || !districtName) {
+        return json(400, { error: 'region_and_district_required' });
+      }
+
+      const { data: existingMatch } = await adminClient
+        .from('organizations')
+        .select('id,name,region_name,district_name,school_code,parent_id')
+        .eq('kind', 'school')
+        .eq('district_name', districtName)
+        .ilike('name', schoolName)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingMatch) {
+        orgId = existingMatch.id;
+        resolvedSchool = existingMatch;
+      } else {
+        const { data: insertedSchool, error: insErr } = await adminClient
+          .from('organizations')
+          .insert({
+            kind: 'school',
+            name: schoolName,
+            region_name: regionName,
+            district_name: districtName,
+            school_code: schoolCode || null,
+            parent_id: parentId || null,
+          })
+          .select('id,name,region_name,district_name,school_code,parent_id')
+          .single();
+        if (insErr || !insertedSchool) {
+          return json(400, { error: insErr?.message || 'school_create_failed' });
+        }
+        orgId = insertedSchool.id;
+        createdSchoolId = insertedSchool.id;
+        resolvedSchool = insertedSchool;
+      }
+    }
+
+    if (!resolvedSchool) {
+      const { data: orgRow } = await adminClient
+        .from('organizations')
+        .select('id,name,kind,region_name,district_name,school_code,parent_id')
+        .eq('id', orgId)
+        .eq('kind', 'school')
+        .maybeSingle();
+      if (!orgRow) return json(404, { error: 'school_not_found' });
+      resolvedSchool = orgRow;
+    }
 
     const { data: posRow } = await adminClient
       .from('role_tariffs')
@@ -170,7 +260,10 @@ Deno.serve(async (req: Request) => {
       .eq('position_code', primaryPosition)
       .eq('is_active', true)
       .maybeSingle();
-    if (!posRow) return json(400, { error: 'position_unavailable' });
+    if (!posRow) {
+      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
+      return json(400, { error: 'position_unavailable' });
+    }
 
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
       email: loginParsed.email,
@@ -182,6 +275,7 @@ Deno.serve(async (req: Request) => {
       },
     });
     if (createErr || !created?.user) {
+      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
       const msg = String(createErr?.message || 'create_user_failed');
       const status = /already|exists|registered/i.test(msg) ? 409 : 400;
       return json(status, { error: status === 409 ? 'login_already_exists' : msg });
@@ -191,6 +285,7 @@ Deno.serve(async (req: Request) => {
     const enrichedDetails = {
       ...profileDetails,
       requested_aliya: includeAliya,
+      self_registered_school: Boolean(createdSchoolId),
     };
 
     const { error: profErr } = await adminClient.from('user_profiles').upsert(
@@ -206,6 +301,7 @@ Deno.serve(async (req: Request) => {
     );
     if (profErr) {
       await adminClient.auth.admin.deleteUser(userId).catch(() => {});
+      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
       return json(500, { error: profErr.message });
     }
 
@@ -224,6 +320,7 @@ Deno.serve(async (req: Request) => {
     });
     if (memErr) {
       await adminClient.auth.admin.deleteUser(userId).catch(() => {});
+      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
       return json(500, { error: memErr.message });
     }
 
@@ -239,6 +336,7 @@ Deno.serve(async (req: Request) => {
         user_id: userId,
         email: loginParsed.email,
         login_name: loginParsed.display,
+        school: resolvedSchool,
         session: null,
       });
     }
@@ -247,6 +345,7 @@ Deno.serve(async (req: Request) => {
       user_id: userId,
       email: loginParsed.email,
       login_name: loginParsed.display,
+      school: resolvedSchool,
       session: signData.session,
       user: signData.user,
     });

@@ -31,13 +31,18 @@ const profileKey='smartmaktab.profile.v1';
 function readSavedProfile(){
   try{const raw=persistentStore.getItem(profileKey)||tabStorage.getItem(profileKey);return raw?JSON.parse(raw):null;}catch{return null;}
 }
-function isUuid(v){return typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);}
+function isUuid(v){return typeof v==='string'&&/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|custom-[a-z0-9-]+)$/i.test(v);}
 const urlSchool=searchParams.get('school')||'';
 const savedProf=readSavedProfile();
 let fromURL=validSchools.has(urlSchool)?urlSchool:(isUuid(urlSchool)?urlSchool:(isUuid(savedProf?.organizationId)?savedProf.organizationId:''));
 function schoolDisplayName(id){
   if(!id)return '';
   if(schoolNames[id])return schoolNames[id];
+  try{
+    const customs=JSON.parse(persistentStore.getItem('smartmaktab.custom_schools.v1')||'[]');
+    const hit=Array.isArray(customs)?customs.find(x=>x.id===id):null;
+    if(hit?.name)return hit.name;
+  }catch{}
   const prof=readSavedProfile();
   if(prof?.organizationId===id&&prof?.organizationName)return prof.organizationName;
   return id;

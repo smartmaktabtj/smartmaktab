@@ -65,7 +65,10 @@ const empty=()=>({
  fields:new Map(),
  school:'',
  schools:Object.create(null),
+ creatingNewSchool:false,
+ newSchool:{region_name:'',district_name:'',name:'',school_code:''},
  cloudSchools:null,
+ cloudAuthorities:null,
  cloudTariffs:null,
 });
 let state=empty();
@@ -359,6 +362,7 @@ async function loadRegistrationBootstrap(){
   if(!res.ok)return;
   const data=await res.json().catch(()=>null);
   if(Array.isArray(data?.schools)&&data.schools.length)state.cloudSchools=data.schools;
+  if(Array.isArray(data?.authorities)&&data.authorities.length)state.cloudAuthorities=data.authorities;
   if(Array.isArray(data?.tariffs)&&data.tariffs.length)state.cloudTariffs=data.tariffs;
   if(step>=1)render();
  }catch{}
@@ -583,12 +587,42 @@ $('lang').addEventListener('change',event=>{
 $('schoolSearch').addEventListener('input',fillSchoolChoices);
 $('schoolChoice').addEventListener('change',event=>{
  state.school=event.target.value;
- $('begin').disabled=!state.school;
+ if(state.school&&state.creatingNewSchool){
+  state.creatingNewSchool=false;
+  $('newSchoolForm').hidden=true;
+ }
+ $('begin').disabled=!canSubmitStep4();
+});
+
+$('toggleNewSchoolBtn')?.addEventListener('click',()=>{
+ state.creatingNewSchool=!state.creatingNewSchool;
+ $('newSchoolForm').hidden=!state.creatingNewSchool;
+ if(state.creatingNewSchool){
+  populateNewSchoolTerritory();
+  $('newSchoolRegion')?.focus();
+ }
+ $('begin').disabled=!canSubmitStep4();
+});
+$('newSchoolRegion')?.addEventListener('change',ev=>{
+ state.newSchool.region_name=clean(ev.target.value);
+ populateNewSchoolTerritory();
+ $('begin').disabled=!canSubmitStep4();
+});
+$('newSchoolDistrict')?.addEventListener('input',ev=>{
+ state.newSchool.district_name=clean(ev.target.value);
+ $('begin').disabled=!canSubmitStep4();
+});
+$('newSchoolName')?.addEventListener('input',ev=>{
+ state.newSchool.name=clean(ev.target.value);
+ $('begin').disabled=!canSubmitStep4();
+});
+$('newSchoolCode')?.addEventListener('input',ev=>{
+ state.newSchool.school_code=clean(ev.target.value);
 });
 
 let enteringCabinet=false;
 $('begin').addEventListener('click',async()=>{
- if(enteringCabinet||step!==4||!state.primary||!state.school)return;
+ if(enteringCabinet||step!==4||!state.primary||!canSubmitStep4())return;
  enteringCabinet=true;
  $('begin').disabled=true;
  $('beginError').textContent=t('opening');
@@ -601,9 +635,24 @@ $('begin').addEventListener('click',async()=>{
    state.extras.map(id=>[id,{usePrimary:true,...state.person}])
   );
 
-  // If connected to a real Supabase school UUID & user created login+password, register user on backend
-  const isUuidSchool=/^[0-9a-f-]{36}$/i.test(state.school);
-  if(loginVal&&password&&isUuidSchool&&!useFileViewer&&navigator.onLine!==false){
+  let targetSchoolId=state.creatingNewSchool?'':state.school;
+  let newSchoolPayload=null;
+  if(state.creatingNewSchool){
+   const matchedAuth=Array.isArray(state.cloudAuthorities)
+    ? state.cloudAuthorities.find(a=>a.authority_tier==='maorif'&&a.district_name===state.newSchool.district_name&&(!state.newSchool.region_name||a.region_name===state.newSchool.region_name))
+    : null;
+   newSchoolPayload={
+    name:clean(state.newSchool.name),
+    region_name:clean(state.newSchool.region_name),
+    district_name:clean(state.newSchool.district_name),
+    school_code:clean(state.newSchool.school_code),
+    parent_id:matchedAuth?.id||'',
+   };
+  }
+
+  // If online & user created login+password (either existing UUID school OR self-registered new school), register on backend
+  const isUuidSchool=/^[0-9a-f-]{36}$/i.test(targetSchoolId);
+  if(loginVal&&password&&(isUuidSchool||newSchoolPayload)&&!useFileViewer&&navigator.onLine!==false){
    $('beginError').textContent=t('regBusy');
    const regRes=await fetch(`${cloudCfg.url}/functions/v1/register-user`,{
     method:'POST',
@@ -612,7 +661,7 @@ $('begin').addEventListener('click',async()=>{
      action:'register',
      login:loginVal,
      password,
-     organization_id:state.school,
+     ...(isUuidSchool?{organization_id:targetSchoolId}:{new_school:newSchoolPayload}),
      primary_position:state.primary,
      extra_positions:state.extras,
      include_aliya:state.includeAliya,
@@ -633,11 +682,27 @@ $('begin').addEventListener('click',async()=>{
      $('beginError').textContent=regJson?.error||t('blocked');
      enteringCabinet=false;$('begin').disabled=false;return;
     }
+    if(regJson?.school?.id){
+     targetSchoolId=regJson.school.id;
+     state.school=targetSchoolId;
+     if(!Array.isArray(state.cloudSchools))state.cloudSchools=[];
+     if(!state.cloudSchools.some(s=>s.id===targetSchoolId))state.cloudSchools.push(regJson.school);
+    }
     if(regJson?.session?.access_token){
      writeStoreItem(cloudSessionKey,JSON.stringify(regJson.session));
-     writeStoreItem('smartmaktab.cloud.last_org.v1',state.school);
+     writeStoreItem('smartmaktab.cloud.last_org.v1',targetSchoolId);
     }
    }
+  }
+
+  if(!targetSchoolId&&newSchoolPayload){
+   const slugId='custom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6);
+   const localEntry={id:slugId,...newSchoolPayload};
+   const existingCustoms=readLocalCustomSchools();
+   existingCustoms.push(localEntry);
+   writeStoreItem('smartmaktab.custom_schools.v1',JSON.stringify(existingCustoms));
+   targetSchoolId=slugId;
+   state.school=slugId;
   }
 
   const row=roster.get(state.primary);
@@ -646,7 +711,7 @@ $('begin').addEventListener('click',async()=>{
    const customTitle=(id==='school-five-method-groups'&&state.customMethodName)?state.customMethodName:roleTitle(id);
    return {id,path:item.path,title:customTitle};
   });
-  const schools=Object.fromEntries(roles.map(role=>[role.id,state.schools[role.id]||state.school]));
+  const schools=Object.fromEntries(roles.map(role=>[role.id,state.schools[role.id]||targetSchoolId]));
   const workspace={primary:state.primary,schools,roles};
   const unifiedProfile={
    fullName,
@@ -655,8 +720,8 @@ $('begin').addEventListener('click',async()=>{
    customMethodName:state.customMethodName,
    includeAliya:state.includeAliya,
    positions:positionProfiles,
-   organizationId:state.school,
-   organizationName:resolveSchoolTitle(state.school),
+   organizationId:targetSchoolId,
+   organizationName:resolveSchoolTitle(targetSchoolId),
   };
 
   const payload={
@@ -670,16 +735,16 @@ $('begin').addEventListener('click',async()=>{
   }
 
   const nativeOrigin=location.protocol==='smapp:'||location.hostname==='appassets.androidplatform.net';
-  const embeddedOnly=useFileViewer||(!nativeOrigin&&navigator.onLine===false&&!isUuidSchool);
+  const embeddedOnly=useFileViewer||(!nativeOrigin&&navigator.onLine===false&&!isUuidSchool&&!newSchoolPayload);
   const activeSchoolName=resolveSchoolTitle(schools[row.id]);
   const intro=brandSplash.play('school',{school:activeSchoolName,role:roles[0].title,lang});
   if(embeddedOnly)void getPack().catch(()=>{});
   await intro;
 
   const isHandoff=key=>key.startsWith('smartmaktab.demo.role-name.v2.')||key.startsWith('smartmaktab.demo.role-setup.v3.')||key.startsWith('smartmaktab.demo.saved-setup.v3.')||key.startsWith('smartmaktab.demo.saved-name.v2.')||key==='smartmaktab.demo.director-handoff.v1';
-  const activeSchool=schools[row.id]||state.school;
+  const activeSchool=schools[row.id]||targetSchoolId;
   const qs=new URLSearchParams();
-  if(validSchools.has(activeSchool)||/^[0-9a-f-]{36}$/i.test(activeSchool))qs.set('school',activeSchool);
+  if(validSchools.has(activeSchool)||/^(?:[0-9a-f-]{36}|custom-[a-z0-9-]+)$/i.test(activeSchool))qs.set('school',activeSchool);
   qs.set('lang',lang);
   const activeRoute=`${row.path}?${qs.toString()}`;
   const activePayload={role:state.primary,school:activeSchool,lang,route:activeRoute,savedAt:Date.now()};
@@ -700,7 +765,7 @@ $('begin').addEventListener('click',async()=>{
   $('beginError').textContent=t('blocked');
  }finally{
   enteringCabinet=false;
-  $('begin').disabled=!state.school;
+  $('begin').disabled=!canSubmitStep4();
  }
 });
 
