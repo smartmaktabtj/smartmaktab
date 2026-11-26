@@ -62,17 +62,19 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   // 50 (Director) + 40 (Academic Deputy) + 20 (Method Group) + 30 (Aliya) = 140 somoni
   assert.match(await page.locator('#totalPriceAmount').textContent(),/140\s+сомони/);
 
-  // Step 3: Unified personal profile + custom method name
+  // Step 3: Unified personal profile + custom method name (demo-mode without credentials)
   await page.locator('#toProfile').click();
   assert.equal(await page.locator('#customMethodWrap').isVisible(),true);
   await page.locator('#customMethodNameInput').fill('Методобъединение точных наук');
-  await fillStartupProfile(page,{first:'Нав',last:'Озмоишӣ',login:'nav_ozm'});
+  await fillStartupProfile(page,{first:'Нав',last:'Озмоишӣ'});
   await page.locator('#toSchoolStep').click();
 
   // Step 4: School choice & summary
   assert.equal(await page.locator('#results .row').count(),3);
   assert.match(await page.locator('#results').textContent(),/Методобъединение точных наук/);
   assert.equal(await page.locator('#results a').count(),0);
+  assert.equal(await page.locator('#demoModeWarning').isVisible(),true);
+  assert.equal(await page.locator('#retryBootstrapBtn').isVisible(),true);
   assert.equal(await page.locator('#begin').textContent(),'Оғоз');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.locator('#schoolSearch').fill('88');
@@ -205,3 +207,132 @@ test('current version has no archive routes and the night setting persists acros
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
  }finally{await browser.close();}
 });
+
+test('cloud registration fails closed when backend is unreachable with login credentials',async()=>{
+ const browser=await chromium.launch();
+ try{
+  const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
+  page.setDefaultTimeout(5500);
+  await page.route('https://*.supabase.co/**',route=>route.abort());
+  await page.goto(`${base}/?lang=ru`);
+  await page.locator('#goToRegister').click();
+  await page.locator('#primaryChoices input[value=school-director]').check();
+  await page.locator('#toExtras').click();
+  await page.locator('#toProfile').click();
+  await fillStartupProfile(page,{first:'Олим',last:'Сангов',login:'olim_fail',password:'secret123'});
+  await page.locator('#toSchoolStep').click();
+
+  assert.equal(await page.locator('#demoModeWarning').isVisible(),false);
+  await page.locator('#schoolSearch').fill('88');
+  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
+  await page.locator('#begin').click();
+
+  // Must stay on Step 4 with visible error and no silent cabinet entry or resume session saved
+  await page.waitForFunction(()=>Boolean(document.getElementById('beginError')?.textContent?.trim())&&!document.getElementById('begin')?.disabled);
+  assert.equal(new URL(page.url()).pathname,'/');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.active-cabinet.v1')),null);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.cloud.session.v1')),null);
+
+  // Going back to Step 3 and clearing login/password switches cleanly to explicit demo mode
+  await page.locator('[data-step="4"] [data-back="3"]').click();
+  await page.locator('#regLogin').fill('');
+  await page.locator('#regPassword').fill('');
+  await page.locator('#regPassword2').fill('');
+  await page.locator('#toSchoolStep').click();
+  assert.equal(await page.locator('#demoModeWarning').isVisible(),true);
+  await page.locator('#begin').click();
+  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=ru');
+ }finally{await browser.close();}
+});
+
+test('cloud self-registration saves account with canonical Tajik phone and signs in on a fresh device',async()=>{
+ const browser=await chromium.launch();
+ const schoolUuid='11111111-1111-4111-8111-111111111088';
+ const maorifUuid='22222222-2222-4222-8222-222222222001';
+ const userUuid='33333333-3333-4333-8333-333333333001';
+ let registeredBody=null;
+
+ async function mockSupabase(context){
+  await context.route('https://*.supabase.co/**',async route=>{
+   const req=route.request();
+   const url=new URL(req.url());
+   const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+   if(url.pathname.endsWith('/functions/v1/register-user')&&req.method()==='GET'){
+    return json({
+     schools:[{id:schoolUuid,name:'МТМУ № 88',region_name:'Суғд',district_name:'Хуҷанд',school_code:'SM-088',kind:'school'}],
+     authorities:[{id:maorifUuid,name:'Маорифи Хуҷанд',authority_tier:'maorif',region_name:'Суғд',district_name:'Хуҷанд'}],
+     tariffs:[],
+    });
+   }
+   if(url.pathname.endsWith('/functions/v1/register-user')&&req.method()==='POST'){
+    registeredBody=req.postDataJSON();
+    return json({
+     user_id:userUuid,
+     login:'927001122',
+     email:'927001122@login.smartmaktab.tj',
+     school:{id:schoolUuid,name:'МТМУ № 88',region_name:'Суғд',district_name:'Хуҷанд',school_code:'SM-088',kind:'school'},
+     session:{access_token:'tok-reg-1',refresh_token:'ref-reg-1',expires_in:3600,user:{id:userUuid,email:'927001122@login.smartmaktab.tj'}},
+    },201);
+   }
+   if(url.pathname.endsWith('/auth/v1/token')&&req.method()==='POST'){
+    const body=req.postDataJSON();
+    if(body?.email==='927001122@login.smartmaktab.tj'&&body?.password==='secret123'){
+     return json({access_token:'tok-login-2',refresh_token:'ref-login-2',expires_in:3600,user:{id:userUuid,email:'927001122@login.smartmaktab.tj'}});
+    }
+    return json({error:'invalid_grant',error_description:'Invalid login credentials'},400);
+   }
+   if(url.pathname.endsWith('/rest/v1/rpc/get_my_workspace_context')){
+    return json({
+     user_id:userUuid,
+     is_super_admin:false,
+     profile:{full_name:'Сангов Олим',preferred_lang:'ru',login_name:'927001122',profile_details:{first:'Олим',last:'Сангов',birthYear:'1985',gender:'male',specialty:'Педагогика',eduYears:'10',education:'higher',languages:['tg']}},
+     memberships:[{organization_id:schoolUuid,organization_name:'МТМУ № 88',kind:'school',role:'director',primary_position:'school-director',extra_positions:[],aliya_enabled:false,active_devices_count:1,max_devices:2}],
+    });
+   }
+   return json([]);
+  });
+ }
+
+ try{
+  // Device 1: register using +992 phone format and cloud school
+  const ctx1=await browser.newContext({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
+  await mockSupabase(ctx1);
+  const page1=await ctx1.newPage();
+  page1.setDefaultTimeout(5500);
+  await page1.goto(`${base}/?lang=ru`);
+  await page1.locator('#goToRegister').click();
+  await page1.locator('#primaryChoices input[value=school-director]').check();
+  await page1.locator('#toExtras').click();
+  await page1.locator('#toProfile').click();
+  await fillStartupProfile(page1,{first:'Олим',last:'Сангов',login:'+992 92 700 11 22',password:'secret123'});
+  await page1.locator('#toSchoolStep').click();
+
+  await page1.locator('#schoolSearch').fill('88');
+  assert.equal(await page1.locator('#schoolChoice').inputValue(),schoolUuid);
+  await page1.locator('#begin').click();
+
+  await page1.waitForURL(`**/cabinets/school/director.html?school=${schoolUuid}&lang=ru`);
+  assert.equal(registeredBody?.action,'register');
+  assert.equal(registeredBody?.organization_id,schoolUuid);
+  assert.equal(registeredBody?.login,'+992 92 700 11 22');
+  const savedSess=await page1.evaluate(()=>JSON.parse(localStorage.getItem('smartmaktab.cloud.session.v1')||'null'));
+  assert.equal(savedSess?.access_token,'tok-reg-1');
+  await ctx1.close();
+
+  // Device 2: clean storage, sign in using 9-digit local phone format without +992
+  const ctx2=await browser.newContext({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
+  await mockSupabase(ctx2);
+  const page2=await ctx2.newPage();
+  page2.setDefaultTimeout(5500);
+  await page2.goto(`${base}/?lang=ru`);
+  await page2.locator('#loginIdentifier').fill('927001122');
+  await page2.locator('#loginPassword').fill('secret123');
+  await page2.locator('#loginSubmit').click();
+
+  await page2.waitForURL(`**/cabinets/school/director.html?school=${schoolUuid}&lang=ru`);
+  await page2.locator('#workspaceSettingsToggle').click();
+  assert.equal(await page2.locator('#profFirst').inputValue(),'Олим');
+  await ctx2.close();
+ }finally{await browser.close();}
+});
+

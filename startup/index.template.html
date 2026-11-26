@@ -200,13 +200,13 @@
 <label class="field" id="otherLangWrap" hidden style="margin-top:8px"><span data-tg="Забони дигар">Другой язык</span><input id="otherLangInput" maxlength="60"></label>
 </fieldset>
 <div id="primaryRoleFields" class="profile-fields"></div>
-<div class="row" style="margin-top:12px">
-<h3 data-tg="Логин ва парол барои воридшавӣ">Логин и пароль для входа</h3>
-<p class="small" style="margin-top:4px" data-tg="Ҳар корбар логини алоҳидаи худро месозад (логини оддӣ, рақами телефон ё Email).">Каждый пользователь создаёт свой отдельный вход (простой логин, телефон или Email).</p>
+<div class="row" style="margin-top:12px;border-color:#72a78c">
+<h3 data-tg="Логин ва парол барои воридшавӣ (ҳатмӣ барои ҳисоби абрӣ)">Логин и пароль для входа (для облачного аккаунта)</h3>
+<p class="small" style="margin-top:4px" data-tg="Барои он ки баъдтар дар ҳамин дастгоҳ ё дастгоҳи дигар ворид шавед, логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.">Чтобы входить на этом и других устройствах, придумайте логин (латиницей a-z, телефон или Email) и пароль (минимум 6 символов).</p>
 <div class="inputs">
-<label class="field"><span data-tg="Логин, телефон ё Email">Логин, телефон или Email</span><input id="regLogin" maxlength="100" placeholder="alijon ё 927001122"></label>
-<label class="field"><span data-tg="Парол (ҳадди ақал 6 аломат)">Пароль (минимум 6 символов)</span><input id="regPassword" type="password" minlength="6" autocomplete="new-password"></label>
-<label class="field"><span data-tg="Тасдиқи парол">Подтвердите пароль</span><input id="regPassword2" type="password" minlength="6" autocomplete="new-password"></label>
+<label class="field"><span data-tg="Логин (лотинӣ), телефон ё Email *">Логин (латиницей), телефон или Email *</span><input id="regLogin" maxlength="100" placeholder="alijon ё 927001122"></label>
+<label class="field"><span data-tg="Парол (ҳадди ақал 6 аломат) *">Пароль (минимум 6 символов) *</span><input id="regPassword" type="password" minlength="6" autocomplete="new-password"></label>
+<label class="field"><span data-tg="Тасдиқи парол *">Подтвердите пароль *</span><input id="regPassword2" type="password" minlength="6" autocomplete="new-password"></label>
 </div>
 </div>
 <p class="note" style="margin-top:8px" data-tg="Барои вазифаҳои иловагӣ маълумоти вазифаи асосӣ худкор гузошта мешавад. Онҳоро баъдтар дар бахши «Профил» тағйир додан мумкин аст.">Для дополнительных должностей данные подставятся автоматически из основной. Позже их можно изменить в разделе «Профиль».</p>
@@ -229,6 +229,8 @@
 <label class="field"><span data-tg="Мактаби асосӣ">Основная школа</span><select id="schoolChoice"></select></label>
 </div>
 <p id="schoolNotice" class="small" role="status" style="margin-top:6px"></p>
+<div style="margin-top:6px"><button type="button" class="button alt" id="retryBootstrapBtn" hidden data-tg="Аз нав бор кардани рӯйхати мактабҳо">Повторить загрузку списка школ</button></div>
+<p id="demoModeWarning" class="note" hidden role="status" style="margin-top:8px;padding:8px 10px;border:1px solid #d59b3c;border-radius:8px" data-tg="Диққат: логин ва парол ворид нашудаанд. Барнома танҳо дар реҷаи демои маҳаллӣ кушода мешавад ва ба пойгоҳи додаҳо сабт намешавад. Барои сохтани ҳисоб ба қадами «Маълумот» баргардед.">Внимание: логин и пароль не указаны. Будет открыт только локальный демо-режим без сохранения аккаунта в базе данных. Чтобы создать аккаунт, вернитесь к анкете.</p>
 <div style="margin-top:8px">
 <button type="button" class="button alt" id="toggleNewSchoolBtn" data-tg="Мактаби мо дар рӯйхат нест — Илова кардан">Нашей школы нет в списке — Добавить</button>
 </div>

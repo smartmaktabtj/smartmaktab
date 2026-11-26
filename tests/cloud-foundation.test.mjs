@@ -266,3 +266,34 @@ test('role tariffs, extra position limits, anti-sharing device locks, and organi
   assert.equal((await as(1, () => q('select id from public.organizations where id=$1', [schoolAId]))).length, 0);
 });
 
+test('phone/login canonicalization aligns client & Edge Functions and Android WebView permits Supabase host', async () => {
+  const { normalizeLoginIdentifier } = await import('../shared/position-catalog.mjs');
+
+  // All 3 forms of a Tajik mobile number must canonicalize identically
+  for (const variant of ['+992 92 700 11 22', '992927001122', '92-700-11-22', '927001122']) {
+    const parsed = normalizeLoginIdentifier(variant);
+    assert.equal(parsed.valid, true, variant);
+    assert.equal(parsed.email, '927001122@login.smartmaktab.tj', variant);
+  }
+  const lat = normalizeLoginIdentifier('Alijon_2026');
+  assert.equal(lat.valid, true);
+  assert.equal(lat.email, 'alijon_2026@login.smartmaktab.tj');
+  const mail = normalizeLoginIdentifier('Teacher@Example.TJ');
+  assert.equal(mail.valid, true);
+  assert.equal(mail.email, 'teacher@example.tj');
+  assert.equal(normalizeLoginIdentifier('Алиҷон').valid, false);
+
+  // Edge Functions must include the exact 992 -> 9-digit canonicalization
+  for (const fnPath of ['../supabase/functions/register-user/index.ts', '../supabase/functions/admin-users/index.ts']) {
+    const src = await read(fnPath);
+    assert.match(src, /\^992\(\\d\{9\}\)\$/, `${fnPath} missing 992 Tajik phone canonicalization`);
+  }
+
+  // Android WebView shouldInterceptRequest must allow Supabase subrequests (not return 404 missing())
+  const java = await read('../native/android/app/src/main/java/tj/smartmaktab/app/MainActivity.java');
+  assert.match(java, /SUPABASE_HOST\s*=\s*"waorfkkavzzpbrsvjjln\.supabase\.co"/);
+  assert.match(java, /cloud\(Uri u\)/);
+  assert.match(java, /if\s*\(\s*r\.isForMainFrame\(\)\s*\)\s*return missing\(\);[\s\S]*cloud\(u\)/);
+});
+
+

@@ -55,7 +55,8 @@ function normalizeLogin(raw: string): { valid: boolean; email: string; display: 
     };
   }
   const digits = text.replace(/[\s+()-]/g, '');
-  const handle = /^\d{7,15}$/.test(digits) ? digits : text.toLowerCase().replace(/\s+/g, '');
+  const tjDigits = /^992(\d{9})$/.test(digits) ? digits.slice(3) : digits;
+  const handle = /^\d{7,15}$/.test(tjDigits) ? tjDigits : text.toLowerCase().replace(/\s+/g, '');
   if (!/^[a-z0-9._-]{3,60}$/.test(handle)) {
     return { valid: false, email: '', display: text };
   }
@@ -191,7 +192,7 @@ Deno.serve(async (req: Request) => {
         if (!regionName && parentAuth.region_name) regionName = parentAuth.region_name;
         if (!districtName && parentAuth.district_name) districtName = parentAuth.district_name;
       } else if (districtName) {
-        const { data: matchedAuth } = await adminClient
+        let { data: matchedAuth } = await adminClient
           .from('organizations')
           .select('id,region_name,district_name')
           .eq('kind', 'education_authority')
@@ -199,6 +200,17 @@ Deno.serve(async (req: Request) => {
           .eq('district_name', districtName)
           .limit(1)
           .maybeSingle();
+        if (!matchedAuth) {
+          const fallback = await adminClient
+            .from('organizations')
+            .select('id,region_name,district_name')
+            .eq('kind', 'education_authority')
+            .eq('authority_tier', 'maorif')
+            .ilike('district_name', `%${districtName}%`)
+            .limit(1)
+            .maybeSingle();
+          matchedAuth = fallback.data ?? null;
+        }
         if (matchedAuth) {
           parentId = matchedAuth.id;
           if (!regionName && matchedAuth.region_name) regionName = matchedAuth.region_name;
@@ -231,6 +243,7 @@ Deno.serve(async (req: Request) => {
             district_name: districtName,
             school_code: schoolCode || null,
             parent_id: parentId || null,
+            parent_kind: parentId ? 'education_authority' : null,
           })
           .select('id,name,region_name,district_name,school_code,parent_id')
           .single();
@@ -242,6 +255,15 @@ Deno.serve(async (req: Request) => {
         resolvedSchool = insertedSchool;
       }
     }
+
+    const rollbackCreated = async (uid = '') => {
+      if (uid) {
+        try { await adminClient.auth.admin.deleteUser(uid); } catch {}
+      }
+      if (createdSchoolId) {
+        try { await adminClient.from('organizations').delete().eq('id', createdSchoolId); } catch {}
+      }
+    };
 
     if (!resolvedSchool) {
       const { data: orgRow } = await adminClient
@@ -261,7 +283,7 @@ Deno.serve(async (req: Request) => {
       .eq('is_active', true)
       .maybeSingle();
     if (!posRow) {
-      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
+      await rollbackCreated();
       return json(400, { error: 'position_unavailable' });
     }
 
@@ -275,7 +297,7 @@ Deno.serve(async (req: Request) => {
       },
     });
     if (createErr || !created?.user) {
-      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
+      await rollbackCreated();
       const msg = String(createErr?.message || 'create_user_failed');
       const status = /already|exists|registered/i.test(msg) ? 409 : 400;
       return json(status, { error: status === 409 ? 'login_already_exists' : msg });
@@ -300,14 +322,14 @@ Deno.serve(async (req: Request) => {
       { onConflict: 'user_id' },
     );
     if (profErr) {
-      await adminClient.auth.admin.deleteUser(userId).catch(() => {});
-      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
+      await rollbackCreated(userId);
       return json(500, { error: profErr.message });
     }
 
     const { error: memErr } = await adminClient.from('school_memberships').insert({
       user_id: userId,
       organization_id: orgId,
+      organization_kind: 'school',
       role: posRow.access_role,
       primary_position: primaryPosition,
       extra_positions: extraPositions,
@@ -319,8 +341,7 @@ Deno.serve(async (req: Request) => {
       position_profiles: positionProfiles,
     });
     if (memErr) {
-      await adminClient.auth.admin.deleteUser(userId).catch(() => {});
-      if (createdSchoolId) await adminClient.from('organizations').delete().eq('id', createdSchoolId).catch(() => {});
+      await rollbackCreated(userId);
       return json(500, { error: memErr.message });
     }
 

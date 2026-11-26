@@ -157,14 +157,50 @@ function canSubmitStep4(){
  }
  return Boolean(state.school);
 }
+function findCloudSchoolMatch(schoolIdOrTitle){
+ const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools:[];
+ if(!cloud.length||!schoolIdOrTitle)return null;
+ const rawTitle=resolveSchoolTitle(schoolIdOrTitle);
+ const norm=s=>String(s||'').trim().toLocaleLowerCase().replace(/\s+/g,' ');
+ const target=norm(rawTitle);
+ return cloud.find(s=>norm(s.name)===target)||null;
+}
 function fillSchoolChoices(){
  const choice=$('schoolChoice'),items=filterMergedSchools($('schoolSearch').value);
- const previous=choice.value;
+ const previous=choice.value||state.school;
  choice.replaceChildren(new Option(fp('pick'),''),...items.map(s=>new Option(s.name,s.id)));
  const validIds=new Set(items.map(s=>s.id));
- choice.value=validIds.has(previous||state.school)?(previous||state.school):(items.length===1?items[0].id:'');
+ let nextVal='';
+ if(validIds.has(previous)){
+  nextVal=previous;
+ }else if(previous&&!/^[0-9a-f-]{36}$/i.test(previous)){
+  const matched=findCloudSchoolMatch(previous);
+  if(matched&&validIds.has(matched.id))nextVal=matched.id;
+ }
+ if(!nextVal&&items.length===1)nextVal=items[0].id;
+ choice.value=nextVal;
  state.school=choice.value;
- $('schoolNotice').textContent=items.length?'':fp('none');
+ const hasCloud=Array.isArray(state.cloudSchools)&&state.cloudSchools.length>0;
+ const hasLogin=Boolean(clean(state.credentials?.login)&&state.credentials?.password);
+ const retryBtn=$('retryBootstrapBtn');
+ if(retryBtn)retryBtn.hidden=useFileViewer||hasCloud;
+ const demoWarn=$('demoModeWarning');
+ if(demoWarn)demoWarn.hidden=hasLogin;
+ let notice='';
+ if(!items.length){
+  notice=fp('none');
+ }else if(!useFileViewer&&!hasCloud){
+  if(state.bootstrapStatus==='loading'){
+   notice=lang==='tg'?'Рӯйхати мактабҳо аз сервер бор мешавад…':'Загрузка списка школ с сервера…';
+  }else if(hasLogin){
+   notice=lang==='tg'
+    ?'Рӯйхати мактабҳо аз сервер бор нашуд. «Аз нав бор кардан»-ро пахш кунед ё мактабатонро дастӣ илова кунед.'
+    :'Не удалось загрузить список школ с сервера. Нажмите «Повторить» при включённом интернете или добавьте школу вручную ниже.';
+  }else{
+   notice=lang==='tg'?'Пайваст бо сервер нест — мактабҳои демо нишон дода шудаанд.':'Сервер школ недоступен — показаны локальные демо-школы.';
+  }
+ }
+ $('schoolNotice').textContent=notice;
  populateNewSchoolTerritory();
  $('begin').disabled=!canSubmitStep4();
 }

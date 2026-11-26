@@ -1,4 +1,4 @@
-const CACHE = 'smartmaktab-shell-v23';
+const CACHE = 'smartmaktab-shell-v24';
 const ASSETS = ['./index.html','./manifest.webmanifest','./icon.svg','./pwa-192.png','./pwa-512.png'];
 const urlFor=path=>new URL(path,self.registration.scope).href;
 const CACHEABLE=new Set(ASSETS.map(urlFor));

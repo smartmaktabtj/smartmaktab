@@ -31,7 +31,8 @@ function normalizeLoginOrEmail(raw: string): { valid: boolean; email: string; di
     return { valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), email, display: email };
   }
   const digits = text.replace(/[\s+()-]/g, '');
-  const handle = /^\d{7,15}$/.test(digits) ? digits : text.toLowerCase().replace(/\s+/g, '');
+  const tjDigits = /^992(\d{9})$/.test(digits) ? digits.slice(3) : digits;
+  const handle = /^\d{7,15}$/.test(tjDigits) ? tjDigits : text.toLowerCase().replace(/\s+/g, '');
   if (!/^[a-z0-9._-]{3,60}$/.test(handle)) return { valid: false, email: '', display: text };
   return { valid: true, email: `${handle}@login.smartmaktab.tj`, display: text };
 }
