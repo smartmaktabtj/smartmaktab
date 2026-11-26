@@ -39,7 +39,8 @@ before(async () => {
     '../supabase/migrations/20261125000100_summary_review.sql',
     '../supabase/migrations/20261125000200_roles_library_licensing.sql',
     '../supabase/migrations/20261125000300_payment_tariffs_tx_unique.sql',
-    '../supabase/migrations/20261126000100_fix_grants_seed_and_content.sql'
+    '../supabase/migrations/20261126000100_fix_grants_seed_and_content.sql',
+    '../supabase/migrations/20261126000200_role_tariffs_quotas_devices_cleanup.sql'
   ]) {
     await db.exec(await read(m));
   }
@@ -196,5 +197,72 @@ test('authenticated orgs parent_id/memberships created_at grants and content_pac
 
   const marked = (await as(1, () => q("select * from public.admin_mark_content_published($1,'content-v3','https://raw.githubusercontent.com/smartmaktabtj/smartmaktab/main/latest.smupdate')", [r3.id])))[0];
   assert.equal(marked.published_tag, 'content-v3');
+});
+
+test('role tariffs, extra position limits, anti-sharing device locks, and organization deletion work', async () => {
+  // All 54 roles seeded with individual prices
+  const tariffs = await as(3, () => q('select position_code, base_price_tjs::float8 as base, extra_price_tjs::float8 as extra from public.role_tariffs'));
+  assert.equal(tariffs.length, 54);
+
+  await denied(as(3, () => q("select public.admin_upsert_role_tariff('school-director', 25, 10, 30, 2, true, true)")));
+  await as(1, () => q("select public.admin_upsert_role_tariff('school-director', 25, 10, 30, 2, true, true)"));
+  const dirTariff = (await as(3, () => q("select base_price_tjs::float8 as b, extra_price_tjs::float8 as e, default_max_devices from public.role_tariffs where position_code='school-director'")))[0];
+  assert.equal(dirTariff.b, 25);
+  assert.equal(dirTariff.e, 10);
+  assert.equal(dirTariff.default_max_devices, 2);
+
+  // Assign teacher_a (uid 4) to schoolAId with 1 device max, primary=school-teacher, extra=['school-class-teacher']
+  await as(1, () => q(
+    "select public.admin_assign_membership($1,$2,'teacher','school-teacher',$3,1,1,true)",
+    [uid(4), schoolAId, ['school-class-teacher']],
+  ));
+
+  const ctx4 = (await as(4, () => q('select public.get_my_workspace_context() as c')))[0].c;
+  assert.equal(ctx4.memberships[0].primary_position, 'school-teacher');
+  assert.deepEqual(ctx4.memberships[0].extra_positions, ['school-class-teacher']);
+  assert.equal(ctx4.memberships[0].max_devices, 1);
+
+  // Claim device 1 on permitted cabinets -> allowed
+  const d1Teacher = (await as(4, () => q("select public.claim_device_session($1,'dev-alpha','Phone A','school-teacher') as r", [schoolAId])))[0].r;
+  assert.equal(d1Teacher.allowed, true);
+  assert.equal(d1Teacher.active_devices, 1);
+
+  const d1Extra = (await as(4, () => q("select public.claim_device_session($1,'dev-alpha','Phone A','school-class-teacher') as r", [schoolAId])))[0].r;
+  assert.equal(d1Extra.allowed, true);
+
+  // Opening unpurchased cabinet on same device -> position_not_allowed
+  const d1Director = (await as(4, () => q("select public.claim_device_session($1,'dev-alpha','Phone A','school-director') as r", [schoolAId])))[0].r;
+  assert.equal(d1Director.allowed, false);
+  assert.equal(d1Director.reason, 'position_not_allowed');
+
+  // Sharing login+password with a second device -> device_limit_reached
+  const d2Blocked = (await as(4, () => q("select public.claim_device_session($1,'dev-beta','Phone B','school-teacher') as r", [schoolAId])))[0].r;
+  assert.equal(d2Blocked.allowed, false);
+  assert.equal(d2Blocked.reason, 'device_limit_reached');
+
+  // Reset devices by super_admin -> second device can now claim
+  await denied(as(4, () => q('select public.admin_reset_user_devices($1,$2,null)', [uid(4), schoolAId])));
+  await as(1, () => q('select public.admin_reset_user_devices($1,$2,null)', [uid(4), schoolAId]));
+  const d2Allowed = (await as(4, () => q("select public.claim_device_session($1,'dev-beta','Phone B','school-teacher') as r", [schoolAId])))[0].r;
+  assert.equal(d2Allowed.allowed, true);
+
+  // Disabled account cannot claim session
+  await as(1, () => q("select public.admin_assign_membership($1,$2,'teacher','school-teacher',$3,1,1,false)", [uid(4), schoolAId, ['school-class-teacher']]));
+  const disabledClaim = (await as(4, () => q("select public.claim_device_session($1,'dev-beta','Phone B','school-teacher') as r", [schoolAId])))[0].r;
+  assert.equal(disabledClaim.allowed, false);
+  assert.equal(disabledClaim.reason, 'account_disabled');
+
+  // Organization deletion: empty org deletes directly, org with dependencies requires force=true
+  const emptyOrgId = (await as(1, () => q("select public.admin_upsert_organization('Test 45','school',$1,null,'Хатлон','Дангара','DEL-45') as id", [maorifId])))[0].id;
+  const normalizedDistrict = (await as(1, () => q('select district_name from public.organizations where id=$1', [emptyOrgId])))[0].district_name;
+  assert.equal(normalizedDistrict, 'Данғара');
+  await denied(as(3, () => q('select public.admin_delete_organization($1,false)', [emptyOrgId])));
+  await as(1, () => q('select public.admin_delete_organization($1,false)', [emptyOrgId]));
+  assert.equal((await as(1, () => q('select id from public.organizations where id=$1', [emptyOrgId]))).length, 0);
+
+  // Force delete removes org with memberships, library books/loans, licenses, payments, device sessions
+  await assert.rejects(as(1, () => q('select public.admin_delete_organization($1,false)', [schoolAId])), /organization_has_data/);
+  await as(1, () => q('select public.admin_delete_organization($1,true)', [schoolAId]));
+  assert.equal((await as(1, () => q('select id from public.organizations where id=$1', [schoolAId]))).length, 0);
 });
 

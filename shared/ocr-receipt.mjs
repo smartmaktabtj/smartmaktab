@@ -99,6 +99,8 @@ export async function submitReceiptForVerification({
   ocrText = '',
   ocrConfidence = null,
   planCode = DEFAULT_PAYMENT_TARIFF.code,
+  primaryPosition = null,
+  extraPositions = [],
   config = getCloudConfig(),
   fetchImpl = globalThis.fetch,
 }) {
@@ -126,6 +128,8 @@ export async function submitReceiptForVerification({
       recipient_account: parsedLocal.detectedRecipient || undefined,
       status_confirmed: parsedLocal.statusConfirmed,
       plan_code: planCode,
+      primary_position: primaryPosition || undefined,
+      extra_positions: Array.isArray(extraPositions) && extraPositions.length ? extraPositions : undefined,
     }),
   });
   const payload = await response.json().catch(() => ({}));
