@@ -70,7 +70,7 @@ export function createCloudClient({
   async function fetchRegistrationBootstrap() {
     const res = await fetchImpl(`${config.url}/functions/v1/register-user?action=bootstrap`, {
       method: 'GET',
-      headers: headers({}, false),
+      headers: { apikey: config.publishableKey },
     });
     return parseJson(res);
   }

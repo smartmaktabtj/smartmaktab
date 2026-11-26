@@ -20,7 +20,7 @@ import java.io.*;
 import java.util.*;
 
 public final class MainActivity extends Activity {
- private static final String HOST="appassets.androidplatform.net", ORIGIN="https://"+HOST;
+ private static final String HOST="appassets.androidplatform.net", ORIGIN="https://"+HOST, SUPABASE_HOST="waorfkkavzzpbrsvjjln.supabase.co";
  private static final long LIMIT=150L*1024*1024;
  private static final int PICK=30, SAVE=31, OPEN=32, SHARE=33, MEDIA=34, SAVE_WINDOWS=35, SAVE_CONTENT_UPDATE=36;
  private WebView view;private ValueCallback<Uri[]> picker;private PermissionRequest media;private String[] mediaResources;
@@ -35,6 +35,7 @@ public final class MainActivity extends Activity {
  private String tr(String ru,String tg){return uiTg?tg:ru;}
  private boolean own(Uri u){return u!=null&&"https".equals(u.getScheme())&&HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private boolean book(Uri u){return u!=null&&"https".equals(u.getScheme())&&"raw.githubusercontent.com".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/sharipovip/books/");}
+ private boolean cloud(Uri u){return u!=null&&"https".equals(u.getScheme())&&SUPABASE_HOST.equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&u.getUserInfo()==null;}
  private static String mime(String s){if(s.endsWith(".html"))return "text/html";if(s.endsWith(".css"))return "text/css";if(s.endsWith(".js")||s.endsWith(".mjs"))return "text/javascript";if(s.endsWith(".json")||s.endsWith(".webmanifest"))return "application/json";if(s.endsWith(".png"))return "image/png";if(s.endsWith(".jpg")||s.endsWith(".jpeg"))return "image/jpeg";if(s.endsWith(".webp"))return "image/webp";if(s.endsWith(".svg"))return "image/svg+xml";if(s.endsWith(".wasm"))return "application/wasm";return "application/octet-stream";}
  @Override public void onCreate(Bundle saved){
   super.onCreate(saved);if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("smartmaktab_updates","SmartMaktab",NotificationManager.IMPORTANCE_DEFAULT));
@@ -51,7 +52,7 @@ public final class MainActivity extends Activity {
   }).build();
   view.setWebViewClient(new WebViewClient(){
    @Override public void onPageStarted(WebView w,String url,Bitmap favicon){trustedOrigin=url!=null&&own(Uri.parse(url));}
-   @Override public WebResourceResponse shouldInterceptRequest(WebView w,WebResourceRequest r){Uri u=r.getUrl();if(own(u))return loader.shouldInterceptRequest(u);return book(u)?null:missing();}
+   @Override public WebResourceResponse shouldInterceptRequest(WebView w,WebResourceRequest r){Uri u=r.getUrl();if(own(u))return loader.shouldInterceptRequest(u);if(r.isForMainFrame())return missing();return (book(u)||cloud(u))?null:missing();}
    @Override public boolean shouldOverrideUrlLoading(WebView w,WebResourceRequest r){Uri u=r.getUrl();if(own(u))return false;if(r.isForMainFrame()&&r.hasGesture()&&book(u)){try{startActivity(new Intent(Intent.ACTION_VIEW,u));}catch(ActivityNotFoundException ignored){}}return true;}
   });
   view.setWebChromeClient(new WebChromeClient(){

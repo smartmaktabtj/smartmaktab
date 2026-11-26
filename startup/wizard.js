@@ -70,6 +70,7 @@ const empty=()=>({
  cloudSchools:null,
  cloudAuthorities:null,
  cloudTariffs:null,
+ bootstrapStatus:'idle',
 });
 let state=empty();
 let step=wantsRegister?1:0;
@@ -87,12 +88,19 @@ const copy={
  invalidProfile:['Заполните все обязательные поля анкеты (ФИО, год рождения, пол, специальность, стаж, образование).','Ҳамаи майдонҳои ҳатмии варақаро пур кунед (Ном, насаб, соли таваллуд, ҷинс, ихтисос, собиқа, маълумот).'],
  invalidMethodName:['Укажите название вашего методического объединения.','Номи иттиҳодияи методии худро ворид кунед.'],
  invalidOtherLang:['Укажите другой язык.','Забони дигарро нависед.'],
- invalidCreds:['Введите логин (или номер телефона) и пароль не менее 6 символов, совпадающий в обоих полях.','Логин (ё рақами телефон) ва пароли ҳадди ақал 6-аломатаро дуруст ворид кунед.'],
+ invalidCreds:['Введите логин латиницей (a-z, 0-9, минимум 3 символа), номер телефона или Email и пароль не менее 6 символов, совпадающий в обоих полях.','Логинро бо ҳуруфи лотинӣ (a-z, 0-9, на кам аз 3 аломат), рақами телефон ё Email ва пароли на кам аз 6-аломатаро дар ҳар ду майдон якхела ворид кунед.'],
  invalidLoginCreds:['Введите логин (или телефон/Email) и пароль.','Логин (ё телефон/Email) ва паролро ворид кунед.'],
- loginFail:['Неверный логин или пароль, либо сервер недоступен.','Логин ё парол нодуруст аст, ё интернет пайваст нест.'],
+ loginFail:['Неверный логин или пароль. Убедитесь, что учётная запись создана при подключённом интернете.','Логин ё парол нодуруст аст. Боварӣ ҳосил кунед, ки ҳисоб ҳангоми пайваст будани интернет сохта шудааст.'],
+ loginNetworkFail:['Сервер входа недоступен. Проверьте подключение к интернету и попробуйте снова.','Сервери воридшавӣ дастрас нест. Пайвасти интернетро санҷед ва боз кӯшиш кунед.'],
  authorityDenied:['Этот аккаунт не относится к Мудири маориф или Сардори раёсат.','Ин ҳисоб ба Мудири маориф ё Сардори раёсат тааллуқ надорад.'],
  loginBusy:['Выполняется вход…','Воридшавӣ иҷро мешавад…'],
- regBusy:['Создание аккаунта и открытие кабинета…','Сохтани ҳисоб ва кушодани утоқ…'],
+ regBusy:['Создание аккаунта на сервере…','Сохтани ҳисоб дар сервер…'],
+ regFileViewerErr:['Нельзя создать облачный аккаунт при открытии локального HTML-файла. Откройте сайт SmartMaktab или установленное приложение с интернетом.','Ҳангоми кушодани файли маҳаллии HTML сохтани ҳисоби абрӣ имконнопазир аст. Сомонаи SmartMaktab ё барномаи насбшударо бо интернет кушоед.'],
+ regOfflineErr:['Нет подключения к интернету. Чтобы сохранить аккаунт в базе и входить с других устройств, подключитесь к интернету.','Пайвасти интернет нест. Барои сабти ҳисоб дар пойгоҳи додаҳо ва воридшавӣ аз дастгоҳҳои дигар интернетро фаъол кунед.'],
+ regSchoolsUnavailable:['Не удалось загрузить список школ с сервера — аккаунт не создан. Проверьте интернет и нажмите «Повторить» либо добавьте школу вручную.','Рӯйхати мактабҳо аз сервер бор нашуд — ҳисоб сохта нашуд. Интернетро санҷида «Аз нав бор кардан»-ро пахш кунед ё мактабро дастӣ илова намоед.'],
+ regSchoolPickCloud:['Список школ обновлён с сервера. Выберите вашу школу в списке и нажмите «Оғоз».','Рӯйхати мактабҳо аз сервер нав шуд. Мактаби худро аз рӯйхат интихоб карда, «Оғоз»-ро пахш кунед.'],
+ regNetworkFail:['Не удалось связаться с сервером регистрации — аккаунт НЕ создан. Проверьте интернет и попробуйте снова.','Бо сервери бақайдгирӣ пайваст шуда нашуд — ҳисоб сохта НАШУД. Интернетро санҷида боз кӯшиш кунед.'],
+ regSessionMissing:['Аккаунт создан, но не удалось подтвердить вход. Попробуйте войти на стартовом экране с этим логином и паролем.','Ҳисоб сохта шуд, вале воридшавӣ тасдиқ нашуд. Дар саҳифаи асосӣ бо ҳамин логин ва парол ворид шавед.'],
  duplicateLogin:['Этот логин или телефон уже зарегистрирован. Нажмите «Войти» на стартовом экране.','Ин логин ё телефон аллакай ба қайд гирифта шудааст. Дар саҳифаи асосӣ «Ворид шудан»-ро пахш кунед.'],
  blocked:['Кабинет не открылся. Попробуйте снова или откройте index.html в Chrome/Edge.','Утоқи корӣ кушода нашуд. Боз кӯшиш кунед ё index.html-ро дар Chrome/Edge кушоед.'],
  opening:['Открываем кабинет…','Утоқи корӣ кушода мешавад…'],
@@ -222,6 +230,10 @@ function updateTotalBar(){
 
 function setStep(n){
  step=n;
+ if(step>=1&&!useFileViewer&&state.bootstrapStatus!=='ready'){
+  void loadRegistrationBootstrap();
+ }
+ if(step===4&&$('beginError'))$('beginError').textContent='';
  render();
  const active=sections.find(s=>Number(s.dataset.step)===n);
  if(active){
@@ -351,21 +363,57 @@ function render(){
  }
 }
 
-// Fetch real schools & updated tariffs from Supabase register-user Edge Function silently in background
-async function loadRegistrationBootstrap(){
- if(useFileViewer||navigator.onLine===false)return;
- try{
-  const res=await fetch(`${cloudCfg.url}/functions/v1/register-user?action=bootstrap`,{
-   method:'GET',
-   headers:{apikey:cloudCfg.publishableKey,'Content-Type':'application/json'},
-  });
-  if(!res.ok)return;
-  const data=await res.json().catch(()=>null);
-  if(Array.isArray(data?.schools)&&data.schools.length)state.cloudSchools=data.schools;
-  if(Array.isArray(data?.authorities)&&data.authorities.length)state.cloudAuthorities=data.authorities;
-  if(Array.isArray(data?.tariffs)&&data.tariffs.length)state.cloudTariffs=data.tariffs;
-  if(step>=1)render();
- }catch{}
+function describeRegError(code){
+ const c=String(code||'');
+ if(c==='invalid_login')return t('invalidCreds');
+ if(c==='password_too_short')return t('invalidCreds');
+ if(c==='login_already_exists')return t('duplicateLogin');
+ if(c==='school_name_required'||c==='region_and_district_required'||c==='school_not_found'||c==='invalid_school'){
+  return lang==='tg'
+   ?'Маълумоти мактаб нодуруст аст. Мактабро аз рӯйхат интихоб кунед ё номи мактабу ноҳияро пурра ворид намоед.'
+   :'Проверьте данные школы: выберите школу из списка или полностью укажите регион, район и название школы.';
+ }
+ return c||t('regNetworkFail');
+}
+
+// Fetch real schools & updated tariffs from Supabase register-user Edge Function
+let bootstrapPromise=null;
+async function loadRegistrationBootstrap(opts={}){
+ const force=Boolean(opts?.force);
+ if(useFileViewer){state.bootstrapStatus='offline';return false;}
+ if(navigator.onLine===false){state.bootstrapStatus='error';if(step===4)fillSchoolChoices();return false;}
+ if(!force&&state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools)&&state.cloudSchools.length)return true;
+ if(bootstrapPromise)return bootstrapPromise;
+ state.bootstrapStatus='loading';
+ if(step===4)fillSchoolChoices();
+ bootstrapPromise=(async()=>{
+  const ctrl=typeof AbortController==='function'?new AbortController():null;
+  const timer=ctrl?setTimeout(()=>ctrl.abort(),15000):0;
+  try{
+   const res=await fetch(`${cloudCfg.url}/functions/v1/register-user?action=bootstrap`,{
+    method:'GET',
+    headers:{apikey:cloudCfg.publishableKey},
+    ...(ctrl?{signal:ctrl.signal}:{}),
+   });
+   if(!res.ok){state.bootstrapStatus='error';return false;}
+   const data=await res.json().catch(()=>null);
+   if(!data||!Array.isArray(data.schools)){state.bootstrapStatus='error';return false;}
+   if(data.schools.length)state.cloudSchools=data.schools;
+   if(Array.isArray(data?.authorities)&&data.authorities.length)state.cloudAuthorities=data.authorities;
+   if(Array.isArray(data?.tariffs)&&data.tariffs.length)state.cloudTariffs=data.tariffs;
+   state.bootstrapStatus=data.schools.length?'ready':'error';
+   return state.bootstrapStatus==='ready';
+  }catch{
+   state.bootstrapStatus='error';
+   return false;
+  }finally{
+   if(timer)clearTimeout(timer);
+   bootstrapPromise=null;
+   if(step===4){fillSchoolChoices();renderExtraSchools();}
+   else if(step===1||step===2){renderPrimaryAndExtraChoices();}
+  }
+ })();
+ return bootstrapPromise;
 }
 void loadRegistrationBootstrap();
 
@@ -412,6 +460,10 @@ $('loginForm')?.addEventListener('submit',async ev=>{
    headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${authJson.access_token}`,'Content-Type':'application/json'},
    body:'{}',
   });
+  if(!ctxRes.ok){
+   $('loginError').textContent=t('loginNetworkFail');
+   return;
+  }
   const ctx=await ctxRes.json().catch(()=>null);
   const memberships=Array.isArray(ctx?.memberships)?ctx.memberships:[];
   const primaryMem=memberships[0]||null;
@@ -471,7 +523,7 @@ $('loginForm')?.addEventListener('submit',async ev=>{
   }
   setStep(1);
  }catch{
-  $('loginError').textContent=t('loginFail');
+  $('loginError').textContent=t('loginNetworkFail');
  }finally{
   $('loginSubmit').disabled=false;
  }
@@ -563,6 +615,8 @@ $('toSchoolStep').addEventListener('click',()=>{
    $('primaryError').textContent=t('invalidCreds');return;
   }
   state.credentials={login:loginVal,password:pass1,password2:pass2};
+ }else{
+  state.credentials={login:'',password:'',password2:''};
  }
  const roleErr=checkRoleFields($('primaryRoleFields'));
  if(roleErr){$('primaryError').textContent=roleErr;return;}
@@ -585,12 +639,14 @@ $('lang').addEventListener('change',event=>{
 });
 
 $('schoolSearch').addEventListener('input',fillSchoolChoices);
+$('retryBootstrapBtn')?.addEventListener('click',()=>{void loadRegistrationBootstrap({force:true});});
 $('schoolChoice').addEventListener('change',event=>{
  state.school=event.target.value;
  if(state.school&&state.creatingNewSchool){
   state.creatingNewSchool=false;
   $('newSchoolForm').hidden=true;
  }
+ $('beginError').textContent='';
  $('begin').disabled=!canSubmitStep4();
 });
 
@@ -638,8 +694,16 @@ $('begin').addEventListener('click',async()=>{
   let targetSchoolId=state.creatingNewSchool?'':state.school;
   let newSchoolPayload=null;
   if(state.creatingNewSchool){
+   const distLower=clean(state.newSchool.district_name).toLocaleLowerCase();
+   const regLower=clean(state.newSchool.region_name).toLocaleLowerCase();
    const matchedAuth=Array.isArray(state.cloudAuthorities)
-    ? state.cloudAuthorities.find(a=>a.authority_tier==='maorif'&&a.district_name===state.newSchool.district_name&&(!state.newSchool.region_name||a.region_name===state.newSchool.region_name))
+    ? state.cloudAuthorities.find(a=>{
+       if(a.authority_tier!=='maorif')return false;
+       const aDist=clean(a.district_name).toLocaleLowerCase();
+       const aReg=clean(a.region_name).toLocaleLowerCase();
+       const distHit=aDist===distLower||(distLower.length>=3&&(aDist.includes(distLower)||distLower.includes(aDist)));
+       return distHit&&(!regLower||aReg===regLower);
+      })
     : null;
    newSchoolPayload={
     name:clean(state.newSchool.name),
@@ -650,49 +714,96 @@ $('begin').addEventListener('click',async()=>{
    };
   }
 
-  // If online & user created login+password (either existing UUID school OR self-registered new school), register on backend
-  const isUuidSchool=/^[0-9a-f-]{36}$/i.test(targetSchoolId);
-  if(loginVal&&password&&(isUuidSchool||newSchoolPayload)&&!useFileViewer&&navigator.onLine!==false){
-   $('beginError').textContent=t('regBusy');
-   const regRes=await fetch(`${cloudCfg.url}/functions/v1/register-user`,{
-    method:'POST',
-    headers:{apikey:cloudCfg.publishableKey,'Content-Type':'application/json'},
-    body:JSON.stringify({
-     action:'register',
-     login:loginVal,
-     password,
-     ...(isUuidSchool?{organization_id:targetSchoolId}:{new_school:newSchoolPayload}),
-     primary_position:state.primary,
-     extra_positions:state.extras,
-     include_aliya:state.includeAliya,
-     custom_method_name:state.customMethodName,
-     full_name:fullName,
-     preferred_lang:lang,
-     profile_details:state.person,
-     position_profiles:positionProfiles,
-    }),
-   }).catch(()=>null);
-   if(regRes){
-    const regJson=await regRes.json().catch(()=>({}));
-    if(regRes.status===409){
-     $('beginError').textContent=t('duplicateLogin');
-     enteringCabinet=false;$('begin').disabled=false;return;
-    }
-    if(!regRes.ok){
-     $('beginError').textContent=regJson?.error||t('blocked');
-     enteringCabinet=false;$('begin').disabled=false;return;
-    }
-    if(regJson?.school?.id){
-     targetSchoolId=regJson.school.id;
-     state.school=targetSchoolId;
-     if(!Array.isArray(state.cloudSchools))state.cloudSchools=[];
-     if(!state.cloudSchools.some(s=>s.id===targetSchoolId))state.cloudSchools.push(regJson.school);
-    }
-    if(regJson?.session?.access_token){
-     writeStoreItem(cloudSessionKey,JSON.stringify(regJson.session));
-     writeStoreItem('smartmaktab.cloud.last_org.v1',targetSchoolId);
+  // Whenever user created login+password, cloud registration MUST succeed before entering cabinet (fail-closed)
+  const wantsCloudAccount=Boolean(loginVal&&password);
+  if(wantsCloudAccount){
+   if(useFileViewer){
+    $('beginError').textContent=t('regFileViewerErr');
+    return;
+   }
+   if(navigator.onLine===false){
+    $('beginError').textContent=t('regOfflineErr');
+    return;
+   }
+   if(!newSchoolPayload&&!/^[0-9a-f-]{36}$/i.test(targetSchoolId)){
+    $('beginError').textContent=t('regBusy');
+    const ok=await loadRegistrationBootstrap({force:true});
+    const matched=ok?findCloudSchoolMatch(targetSchoolId):null;
+    if(matched?.id){
+     targetSchoolId=matched.id;
+     state.school=matched.id;
+    }else if(ok){
+     $('beginError').textContent=t('regSchoolPickCloud');
+     return;
+    }else{
+     $('beginError').textContent=t('regSchoolsUnavailable');
+     return;
     }
    }
+   const isUuidSchool=/^[0-9a-f-]{36}$/i.test(targetSchoolId);
+   $('beginError').textContent=t('regBusy');
+   const regCtrl=typeof AbortController==='function'?new AbortController():null;
+   const regTimer=regCtrl?setTimeout(()=>regCtrl.abort(),20000):0;
+   let regRes=null;
+   try{
+    regRes=await fetch(`${cloudCfg.url}/functions/v1/register-user`,{
+     method:'POST',
+     headers:{apikey:cloudCfg.publishableKey,'Content-Type':'application/json'},
+     ...(regCtrl?{signal:regCtrl.signal}:{}),
+     body:JSON.stringify({
+      action:'register',
+      login:loginVal,
+      password,
+      ...(isUuidSchool?{organization_id:targetSchoolId}:{new_school:newSchoolPayload}),
+      primary_position:state.primary,
+      extra_positions:state.extras,
+      include_aliya:state.includeAliya,
+      custom_method_name:state.customMethodName,
+      full_name:fullName,
+      preferred_lang:lang,
+      profile_details:state.person,
+      position_profiles:positionProfiles,
+     }),
+    });
+   }catch{
+    $('beginError').textContent=t('regNetworkFail');
+    return;
+   }finally{
+    if(regTimer)clearTimeout(regTimer);
+   }
+   const regJson=await regRes.json().catch(()=>({}));
+   if(regRes.status===409){
+    $('beginError').textContent=t('duplicateLogin');
+    return;
+   }
+   if(!regRes.ok||!regJson?.user_id){
+    $('beginError').textContent=describeRegError(regJson?.error);
+    return;
+   }
+   if(regJson?.school?.id){
+    targetSchoolId=regJson.school.id;
+    state.school=targetSchoolId;
+    if(!Array.isArray(state.cloudSchools))state.cloudSchools=[];
+    if(!state.cloudSchools.some(s=>s.id===targetSchoolId))state.cloudSchools.push(regJson.school);
+   }
+   let sessionObj=regJson?.session||null;
+   if(!sessionObj?.access_token){
+    const parsedLogin=normalizeLoginIdentifier(loginVal);
+    if(parsedLogin.valid){
+     const signRes=await fetch(`${cloudCfg.url}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{apikey:cloudCfg.publishableKey,'Content-Type':'application/json'},
+      body:JSON.stringify({email:parsedLogin.email,password}),
+     }).catch(()=>null);
+     if(signRes?.ok)sessionObj=await signRes.json().catch(()=>null);
+    }
+   }
+   if(!sessionObj?.access_token){
+    $('beginError').textContent=t('regSessionMissing');
+    return;
+   }
+   writeStoreItem(cloudSessionKey,JSON.stringify(sessionObj));
+   writeStoreItem('smartmaktab.cloud.last_org.v1',targetSchoolId);
   }
 
   if(!targetSchoolId&&newSchoolPayload){
@@ -705,13 +816,22 @@ $('begin').addEventListener('click',async()=>{
    state.school=slugId;
   }
 
+  const finalIsUuid=/^[0-9a-f-]{36}$/i.test(targetSchoolId);
   const row=roster.get(state.primary);
   const roles=[state.primary,...state.extras].map(id=>{
    const item=roster.get(id);
    const customTitle=(id==='school-five-method-groups'&&state.customMethodName)?state.customMethodName:roleTitle(id);
    return {id,path:item.path,title:customTitle};
   });
-  const schools=Object.fromEntries(roles.map(role=>[role.id,state.schools[role.id]||targetSchoolId]));
+  const resolveExtraSchool=id=>{
+   const chosen=state.schools[id];
+   if(!chosen)return targetSchoolId;
+   if(finalIsUuid&&!/^[0-9a-f-]{36}$/i.test(chosen)){
+    return findCloudSchoolMatch(chosen)?.id||targetSchoolId;
+   }
+   return chosen;
+  };
+  const schools=Object.fromEntries(roles.map(role=>[role.id,resolveExtraSchool(role.id)]));
   const workspace={primary:state.primary,schools,roles};
   const unifiedProfile={
    fullName,
@@ -735,7 +855,7 @@ $('begin').addEventListener('click',async()=>{
   }
 
   const nativeOrigin=location.protocol==='smapp:'||location.hostname==='appassets.androidplatform.net';
-  const embeddedOnly=useFileViewer||(!nativeOrigin&&navigator.onLine===false&&!isUuidSchool&&!newSchoolPayload);
+  const embeddedOnly=useFileViewer||(!nativeOrigin&&navigator.onLine===false&&!finalIsUuid&&!newSchoolPayload);
   const activeSchoolName=resolveSchoolTitle(schools[row.id]);
   const intro=brandSplash.play('school',{school:activeSchoolName,role:roles[0].title,lang});
   if(embeddedOnly)void getPack().catch(()=>{});

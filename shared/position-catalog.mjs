@@ -140,11 +140,12 @@ export function normalizeLoginIdentifier(raw) {
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     return { valid: ok, error: ok ? '' : 'invalid_email', email, display: email };
   }
-  // Normalize phone or plain login: strip spaces, +, parens, hyphens if phone-like digits, else lowercase safe handle
+  // Normalize phone or plain login: strip spaces, +, parens, hyphens if phone-like digits (canonicalizing +992XXXXXXXXX), else lowercase safe handle
   const digitsOnly = text.replace(/[\s+()-]/g, '');
+  const tjDigits = /^992(\d{9})$/.test(digitsOnly) ? digitsOnly.slice(3) : digitsOnly;
   let handle = '';
-  if (/^\d{7,15}$/.test(digitsOnly)) {
-    handle = digitsOnly;
+  if (/^\d{7,15}$/.test(tjDigits)) {
+    handle = tjDigits;
   } else {
     handle = text.toLowerCase().replace(/\s+/g, '');
   }
