@@ -54,7 +54,8 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
  .sm-app-layout .workspace-summary{margin-top:6px;gap:8px}
  .sm-app-layout .workspace-summary .metric{padding:8px 10px}
  .sm-app-layout .workspace-summary .metric b{font-size:1rem}
- .sm-app-layout article[data-sm-screen]>.sm-screen:not(.sm-screen-current),.sm-app-layout article[data-sm-screen]:not([data-sm-screen=""])>:not(.sm-screen-current){display:none!important}
+ .sm-app-layout article[data-sm-screen]>.sm-screen:not(.sm-screen-current),.sm-app-layout article[data-sm-screen]:not([data-sm-screen=""])>:not(.sm-screen-current):not(#licenseGateBanner){display:none!important}
+ .sm-app-layout article[data-sm-screen]>#licenseGateBanner[hidden],.sm-app-layout article[data-sm-screen="cloudWorkspacePanel"]>#licenseGateBanner{display:none!important}
  .sm-view-bar{flex:none;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:6px clamp(12px,2.5vw,28px);font-size:.86rem;font-weight:650}
  .sm-module-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:2px 0 12px}
  .sm-module-grid:empty,.sm-shortcuts:empty,.role-forms-bar:empty{display:none}

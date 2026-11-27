@@ -337,8 +337,18 @@ test('Stage 2 browser: Director "Корбарон" module manages users, devices
       if (url.includes('/functions/v1/admin-users')) {
         const body = JSON.parse(req.postData() || '{}');
         rpcCalls.push(['admin-users', body]);
+        if (body.action === 'manager_reset_password') {
+          return json({
+            ok: true,
+            action: body.action,
+            user_id: body.user_id,
+            org_id: body.org_id,
+            full_name: 'Алиева Мадина',
+            temporary_password: 'SM-TEST-4829',
+          });
+        }
         if (body.action === 'manager_delete_user') {
-          managedUsers = managedUsers.filter(u => u.membership_id !== body.membership_id);
+          managedUsers = managedUsers.filter(u => u.user_id !== body.user_id);
         }
         return json({ ok: true, action: body.action });
       }
@@ -381,30 +391,30 @@ test('Stage 2 browser: Director "Корбарон" module manages users, devices
     await page.waitForFunction(() => (document.getElementById('smUsersPanel')?.textContent || '').includes('Алиева Мадина'));
 
     // Reset password -> displays SM-XXXX-XXXX box
-    await page.locator(`[data-usr-act="reset-pass"][data-mem="${teacherMemId}"]`).click();
+    await page.locator(`[data-usr-reset-pass="${teacherUid}"]`).click();
     await page.locator('#smUsersPanel .sm-issued-box code').waitFor();
     const issuedCode = await page.locator('#smUsersPanel .sm-issued-box code').textContent();
     assert.match(issuedCode || '', /^SM-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
 
     // Reset devices -> clears active devices badge
-    await page.locator(`[data-usr-act="reset-devices"][data-mem="${teacherMemId}"]`).click();
+    await page.locator(`[data-usr-reset-dev="${teacherMemId}"]`).click();
     await page.waitForFunction(() => (document.getElementById('smUsersPanel')?.textContent || '').includes('0/4'));
 
     // Disable user -> shows Фаъол кардан
-    await page.locator(`[data-usr-act="toggle-active"][data-mem="${teacherMemId}"]`).click();
+    await page.locator(`[data-usr-toggle="0"][data-mem="${teacherMemId}"]`).click();
     await page.waitForFunction(id => {
-      const btn = document.querySelector(`[data-usr-act="toggle-active"][data-mem="${id}"]`);
-      return btn && /Фаъол/i.test(btn.textContent || '');
+      const btn = document.querySelector(`[data-usr-toggle="1"][data-mem="${id}"]`);
+      return Boolean(btn && /Фаъол/i.test(btn.textContent || ''));
     }, teacherMemId);
 
     // Delete user -> row disappears
-    await page.locator(`[data-usr-act="delete"][data-mem="${teacherMemId}"]`).click();
+    await page.locator(`[data-usr-delete="${teacherUid}"]`).click();
     await page.waitForFunction(() => !(document.getElementById('smUsersPanel')?.textContent || '').includes('Алиева Мадина'));
 
-    assert.ok(rpcCalls.some(([k, b]) => k === 'admin-users' && b.action === 'manager_reset_password' && b.membership_id === teacherMemId));
+    assert.ok(rpcCalls.some(([k, b]) => k === 'admin-users' && b.action === 'manager_reset_password' && b.user_id === teacherUid));
     assert.ok(rpcCalls.some(([k, b]) => k === 'reset_devices' && b.p_membership_id === teacherMemId));
     assert.ok(rpcCalls.some(([k, b]) => k === 'set_active' && b.p_membership_id === teacherMemId && b.p_active === false));
-    assert.ok(rpcCalls.some(([k, b]) => k === 'admin-users' && b.action === 'manager_delete_user' && b.membership_id === teacherMemId));
+    assert.ok(rpcCalls.some(([k, b]) => k === 'admin-users' && b.action === 'manager_delete_user' && b.user_id === teacherUid));
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
