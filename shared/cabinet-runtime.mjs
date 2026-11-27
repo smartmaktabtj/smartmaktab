@@ -63,7 +63,7 @@ export const tabStorage={
 };
 export function saveActiveResume({role='',school='',lang='tg',route=''}){
  if(offlineViewer||!routePattern.test(route))return;
- const safeLang=lang==='ru'?'ru':'tg';
+ const safeLang='tg';
  const payload={role,school,lang:safeLang,route,savedAt:Date.now()};
  persistentStore.setItem(activeKey,JSON.stringify(payload));
  try{sqlite()?.saveResumeSession?.(role,school,safeLang,route);}catch{}
@@ -73,10 +73,10 @@ export function clearActiveResume(){
  try{sqlite()?.clearResumeRoute?.();}catch{}
 }
 export const cabinetPageURL=viewerContext?new URL(viewerContext.path, 'https://sm-preview.invalid/'):
- offlineViewer?new URL(document.querySelector('meta[name="smartmaktab-path"]')?.content||'onboarding/index.html','https://sm-preview.invalid/'):new URL(location.href);
+ offlineViewer?new URL(document.querySelector('meta[name="smartmaktab-path"]')?.content||'index.html','https://sm-preview.invalid/'):new URL(location.href);
 if(viewerContext?.school)cabinetPageURL.searchParams.set('school',viewerContext.school);
-if(viewerContext?.lang==='tg'||viewerContext?.lang==='ru')cabinetPageURL.searchParams.set('lang',viewerContext.lang);
-const fragment=cabinetPageURL.pathname.match(/^(.*\/)(?:cabinets|onboarding)\//)?.[1]??'/';
+cabinetPageURL.searchParams.set('lang','tg');
+const fragment=cabinetPageURL.pathname.match(/^(.*\/)cabinets\//)?.[1]??'/';
 export const appRoot=new URL(fragment,cabinetPageURL);
 export function openCabinetView(url){
  if(!offlineViewer){location.assign(url);return;}

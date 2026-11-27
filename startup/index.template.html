@@ -88,24 +88,22 @@
 </style></head><body><div class="shell" id="startupShell" data-screen="0">
 <header class="top"><a href="./index.html" class="brand"><span class="logo" aria-hidden="true">S</span>SmartMaktab</a>
 <div class="startup-actions">
-<details id="startupUpdateMenu" class="sm-upd-menu"><summary class="theme-toggle" id="startupUpdateBtn" title="Обновление / Навсозӣ"><span aria-hidden="true">↻</span> <span data-tg="Навсозӣ">Обновление</span><span id="startupUpdateDot" class="sm-upd-badge" hidden></span></summary><div>
-<button type="button" id="updAppBtn" class="button alt" data-tg="Навсозии барнома">Обновление приложения</button>
-<button type="button" id="updContentBtn" class="button alt" data-tg="Навсозии мавод">Обновление материалов</button>
-<button type="button" id="updWinBtn" class="button alt" data-tg="Боргирӣ барои Windows (.exe)">Скачать для Windows (.exe)</button>
+<details id="startupUpdateMenu" class="sm-upd-menu"><summary class="theme-toggle" id="startupUpdateBtn" title="Навсозӣ"><span aria-hidden="true">↻</span> <span data-tg="Навсозӣ">Навсозӣ</span><span id="startupUpdateDot" class="sm-upd-badge" hidden></span></summary><div>
+<button type="button" id="updAppBtn" class="button alt" data-tg="Навсозии барнома">Навсозии барнома</button>
+<button type="button" id="updWinBtn" class="button alt" data-tg="Боргирӣ барои Windows (.exe)">Боргирӣ барои Windows (.exe)</button>
 <p id="updStatusLine" class="small" style="margin:2px 4px 0" hidden></p>
 </div></details>
-<button type="button" id="themeToggle" class="theme-toggle">Ночной режим</button>
-<select id="lang" class="language" aria-label="Язык / Забон"><option value="tg">Тоҷикӣ</option><option value="ru">Русский</option></select>
+<button type="button" id="themeToggle" class="theme-toggle">Реҷаи шабона</button>
 </div></header>
 
-<ol id="regProgress" class="progress" aria-label="Қадамҳо / Шаги" hidden>
-<li data-mark="1" data-tg="Вазифаи асосӣ">Основная</li>
-<li data-mark="2" data-tg="Иловагӣ ва нарх">Доп. и сумма</li>
-<li data-mark="3" data-tg="Маълумот">Анкета</li>
-<li data-mark="4" data-tg="Мактаб">Школа</li>
+<ol id="regProgress" class="progress" aria-label="Қадамҳо" hidden>
+<li data-mark="1" data-tg="Вазифаи асосӣ">Вазифаи асосӣ</li>
+<li data-mark="2" data-tg="Иловагӣ ва нарх">Иловагӣ ва нарх</li>
+<li data-mark="3" data-tg="Маълумот">Маълумот</li>
+<li data-mark="4" data-tg="Мактаб">Мактаб</li>
 </ol>
 
-<p id="viewerNotReady" class="note" style="padding:8px 18px" role="status" data-tg="Агар танҳо тасвир намоён бошад ва тугмаҳо кор накунанд, пешнамоиши кории SmartMaktab-ро кушоед.">Если показано только изображение страницы и кнопки не отвечают, откройте рабочий предпросмотр «SmartMaktab — рабочая версия».</p>
+<p id="viewerNotReady" class="note" style="padding:8px 18px" role="status" data-tg="Агар танҳо тасвир намоён бошад ва тугмаҳо кор накунанд, пешнамоиши кории SmartMaktab-ро кушоед.">Агар танҳо тасвир намоён бошад ва тугмаҳо кор накунанд, пешнамоиши кории SmartMaktab-ро кушоед.</p>
 
 <main class="panel" id="wizard" inert>
 <!-- STEP 0: LOGIN + REGISTER + MAORIF/RAESAT LOGIN -->
@@ -113,157 +111,157 @@
 <div class="setup-step-body">
 <form id="loginForm" class="auth-card" autocomplete="on">
 <div>
-<h2 id="loginTitle" style="padding:0;margin-bottom:4px" data-tg="Воридшавӣ ба SmartMaktab">Вход в SmartMaktab</h2>
-<p id="loginSubtitle" class="small" data-tg="Логин, рақами телефон ё Email ва пароли худро ворид кунед.">Введите логин, номер телефона или Email и пароль.</p>
+<h2 id="loginTitle" style="padding:0;margin-bottom:4px" data-tg="Воридшавӣ ба SmartMaktab">Воридшавӣ ба SmartMaktab</h2>
+<p id="loginSubtitle" class="small" data-tg="Логин, рақами телефон ё Email ва пароли худро ворид кунед.">Логин, рақами телефон ё Email ва пароли худро ворид кунед.</p>
 </div>
-<label class="field"><span data-tg="Логин, телефон ё Email">Логин, телефон или Email</span><input id="loginIdentifier" type="text" autocomplete="username" placeholder="alijon, 927001122 ё email"></label>
-<label class="field"><span data-tg="Парол">Пароль</span><input id="loginPassword" type="password" autocomplete="current-password"></label>
+<label class="field"><span data-tg="Логин, телефон ё Email">Логин, телефон ё Email</span><input id="loginIdentifier" type="text" autocomplete="username" placeholder="alijon, 927001122 ё email"></label>
+<label class="field"><span data-tg="Парол">Парол</span><input id="loginPassword" type="password" autocomplete="current-password"></label>
 <p class="error" id="loginError" role="status"></p>
-<button type="submit" id="loginSubmit" class="button full" data-tg="Ворид шудан">Войти</button>
+<button type="submit" id="loginSubmit" class="button full" data-tg="Ворид шудан">Ворид шудан</button>
 <div id="schoolAuthExtras">
-<div class="auth-divider"><span data-tg="ё">или</span></div>
-<button type="button" id="goToRegister" class="button alt full" data-tg="Бақайдгирӣ">Зарегистрироваться</button>
-<button type="button" id="goAuthorityLogin" class="button alt full" style="margin-top:8px" data-tg="Вуруд барои Мудири маориф ва Сардори раёсат">Вход для Мудири маориф и Сардори раёсат</button>
+<div class="auth-divider"><span data-tg="ё">ё</span></div>
+<button type="button" id="goToRegister" class="button alt full" data-tg="Бақайдгирӣ">Бақайдгирӣ</button>
+<button type="button" id="goAuthorityLogin" class="button alt full" style="margin-top:8px" data-tg="Вуруд барои Маориф ва Раёсат">Вуруд барои Маориф ва Раёсат</button>
 </div>
-<button type="button" id="backAuthorityLogin" class="button alt full" hidden data-tg="← Бозгашт ба вуруди мактаб">← Вернуться к обычному входу</button>
+<button type="button" id="backAuthorityLogin" class="button alt full" hidden data-tg="← Бозгашт ба вуруди мактаб">← Бозгашт ба вуруди мактаб</button>
 </form>
 </div>
 </section>
 
 <!-- STEP 1: PRIMARY SCHOOL POSITION (20 positions) -->
 <section data-step="1" hidden>
-<h2 tabindex="-1" data-tg="Вазифаи асосиро интихоб кунед">Выберите основную должность</h2>
+<h2 tabindex="-1" data-tg="Вазифаи асосиро интихоб кунед">Вазифаи асосиро интихоб кунед</h2>
 <div class="setup-step-body">
-<p class="intro" data-tg="Як вазифаи асосии мактабро интихоб кунед.">Выберите одну основную школьную должность.</p>
+<p class="intro" data-tg="Як вазифаи асосии мактабро интихоб кунед.">Як вазифаи асосии мактабро интихоб кунед.</p>
 <div id="primaryChoices" class="choices"></div>
 </div>
 <div class="foot">
-<button type="button" class="button alt" data-back="0" data-tg="Бозгашт">Назад</button>
-<button type="button" class="button" id="toExtras" disabled data-tg="Идома">Далее</button>
+<button type="button" class="button alt" data-back="0" data-tg="Бозгашт">Бозгашт</button>
+<button type="button" class="button" id="toExtras" disabled data-tg="Идома">Идома</button>
 </div>
 </section>
 
 <!-- STEP 2: COMPATIBLE EXTRA POSITIONS + ALIYA (+30) + TOTAL PRICE -->
 <section data-step="2" hidden>
-<h2 tabindex="-1" data-tg="Вазифаҳои иловагӣ ва хидматҳо">Дополнительные должности и услуги</h2>
+<h2 tabindex="-1" data-tg="Вазифаҳои иловагӣ ва хидматҳо">Вазифаҳои иловагӣ ва хидматҳо</h2>
 <div class="setup-step-body">
 <p id="mainRole" class="intro"></p>
 <div class="statusbar" style="margin-bottom:8px">
-<p class="small" data-tg="Танҳо вазифаҳои бо ҳам мувофиқ нишон дода мешаванд. Ин қадамро гузаронидан мумкин аст.">Показаны только совместимые должности. Этот шаг можно пропустить.</p>
+<p class="small" data-tg="Танҳо вазифаҳои бо ҳам мувофиқ нишон дода мешаванд. Ин қадамро гузаронидан мумкин аст.">Танҳо вазифаҳои бо ҳам мувофиқ нишон дода мешаванд. Ин қадамро гузаронидан мумкин аст.</p>
 <output class="count" id="extraCount" aria-live="polite">0</output>
 </div>
-<p id="noExtras" class="note" hidden data-tg="Барои ин вазифа интихоби вазифаи иловагӣ дастрас нест.">Для выбранной должности дополнительные должности недоступны.</p>
+<p id="noExtras" class="note" hidden data-tg="Барои ин вазифа интихоби вазифаи иловагӣ дастрас нест.">Барои ин вазифа интихоби вазифаи иловагӣ дастрас нест.</p>
 <div id="extraChoices" class="choices"></div>
 <div class="aliya-card">
-<label><input type="checkbox" id="aliyaAddonToggle"><div><strong data-tg="Функсияи Алия (ёрдамчии интеллектуалӣ)">Функция Алия (интеллектуальный помощник)</strong><span class="small" data-tg="Ихтиёрӣ барои ҳамаи вазифаҳо: кӯмак дар ҳуҷҷатҳо ва китобхона">По желанию для любой должности: помощь с документами и библиотекой</span></div></label>
+<label><input type="checkbox" id="aliyaAddonToggle"><div><strong data-tg="Функсияи Алия (ёрдамчии интеллектуалӣ)">Функсияи Алия (ёрдамчии интеллектуалӣ)</strong><span class="small" data-tg="Ихтиёрӣ барои ҳамаи вазифаҳо: кӯмак дар ҳуҷҷатҳо ва китобхона">Ихтиёрӣ барои ҳамаи вазифаҳо: кӯмак дар ҳуҷҷатҳо ва китобхона</span></div></label>
 <span class="price-pill">+30 сомонӣ</span>
 </div>
 <div class="total-bar">
-<span class="small" id="priceWarning" data-tg="Моҳи 1-ум ройгон (30 рӯз) · Баъд барои 3, 6, 9, 12 моҳ тахфиф то 15%. Ҳар вазифаи иловагӣ ва Алия ба маблағ илова мешавад.">1-й месяц бесплатно (30 дней) · Далее скидка до 15% за 3, 6, 9, 12 мес. Каждая доп. должность и Алия увеличивают стоимость.</span>
+<span class="small" id="priceWarning" data-tg="Моҳи 1-ум ройгон (30 рӯз) · Баъд барои 3, 6, 9, 12 моҳ тахфиф то 15%. Ҳар вазифаи иловагӣ ва Алия ба маблағ илова мешавад.">Моҳи 1-ум ройгон (30 рӯз) · Баъд барои 3, 6, 9, 12 моҳ тахфиф то 15%. Ҳар вазифаи иловагӣ ва Алия ба маблағ илова мешавад.</span>
 <span class="total-val" id="totalPriceAmount">Ҳамагӣ: 0 сомонӣ / моҳ</span>
 </div>
 </div>
 <div class="foot">
-<button type="button" class="button alt" data-back="1" data-tg="Бозгашт">Назад</button>
-<button type="button" class="button" id="toProfile" data-tg="Идома">Далее</button>
+<button type="button" class="button alt" data-back="1" data-tg="Бозгашт">Бозгашт</button>
+<button type="button" class="button" id="toProfile" data-tg="Идома">Идома</button>
 </div>
 </section>
 
 <!-- STEP 3: PERSONAL PROFILE + CREDENTIALS -->
 <section data-step="3" hidden>
-<h2 tabindex="-1" data-tg="Маълумоти шахсӣ ва ҳисоб">Личные данные и учётная запись</h2>
+<h2 tabindex="-1" data-tg="Маълумоти шахсӣ ва ҳисоб">Маълумоти шахсӣ ва ҳисоб</h2>
 <div class="setup-step-body">
 <p id="mainFormRole" class="intro"></p>
 <form id="primaryForm" inert autocomplete="off">
 <div class="inputs">
-<label class="field"><span data-tg="Ном">Имя</span><input id="firstName" required maxlength="60"></label>
-<label class="field"><span data-tg="Насаб">Фамилия</span><input id="lastName" required maxlength="60"></label>
-<label class="field"><span data-tg="Номи падар">Отчество</span><input id="middleName" maxlength="60"></label>
-<label class="field"><span data-tg="Соли таваллуд">Год рождения</span><input id="birthYear" type="number" min="1940" max="2015" required placeholder="1985"></label>
-<label class="field"><span data-tg="Ҷинс">Пол</span><select id="genderSelect" required><option value="" data-tg="Интихоб кунед">Выберите</option><option value="female" data-tg="Зан">Женский</option><option value="male" data-tg="Мард">Мужской</option></select></label>
-<label class="field"><span data-tg="Ихтисос (аз рӯи диплом)">Специальность</span><input id="specialtyInput" required maxlength="100"></label>
-<label class="field"><span data-tg="Собиқаи кор дар соҳаи маориф (сол)">Стаж работы в образовании (лет)</span><input id="eduYearsInput" type="number" min="0" max="70" required placeholder="5"></label>
-<label class="field"><span data-tg="Маълумот (таҳсилот)">Образование</span><select id="educationSelect" required><option value="" data-tg="Интихоб кунед">Выберите</option><option value="higher" data-tg="Олӣ">Высшее</option><option value="bachelor" data-tg="Бакалавр">Бакалавр</option><option value="specialist" data-tg="Мутахассис">Специалист</option><option value="master" data-tg="Магистр">Магистр</option><option value="vocational" data-tg="Миёнаи касбӣ">Среднее профессиональное</option><option value="other" data-tg="Дигар">Другое</option></select></label>
+<label class="field"><span data-tg="Ном">Ном</span><input id="firstName" required maxlength="60"></label>
+<label class="field"><span data-tg="Насаб">Насаб</span><input id="lastName" required maxlength="60"></label>
+<label class="field"><span data-tg="Номи падар">Номи падар</span><input id="middleName" maxlength="60"></label>
+<label class="field"><span data-tg="Соли таваллуд">Соли таваллуд</span><input id="birthYear" type="number" min="1940" max="2015" required placeholder="1985"></label>
+<label class="field"><span data-tg="Ҷинс">Ҷинс</span><select id="genderSelect" required><option value="" data-tg="Интихоб кунед">Интихоб кунед</option><option value="female" data-tg="Зан">Зан</option><option value="male" data-tg="Мард">Мард</option></select></label>
+<label class="field"><span data-tg="Ихтисос (аз рӯи диплом)">Ихтисос (аз рӯи диплом)</span><input id="specialtyInput" required maxlength="100"></label>
+<label class="field"><span data-tg="Собиқаи кор дар соҳаи маориф (сол)">Собиқаи кор дар соҳаи маориф (сол)</span><input id="eduYearsInput" type="number" min="0" max="70" required placeholder="5"></label>
+<label class="field"><span data-tg="Маълумот (таҳсилот)">Маълумот (таҳсилот)</span><select id="educationSelect" required><option value="" data-tg="Интихоб кунед">Интихоб кунед</option><option value="higher" data-tg="Олӣ">Олӣ</option><option value="bachelor" data-tg="Бакалавр">Бакалавр</option><option value="specialist" data-tg="Мутахассис">Мутахассис</option><option value="master" data-tg="Магистр">Магистр</option><option value="vocational" data-tg="Миёнаи касбӣ">Миёнаи касбӣ</option><option value="other" data-tg="Дигар">Дигар</option></select></label>
 </div>
-<label class="field" id="customMethodWrap" hidden style="margin-top:10px"><span data-tg="Номи иттиҳодияи методии шумо">Название вашего методического объединения</span><input id="customMethodNameInput" maxlength="120" placeholder="Масалан: Иттиҳодияи методии фанҳои дақиқ"></label>
+<label class="field" id="customMethodWrap" hidden style="margin-top:10px"><span data-tg="Номи иттиҳодияи методии шумо">Номи иттиҳодияи методии шумо</span><input id="customMethodNameInput" maxlength="120" placeholder="Масалан: Иттиҳодияи методии фанҳои дақиқ"></label>
 <fieldset class="choice-set" style="margin-top:10px">
-<legend data-tg="Донистани забонҳо (якчанд интихоб)">Знание языков (можно несколько)</legend>
+<legend data-tg="Донистани забонҳо (якчанд интихоб)">Донистани забонҳо (якчанд интихоб)</legend>
 <div class="checkboxes" id="langChoices">
-<label><input type="checkbox" value="tg"><span data-tg="Тоҷикӣ">Таджикский</span></label>
-<label><input type="checkbox" value="ru"><span data-tg="Русӣ">Русский</span></label>
-<label><input type="checkbox" value="en"><span data-tg="Англисӣ">Английский</span></label>
-<label><input type="checkbox" value="uz"><span data-tg="Ӯзбекӣ">Узбекский</span></label>
-<label><input type="checkbox" value="fa"><span data-tg="Форсӣ">Персидский</span></label>
-<label><input type="checkbox" value="de"><span data-tg="Олмонӣ">Немецкий</span></label>
-<label><input type="checkbox" value="other"><span data-tg="Дигар">Другой</span></label>
+<label><input type="checkbox" value="tg"><span data-tg="Тоҷикӣ">Тоҷикӣ</span></label>
+<label><input type="checkbox" value="ru"><span data-tg="Русӣ">Русӣ</span></label>
+<label><input type="checkbox" value="en"><span data-tg="Англисӣ">Англисӣ</span></label>
+<label><input type="checkbox" value="uz"><span data-tg="Ӯзбекӣ">Ӯзбекӣ</span></label>
+<label><input type="checkbox" value="fa"><span data-tg="Форсӣ">Форсӣ</span></label>
+<label><input type="checkbox" value="de"><span data-tg="Олмонӣ">Олмонӣ</span></label>
+<label><input type="checkbox" value="other"><span data-tg="Дигар">Дигар</span></label>
 </div>
-<label class="field" id="otherLangWrap" hidden style="margin-top:8px"><span data-tg="Забони дигар">Другой язык</span><input id="otherLangInput" maxlength="60"></label>
+<label class="field" id="otherLangWrap" hidden style="margin-top:8px"><span data-tg="Забони дигар">Забони дигар</span><input id="otherLangInput" maxlength="60"></label>
 </fieldset>
 <div id="primaryRoleFields" class="profile-fields"></div>
 <div class="row" style="margin-top:12px;border-color:#72a78c">
-<h3 data-tg="Логин ва парол барои воридшавӣ (ҳатмӣ барои ҳисоби абрӣ)">Логин и пароль для входа (для облачного аккаунта)</h3>
-<p class="small" style="margin-top:4px" data-tg="Барои он ки баъдтар дар ҳамин дастгоҳ ё дастгоҳи дигар ворид шавед, логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.">Чтобы входить на этом и других устройствах, придумайте логин (латиницей a-z, телефон или Email) и пароль (минимум 6 символов).</p>
+<h3 data-tg="Логин ва парол барои воридшавӣ (ҳатмӣ барои ҳисоби абрӣ)">Логин ва парол барои воридшавӣ (ҳатмӣ барои ҳисоби абрӣ)</h3>
+<p class="small" style="margin-top:4px" data-tg="Барои он ки баъдтар дар ҳамин дастгоҳ ё дастгоҳи дигар ворид шавед, логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.">Барои он ки баъдтар дар ҳамин дастгоҳ ё дастгоҳи дигар ворид шавед, логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.</p>
 <div class="inputs">
-<label class="field"><span data-tg="Логин (лотинӣ), телефон ё Email *">Логин (латиницей), телефон или Email *</span><input id="regLogin" maxlength="100" placeholder="alijon ё 927001122"></label>
-<label class="field"><span data-tg="Парол (ҳадди ақал 6 аломат) *">Пароль (минимум 6 символов) *</span><input id="regPassword" type="password" minlength="6" autocomplete="new-password"></label>
-<label class="field"><span data-tg="Тасдиқи парол *">Подтвердите пароль *</span><input id="regPassword2" type="password" minlength="6" autocomplete="new-password"></label>
+<label class="field"><span data-tg="Логин (лотинӣ), телефон ё Email *">Логин (лотинӣ), телефон ё Email *</span><input id="regLogin" maxlength="100" placeholder="alijon ё 927001122"></label>
+<label class="field"><span data-tg="Парол (ҳадди ақал 6 аломат) *">Парол (ҳадди ақал 6 аломат) *</span><input id="regPassword" type="password" minlength="6" autocomplete="new-password"></label>
+<label class="field"><span data-tg="Тасдиқи парол *">Тасдиқи парол *</span><input id="regPassword2" type="password" minlength="6" autocomplete="new-password"></label>
 </div>
 </div>
-<p class="note" style="margin-top:8px" data-tg="Барои вазифаҳои иловагӣ маълумоти вазифаи асосӣ худкор гузошта мешавад. Онҳоро баъдтар дар бахши «Профил» тағйир додан мумкин аст.">Для дополнительных должностей данные подставятся автоматически из основной. Позже их можно изменить в разделе «Профиль».</p>
+<p class="note" style="margin-top:8px" data-tg="Барои вазифаҳои иловагӣ маълумоти вазифаи асосӣ худкор гузошта мешавад. Онҳоро баъдтар дар бахши «Профил» тағйир додан мумкин аст.">Барои вазифаҳои иловагӣ маълумоти вазифаи асосӣ худкор гузошта мешавад. Онҳоро баъдтар дар бахши «Профил» тағйир додан мумкин аст.</p>
 </form>
 </div>
 <div class="foot">
-<button type="button" class="button alt" data-back="2" data-tg="Бозгашт">Назад</button>
-<button type="button" class="button" id="toSchoolStep" data-tg="Ба интихоби мактаб">Далее: школа</button>
+<button type="button" class="button alt" data-back="2" data-tg="Бозгашт">Бозгашт</button>
+<button type="button" class="button" id="toSchoolStep" data-tg="Ба интихоби мактаб">Ба интихоби мактаб</button>
 <p class="error" role="status" id="primaryError"></p>
 </div>
 </section>
 
 <!-- STEP 4: SCHOOL SELECTION -->
 <section data-step="4" hidden>
-<h2 tabindex="-1" data-tg="Мактабро интихоб кунед">Выберите школу</h2>
+<h2 tabindex="-1" data-tg="Мактабро интихоб кунед">Мактабро интихоб кунед</h2>
 <div class="setup-step-body">
-<p class="intro" data-tg="Мактабро аз рӯи рақам ё ном ҷустуҷӯ кунед.">Найдите школу по номеру или названию.</p>
+<p class="intro" data-tg="Мактабро аз рӯи рақам ё ном ҷустуҷӯ кунед.">Мактабро аз рӯи рақам ё ном ҷустуҷӯ кунед.</p>
 <div class="inputs">
-<label class="field"><span data-tg="Ҷустуҷӯи мактаб">Поиск школы</span><input id="schoolSearch" type="search" maxlength="80" placeholder="МТМУ № 88" autocomplete="off"></label>
-<label class="field"><span data-tg="Мактаби асосӣ">Основная школа</span><select id="schoolChoice"></select></label>
+<label class="field"><span data-tg="Ҷустуҷӯи мактаб">Ҷустуҷӯи мактаб</span><input id="schoolSearch" type="search" maxlength="80" placeholder="МТМУ № 88" autocomplete="off"></label>
+<label class="field"><span data-tg="Мактаби асосӣ">Мактаби асосӣ</span><select id="schoolChoice"></select></label>
 </div>
 <p id="schoolNotice" class="small" role="status" style="margin-top:6px"></p>
-<div style="margin-top:6px"><button type="button" class="button alt" id="retryBootstrapBtn" hidden data-tg="Аз нав бор кардани рӯйхати мактабҳо">Повторить загрузку списка школ</button></div>
-<p id="demoModeWarning" class="note" hidden role="status" style="margin-top:8px;padding:8px 10px;border:1px solid #d59b3c;border-radius:8px" data-tg="Диққат: логин ва парол ворид нашудаанд. Барнома танҳо дар реҷаи демои маҳаллӣ кушода мешавад ва ба пойгоҳи додаҳо сабт намешавад. Барои сохтани ҳисоб ба қадами «Маълумот» баргардед.">Внимание: логин и пароль не указаны. Будет открыт только локальный демо-режим без сохранения аккаунта в базе данных. Чтобы создать аккаунт, вернитесь к анкете.</p>
+<div style="margin-top:6px"><button type="button" class="button alt" id="retryBootstrapBtn" hidden data-tg="Аз нав бор кардани рӯйхати мактабҳо">Аз нав бор кардани рӯйхати мактабҳо</button></div>
+<p id="demoModeWarning" class="note" hidden role="status" style="margin-top:8px;padding:8px 10px;border:1px solid #d59b3c;border-radius:8px" data-tg="Диққат: логин ва парол ворид нашудаанд. Барнома танҳо дар реҷаи демои маҳаллӣ кушода мешавад ва ба пойгоҳи додаҳо сабт намешавад. Барои сохтани ҳисоб ба қадами «Маълумот» баргардед.">Диққат: логин ва парол ворид нашудаанд. Барнома танҳо дар реҷаи демои маҳаллӣ кушода мешавад ва ба пойгоҳи додаҳо сабт намешавад. Барои сохтани ҳисоб ба қадами «Маълумот» баргардед.</p>
 <div style="margin-top:8px">
-<button type="button" class="button alt" id="toggleNewSchoolBtn" data-tg="Мактаби мо дар рӯйхат нест — Илова кардан">Нашей школы нет в списке — Добавить</button>
+<button type="button" class="button alt" id="toggleNewSchoolBtn" data-tg="Мактаби мо дар рӯйхат нест — Илова кардан">Мактаби мо дар рӯйхат нест — Илова кардан</button>
 </div>
 <div id="newSchoolForm" class="row" hidden style="margin-top:10px">
-<p class="small" data-tg="Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:">Выберите область, район, джамоат и село, затем укажите название вашей школы:</p>
+<p class="small" data-tg="Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:">Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:</p>
 <div class="inputs">
-<label class="field"><span data-tg="Вилоят / Шаҳр">Область / Регион</span><select id="newSchoolRegion"></select></label>
-<label class="field"><span data-tg="Шаҳр / Ноҳия (Маориф)">Город / Район (Маориф)</span><input id="newSchoolDistrict" list="newSchoolDistrictList" maxlength="120" placeholder="Хуҷанд / Данғара"></label>
+<label class="field"><span data-tg="Вилоят / Шаҳр">Вилоят / Шаҳр</span><select id="newSchoolRegion"></select></label>
+<label class="field"><span data-tg="Шаҳр / Ноҳия (Маориф)">Шаҳр / Ноҳия (Маориф)</span><input id="newSchoolDistrict" list="newSchoolDistrictList" maxlength="120" placeholder="Хуҷанд / Данғара"></label>
 <datalist id="newSchoolDistrictList"></datalist>
-<label class="field"><span data-tg="Ҷамоат / Шаҳрак">Джамоат / Посёлок</span><select id="newSchoolJamoatSelect"></select></label>
-<label class="field" id="newSchoolJamoatCustomWrap" hidden><span data-tg="Номи ҷамоат (дастӣ)">Название джамоата (вручную)</span><input id="newSchoolJamoatCustom" maxlength="120" placeholder="Ҷамоати ..."></label>
-<label class="field"><span data-tg="Деҳа / Маҳалла / Шаҳр">Село / Населённый пункт</span><select id="newSchoolVillageSelect"></select></label>
-<label class="field" id="newSchoolVillageCustomWrap" hidden><span data-tg="Номи деҳа (дастӣ)">Название села (вручную)</span><input id="newSchoolVillageCustom" maxlength="120" placeholder="Деҳаи ..."></label>
-<label class="field"><span data-tg="Номи мактаб">Название школы</span><input id="newSchoolName" maxlength="160" placeholder="МТМУ № 99"></label>
-<label class="field"><span data-tg="Рамзи мактаб (ихтиёрӣ)">Код школы (необязательно)</span><input id="newSchoolCode" maxlength="40" placeholder="SM-099"></label>
+<label class="field"><span data-tg="Ҷамоат / Шаҳрак">Ҷамоат / Шаҳрак</span><select id="newSchoolJamoatSelect"></select></label>
+<label class="field" id="newSchoolJamoatCustomWrap" hidden><span data-tg="Номи ҷамоат (дастӣ)">Номи ҷамоат (дастӣ)</span><input id="newSchoolJamoatCustom" maxlength="120" placeholder="Ҷамоати ..."></label>
+<label class="field"><span data-tg="Деҳа / Маҳалла / Шаҳр">Деҳа / Маҳалла / Шаҳр</span><select id="newSchoolVillageSelect"></select></label>
+<label class="field" id="newSchoolVillageCustomWrap" hidden><span data-tg="Номи деҳа (дастӣ)">Номи деҳа (дастӣ)</span><input id="newSchoolVillageCustom" maxlength="120" placeholder="Деҳаи ..."></label>
+<label class="field"><span data-tg="Номи мактаб">Номи мактаб</span><input id="newSchoolName" maxlength="160" placeholder="МТМУ № 99"></label>
+<label class="field"><span data-tg="Рамзи мактаб (ихтиёрӣ)">Рамзи мактаб (ихтиёрӣ)</span><input id="newSchoolCode" maxlength="40" placeholder="SM-099"></label>
 </div>
 </div>
-<details id="extraSchoolBlock" class="row" hidden><summary data-tg="Мактаби дигар барои вазифаи иловагӣ">Другая школа для дополнительной должности</summary><div id="extraSchools" class="inputs"></div></details>
+<details id="extraSchoolBlock" class="row" hidden><summary data-tg="Мактаби дигар барои вазифаи иловагӣ">Мактаби дигар барои вазифаи иловагӣ</summary><div id="extraSchools" class="inputs"></div></details>
 <div id="results"></div>
 </div>
 <div class="foot">
-<button type="button" class="button alt" data-back="3" data-tg="Бозгашт ба маълумот">Назад к анкете</button>
+<button type="button" class="button alt" data-back="3" data-tg="Бозгашт ба маълумот">Бозгашт ба маълумот</button>
 <button type="button" class="button" id="begin" disabled>Оғоз</button>
 <p class="error" role="status" id="beginError"></p>
 </div>
 </section>
 </main>
-<footer class="ownership-notice no-print"><span data-tg="© Парвиз Шарипов. Ҳамаи ҳуҷҷатҳо ва ҳуқуқҳо ҳифз шудаанд.">© Парвиз Шарипов. Все права защищены.</span></footer>
-<noscript><p class="note">Для работы SmartMaktab включите JavaScript. / Барои кор JavaScript-ро фаъол кунед.</p></noscript>
+<footer class="ownership-notice no-print"><span data-tg="© Парвиз Шарипов. Ҳамаи ҳуҷҷатҳо ва ҳуқуқҳо ҳифз шудаанд.">© Парвиз Шарипов. Ҳамаи ҳуҷҷатҳо ва ҳуқуқҳо ҳифз шудаанд.</span></footer>
+<noscript><p class="note">Барои кори SmartMaktab JavaScript-ро фаъол кунед.</p></noscript>
 </div>
-<section id="offlineDeck" hidden aria-label="SmartMaktab"><div id="offlineDeckHeader"><button type="button" class="button alt" id="offlineBack" data-tg="Бозгашт">← Назад</button><strong id="offlineTitle">SmartMaktab</strong><p id="offlineNavStatus" class="note" role="status"></p></div><div id="offlineFrameSlot"></div></section>
+<section id="offlineDeck" hidden aria-label="SmartMaktab"><div id="offlineDeckHeader"><button type="button" class="button alt" id="offlineBack" data-tg="Бозгашт">Бозгашт</button><strong id="offlineTitle">SmartMaktab</strong><p id="offlineNavStatus" class="note" role="status"></p></div><div id="offlineFrameSlot"></div></section>
 <dialog id="brandSplash" class="brand-splash" aria-labelledby="splashTitle" aria-describedby="splashCaption">
 <div class="splash-stage"><svg class="splash-art" aria-hidden="true" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid slice"><ellipse class="splash-orbit" cx="500" cy="304" rx="368" ry="171" transform="rotate(-12 500 304)" pathLength="1"/><ellipse class="splash-orbit secondary" cx="500" cy="310" rx="408" ry="209" transform="rotate(13 500 310)" pathLength="1"/><path class="splash-route" pathLength="1" d="M0 467C163 467 184 229 360 229h83c44 0 58-50 108-50h89c154 0 180-74 360-74"/><path class="splash-route alt" pathLength="1" d="M0 497h103c112 0 111-95 231-95h149c70 0 83-40 150-40h85c143 0 146-30 282-30"/><circle class="splash-spark" cx="184" cy="308" r="4"/><circle class="splash-spark later" cx="769" cy="175" r="3"/><circle class="splash-spark later" cx="720" cy="419" r="2.6"/></svg>
 <div class="splash-content"><p id="splashKind" class="splash-kind"></p><h2 id="splashTitle" class="splash-word" aria-label="SmartMaktab"><span id="splashLetters" class="splash-letters" aria-hidden="true"></span><span id="splashCaret" class="splash-caret" aria-hidden="true"></span></h2><p id="splashCaption" class="splash-caption"></p><p id="splashRole" class="splash-role" hidden></p><div class="splash-meter" aria-hidden="true"></div></div>
-<button type="button" id="splashSkip" class="splash-skip" autofocus>Пропустить</button></div></dialog>
+<button type="button" id="splashSkip" class="splash-skip" autofocus>Гузаштан</button></div></dialog>
 <template id="sm-portable-pdf" data-pack="@@PDF_DATA@@"></template><template id="sm-embedded-pages" data-pack="@@VIEWER_DATA@@"></template><template id="roleData" data-roles="@@ROLE_DATA@@"></template>@@STARTUP_JS@@</body></html>

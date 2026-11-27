@@ -8,15 +8,16 @@ const route=(name,query='?school=demo-88')=>`${base}/cabinets/school/${name}.htm
 const input=(p,name)=>p.locator(`[data-school-form-field=${name}]`);
 const preview=(p,name='Пешнамоиш')=>p.locator('#schoolForms').getByRole('button',{name,exact:true});
 async function selectClass(p){await p.locator('#schoolForms [data-class-grade]').selectOption('5');await p.locator('#schoolForms [data-class-letter]').selectOption('Ғ');}
-test('Tajik default, saved optional Russian, copyright, and no demo UI across all 54 pages',async()=>{
+test('Tajik-only UI, copyright, and no demo UI across all 24 pages',async()=>{
  const browser=await chromium.launch();try{
   const page=await browser.newPage({reducedMotion:'reduce',serviceWorkers:'block'});await page.goto(base);
-  assert.equal(await page.locator('html').getAttribute('lang'),'tg');assert.equal(await page.locator('#lang').inputValue(),'tg');
+  assert.equal(await page.locator('html').getAttribute('lang'),'tg');
+  assert.equal(await page.locator('#lang').count(),0);
   assert.match(await page.locator('.ownership-notice').innerText(),/Парвиз Шарипов.*Ҳамаи .*ҳуқуқҳо/);
-  await page.locator('#lang').selectOption('ru');await page.reload();assert.equal(await page.locator('html').getAttribute('lang'),'ru');
-  await page.goto(route('records-clerk'));assert.equal(await page.locator('html').getAttribute('lang'),'ru');
-  await page.locator('#cabinetLang').selectOption('tg');await page.goto(base);assert.equal(await page.locator('html').getAttribute('lang'),'tg');
+  await page.goto(route('records-clerk'));assert.equal(await page.locator('html').getAttribute('lang'),'tg');
+  assert.equal(await page.locator('#cabinetLang').count(),0);
   const list=JSON.parse(await readFile(new URL('../shared/cabinet-registry.json',import.meta.url),'utf8'));
+  assert.equal(list.length,24);
   for(const row of list){const raw=(await readFile(new URL(`../${row.path}`,import.meta.url),'utf8')).split('<!-- SMARTMAKTAB INLINE START -->')[0];assert.match(raw,/© Парвиз Шарипов/);assert.doesNotMatch(raw,/(?:\bDEMO\b|\bДемо[-\s])/iu);}
  }finally{await browser.close();}
 });
@@ -30,7 +31,6 @@ test('certificate and characteristic use typed fields, variants and printing, ne
   const sheet=page.locator('.school-form-sheet');await sheet.waitFor();assert.match(await sheet.innerText(),/Маълумотнома барои озмун/);assert.match(await sheet.innerText(),/<b>Намунаи шартӣ<\/b>/);assert.equal(await sheet.locator('b').count(),0);assert.match(await sheet.innerText(),/МТМУ № 88 · Синф 5Ғ/);
   await page.evaluate(()=>{window.print=()=>{window.printTarget=document.querySelector('.sm-target-print')?.textContent;window.dispatchEvent(new Event('afterprint'));};});
   await sheet.getByRole('button',{name:'Чоп',exact:true}).click();assert.match(await page.evaluate(()=>window.printTarget),/Озмуни китобхонӣ/);
-  await page.locator('#cabinetLang').selectOption('ru');await sheet.getByRole('heading',{name:'Справка для конкурса'}).waitFor();
   await page.goto(route('class-teacher','?school=demo-88&lang=tg'));
   await homeView(page);await page.getByRole('button',{name:'Тавсифнома',exact:true}).click();await selectClass(page);
   await input(page,'person').fill('Шахси шартӣ');await input(page,'behavior').fill('Хуб');await input(page,'details').fill('Дар машғулиятҳо фаъол аст.');await input(page,'achievement').fill('Хониши китоб');await preview(page).click();

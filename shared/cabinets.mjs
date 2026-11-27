@@ -11,22 +11,21 @@ export function readTeacherWorkplaces(){
   try{ const value=JSON.parse(tabStorage.getItem(teacherWorkplacesKey));return Array.isArray(value)?[...new Set(value.filter(id=>validSchools.has(id)))]:[]; }catch{return [];}
 }
 const searchParams=cabinetPageURL.searchParams;
-let lang=getLanguage(searchParams.get('lang'));
+let lang='tg';
+saveLanguage('tg');
 const texts=[...document.querySelectorAll('[data-tg]')].map(node=>[node,node.textContent]);
 const placeholders=[...document.querySelectorAll('[data-tg-placeholder]')].map(node=>[node,node.placeholder]);
 const dict={
-  selectSchool:['Сначала выберите школу, затем откройте её кабинет.','Аввал мактабро интихоб кунед, баъд утоқи онро кушоед.'],
-  noResults:['Пункты не найдены. Попробуйте другой запрос.','Натиҷа ёфт нашуд. Калимаи дигарро ҷустуҷӯ кунед.'],
-  count:['Показано страниц: ','Саҳифаҳои намоён: '],
-  noneSchool:['Школа не выбрана','Мактаб интихоб нашудааст']
+  selectSchool:'Аввал мактабро интихоб кунед, баъд утоқи онро кушоед.',
+  noResults:'Натиҷа ёфт нашуд. Калимаи дигарро ҷустуҷӯ кунед.',
+  count:'Саҳифаҳои намоён: ',
+  noneSchool:'Мактаб интихоб нашудааст'
 };
-const t=key=>dict[key][lang==='tg'?1:0];
+const t=key=>dict[key];
 const section=$('cabinetSection'), query=$('cabinetQuery');
 const listLinks=[...document.querySelectorAll('[data-cabinet-link]')];
 const sections=[...document.querySelectorAll('[data-cabinet-section]')];
 const listPath=new Map(listLinks.map(link=>[link,link.getAttribute('href')]));
-const backLinks=[...document.querySelectorAll('a[href*="onboarding/index.html"]')];
-const baseBack=new Map(backLinks.map(link=>[link,link.getAttribute('href')]));
 const profileKey='smartmaktab.profile.v1';
 function readSavedProfile(){
   try{const raw=persistentStore.getItem(profileKey)||tabStorage.getItem(profileKey);return raw?JSON.parse(raw):null;}catch{return null;}
@@ -49,8 +48,9 @@ function schoolDisplayName(id){
 }
 export let selectedDemoSchool=fromURL ? Object.freeze({id:fromURL,name:schoolDisplayName(fromURL)}) : null;
 const cabinet=document.querySelector('[data-cabinet-id]');
+const actionsEl=document.querySelector('header.top .actions');
 const themeButton=cabinet?document.createElement('button'):null;
-if(themeButton){themeButton.id='themeToggle';themeButton.type='button';themeButton.className='theme-toggle';$('cabinetLang').before(themeButton);}
+if(themeButton&&actionsEl){themeButton.id='themeToggle';themeButton.type='button';themeButton.className='theme-toggle';actionsEl.append(themeButton);}
 const theme=themeButton?installTheme(themeButton,{initial:viewerContext?.theme,onChange:publishTheme}):null;
 const workspaceKey='smartmaktab.demo.workspace.v1';
 function getWorkspace(){
@@ -82,7 +82,9 @@ const switchLabel=switcher?document.createElement('label'):null;
 const switchCaption=switcher?document.createElement('span'):null;
 if(switcher){
   switcher.id='workspaceSwitch';switcher.className='lang-select';switchLabel.className='workspace-switch';
-  switchLabel.append(switchCaption,switcher);$('cabinetLang')?.before(switchLabel);
+  switchLabel.append(switchCaption,switcher);
+  const anchor=$('themeToggle')||actionsEl?.lastElementChild;
+  if(anchor)anchor.before(switchLabel);else actionsEl?.append(switchLabel);
   switcher.addEventListener('change',()=>{
     const selected=workspace.roles.find(role=>role.id===switcher.value);
     if(!selected||selected.id===cabinet.dataset.cabinetId)return;
@@ -95,14 +97,13 @@ if(switcher){
 }
 function refreshSwitcher(){
   if(!switcher)return;
-  switchCaption.textContent=lang==='tg'?'Утоқҳои ман':'Мои кабинеты';
-  switcher.replaceChildren(...workspace.roles.map(role=>new Option(role.title+(role.id===workspace.primary?(lang==='tg'?' · асосӣ':' · основной'):''),role.id)));
+  switchCaption.textContent='Утоқҳои ман';
+  switcher.replaceChildren(...workspace.roles.map(role=>new Option(role.title+(role.id===workspace.primary?' · асосӣ':''),role.id)));
   switcher.value=cabinet.dataset.cabinetId;
 }
-if(cabinet)for(const link of backLinks)link.hidden=true;
 function refreshLinks(){
   const chosen=cabinet?fromURL:'';
-  for(const [link,original] of [...listPath,...baseBack]) {
+  for(const [link,original] of listPath) {
     const dest=new URL(original,cabinetPageURL);
     dest.searchParams.set('lang',lang);
     if(chosen && (!link.dataset.group || link.dataset.group==='school')) dest.searchParams.set('school',chosen);
@@ -133,10 +134,9 @@ function refreshDirectory(){
   $('directoryStatus').textContent=count?(t('count')+count):t('noResults');
 }
 function applyLanguage(){
-  document.documentElement.lang=lang;theme?.refresh();
-  if($('cabinetLang')) $('cabinetLang').value=lang;
-  for(const [node,ru] of texts) node.textContent=lang==='tg'?node.dataset.tg:ru;
-  for(const [node,ru] of placeholders)node.placeholder=lang==='tg'?node.dataset.tgPlaceholder:ru;
+  document.documentElement.lang='tg';theme?.refresh();
+  for(const [node] of texts) node.textContent=node.dataset.tg;
+  for(const [node] of placeholders)node.placeholder=node.dataset.tgPlaceholder;
   if($('selectedSchool')) $('selectedSchool').textContent=schoolDisplayName(fromURL)||t('noneSchool');
   refreshLinks(); refreshDirectory(); refreshSwitcher();refreshRoleUI();
   document.dispatchEvent(new Event('cabinet:language'));
@@ -147,11 +147,10 @@ function readHash(){
 }
 section?.addEventListener('change',()=>{ try { history.replaceState(null,'', section.value==='all'?'#all':`#${section.value}`); } catch {} refreshDirectory(); });
 query?.addEventListener('input',refreshDirectory);
-$('cabinetLang')?.addEventListener('change',event=>{lang=event.target.value==='ru'?'ru':'tg';saveLanguage(lang);publishLanguage(lang);cabinetPageURL.searchParams.set('lang',lang);if(!offlineViewer)try{history.replaceState(null,'',cabinetPageURL);}catch{}if(workspace&&cabinet)saveActiveResume({role:cabinet.dataset.cabinetId,school:fromURL,lang,route:currentResumeRoute()});applyLanguage();});
 window.addEventListener('hashchange',readHash);
 
-const roleCopy={saved:['Анкета заполнена. Теперь выберите школу.','Варақа пур шуд. Акнун мактабро интихоб кунед.'],invalid:['Заполните обязательные поля.','Майдонҳои ҳатмиро пур кунед.'],choose:['Выберите из списка','Аз рӯйхат интихоб кунед'],nothing:['Школы не найдены.','Мактаб ёфт нашуд.'],selected:['Выбрано: ','Интихоб шуд: ']};
-const rt=key=>roleCopy[key][lang==='tg'?1:0];
+const roleCopy={saved:'Варақа пур шуд. Акнун мактабро интихоб кунед.',invalid:'Майдонҳои ҳатмиро пур кунед.',choose:'Аз рӯйхат интихоб кунед',nothing:'Мактаб ёфт нашуд.',selected:'Интихоб шуд: '};
+const rt=key=>roleCopy[key];
 const roleForm=$('roleIntakeForm'),picker=$('institutionPicker');
 let intakeReady=!!fromURL,intakeNote='';
 function takeSetup(){

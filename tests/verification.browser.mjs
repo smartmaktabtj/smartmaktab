@@ -5,7 +5,17 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { fillStartupProfile } from './onboarding-fixtures.mjs';
-import { canonicalRegionName } from '../shared/tajikistan-locations.mjs';
+
+function canonicalRegionName(raw) {
+  const s = String(raw || '').trim();
+  const low = s.toLocaleLowerCase();
+  if (low.includes('суғд') || low.includes('сугд') || low.includes('согд')) return 'Суғд';
+  if (low.includes('хатлон')) return 'Хатлон';
+  if (low.includes('душанбе')) return 'Душанбе';
+  if (low.includes('вмкб') || low.includes('бадахшон')) return 'ВМКБ';
+  if (low.includes('тобе')) return 'Ноҳияҳои тобеи ҷумҳурӣ';
+  return s;
+}
 
 const base = process.env.SM_BASE_URL ?? 'http://localhost:4180';
 const repoRoot = resolve(new URL('..', import.meta.url).pathname);

@@ -74,7 +74,7 @@ export function setupPhase2Panels(article, docs, school, views) {
   const isAuthority = cabinetId.startsWith('office-') || cabinetId.startsWith('maorif-') || cabinetId.startsWith('raesat-');
   const isDirector = cabinetId === 'school-director';
   const isTeacher = cabinetId === 'school-teacher';
-  const isAccountant = cabinetId === 'school-accountant' || cabinetId === 'office-accounting';
+  const isAccountant = cabinetId === 'school-accountant';
   const isClassOrQuality = ['school-class-teacher', 'school-education-quality', 'school-academic-deputy', 'school-primary-deputy', 'school-director', 'school-teacher'].includes(cabinetId);
   const canStudents = !isAuthority && ['school-director', 'school-academic-deputy', 'school-primary-deputy', 'school-upbringing-deputy', 'school-records-clerk', 'school-class-teacher', 'school-education-quality', 'school-sozmon', 'school-girls-council-chair', 'school-psychologist', 'school-teacher'].includes(cabinetId);
   const canWorkload = !isAuthority && ['school-teacher', 'school-director', 'school-academic-deputy', 'school-primary-deputy', 'school-accountant'].includes(cabinetId);

@@ -1,5 +1,4 @@
 node_modules/
-dev/supabase-config.json
 .env
 .env.*
 supabase/.temp/
@@ -13,6 +12,10 @@ supabase/.temp/
 *.key
 native/windows/web/
 native/windows/release/
+native/windows/unsigned-release/
+native/windows/node_modules/
+native/admin-windows/release/
+native/admin-windows/node_modules/
 native/android/.gradle/
 native/android/**/build/
 native/android/app/src/main/assets/web/
@@ -20,15 +23,5 @@ native/android/app/src/main/assets/windows-release-repository.txt
 native/android/local.properties
 native/android/release/
 
-# Generated pilot files and signing material
-native/windows/pilot-release/
-native/windows/content-config.json
-*.smupdate-key
-
-# Admin Desktop Electron staging & builds
-admin-desktop/bundled/
-admin-desktop/release/
-admin-desktop/unsigned-release/
-admin-desktop/node_modules/
 __pycache__/
 *.pyc

@@ -1,7 +1,7 @@
 import {unzipSync,zipSync,strFromU8,strToU8} from 'fflate';
 import {normalizeClasses} from './class-picker.mjs';
-import {documentBase64} from '../templates/student-enrollment-bytes.mjs';
-import contract from '../templates/student_enrollment_certificate.tg.json' with {type:'json'};
+import {documentBase64} from './student-enrollment-bytes.mjs';
+import contract from './student_enrollment_certificate.tg.json' with {type:'json'};
 const {fields}=contract;
 export const pilotCertificateFields=fields;
 const xmlEscape=text=>text.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));

@@ -1,0 +1,1 @@
+{"name":"smartmaktab-admin","productName":"SmartMaktab Admin","version":"1.0.0","description":"SmartMaktab Admin","author":"Парвиз Шарипов","private":true,"main":"main.cjs","scripts":{"dist":"electron-builder --config builder.cjs --win nsis --x64 --publish never"},"devDependencies":{"electron":"22.3.27","electron-builder":"26.18.0"}}
