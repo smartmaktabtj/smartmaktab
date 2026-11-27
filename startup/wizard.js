@@ -77,7 +77,8 @@ const empty=()=>({
 let state=empty();
 let step=wantsRegister?1:0;
 let authorityLoginMode=false;
-let lang=getLanguage(params.get('lang'));
+let lang='tg';
+saveLanguage('tg');
 
 const copy={
  primary:['Основная', 'Асосӣ'],
@@ -142,10 +143,6 @@ if(updMenu){
 
  $('updAppBtn')?.addEventListener('click',async()=>{
   updMenu.open=false;
-  if(globalThis.SmartMaktabAndroid){
-   globalThis.SmartMaktabAndroid.postMessage(JSON.stringify({action:'checkAssetUpdate',lang}));
-   return;
-  }
   if(globalThis.SmartMaktabWindows?.checkAppRelease){
    const r=await globalThis.SmartMaktabWindows.checkAppRelease().catch(()=>({status:'network'}));
    if(r.status==='available'&&r.downloadUrl){
@@ -153,28 +150,21 @@ if(updMenu){
    }else{
     updStatusLine.hidden=false;
     updStatusLine.textContent=r.status==='up-to-date'
-     ?(lang==='tg'?`Нусхаи навтарин (${r.currentVersion}) насб аст.`:`Установлена актуальная версия (${r.currentVersion}).`)
-     :(lang==='tg'?'Санҷиш имконнопазир (интернет лозим).':'Проверка недоступна (нужен интернет).');
+     ?`Нусхаи навтарин (${r.currentVersion}) насб аст.`
+     :'Санҷиш имконнопазир (интернет лозим).';
     updMenu.open=true;
    }
    return;
   }
-  try{const reg=await navigator.serviceWorker?.getRegistration?.();await reg?.update?.();}catch{}
+  try{
+   const regs=await navigator.serviceWorker?.getRegistrations?.();
+   if(regs)await Promise.all(regs.map(r=>r.unregister()));
+   const keys=await globalThis.caches?.keys?.();
+   if(keys)await Promise.all(keys.map(k=>caches.delete(k)));
+  }catch{}
+  if(globalThis.SmartMaktabAndroid){location.reload();return;}
   updStatusLine.hidden=false;
-  updStatusLine.textContent=lang==='tg'?'Барнома санҷида шуд.':'Приложение проверено.';
-  updMenu.open=true;
- });
-
- $('updContentBtn')?.addEventListener('click',async()=>{
-  updMenu.open=false;
-  if(globalThis.SmartMaktabAndroid){
-   globalThis.SmartMaktabAndroid.postMessage(JSON.stringify({action:'downloadContentUpdate',lang}));
-   return;
-  }
-  updStatusLine.hidden=false;
-  updStatusLine.textContent=lang==='tg'
-   ?'Барои навсозии мавод пас аз воридшавӣ ба утоқ тугмаи ↻-ро пахш кунед.'
-   :'Для применения .smupdate войдите в кабинет и нажмите ↻ → Обновление материалов.';
+  updStatusLine.textContent='Барнома санҷида шуд.';
   updMenu.open=true;
  });
 
@@ -325,8 +315,8 @@ function resultCard(id){
 
 function render(){
  $('startupShell').dataset.screen=String(step);
- document.documentElement.lang=lang;$('lang').value=lang;startupTheme.refresh();
- for(const [node,ru] of staticText)node.textContent=lang==='tg'?node.dataset.tg:ru;
+ document.documentElement.lang='tg';startupTheme.refresh();
+ for(const [node] of staticText)node.textContent=node.dataset.tg;
 
  // Update auth screen mode text cleanly after staticText pass
  if(step===0){
@@ -510,7 +500,7 @@ $('loginForm')?.addEventListener('submit',async ev=>{
   const memberships=Array.isArray(ctx?.memberships)?ctx.memberships:[];
   const primaryMem=memberships[0]||null;
   if(authorityLoginMode){
-   const isAuth=Boolean(ctx?.is_super_admin)||memberships.some(m=>m.kind==='education_authority'||['office-head','raesat-head'].includes(m.primary_position)||['maorif','district_observer'].includes(m.role));
+   const isAuth=Boolean(ctx?.is_super_admin)||memberships.some(m=>m.kind==='education_authority'||['office-head','office-clerk','raesat-head','raesat-clerk'].includes(m.primary_position)||['maorif','authority_viewer','district_observer'].includes(m.role));
    if(!isAuth){
     $('loginError').textContent=t('authorityDenied');
     return;
@@ -557,7 +547,7 @@ $('loginForm')?.addEventListener('submit',async ev=>{
    writeStoreItem(profileStorageKey,JSON.stringify(savedProf));
 
    const targetRow=roster.get(roles[0].id);
-   const targetLang=ctx?.profile?.preferred_lang==='ru'?'ru':lang;
+   const targetLang='tg';
    const route=`${targetRow.path}?school=${primaryMem.organization_id}&lang=${targetLang}`;
    writeStoreItem(activeCabinetKey,JSON.stringify({role:roles[0].id,school:primaryMem.organization_id,lang:targetLang,route,savedAt:Date.now()}));
    try{globalThis.SmartMaktabSqlite?.saveResumeSession?.(roles[0].id,primaryMem.organization_id,targetLang,route);}catch{}
@@ -670,16 +660,6 @@ $('toSchoolStep').addEventListener('click',()=>{
 
 $('primaryForm').addEventListener('keydown',ev=>{
  if(ev.key==='Enter'&&ev.target instanceof HTMLInputElement&&!ev.isComposing){ev.preventDefault();$('toSchoolStep').click();}
-});
-
-$('lang').addEventListener('change',event=>{
- lang=event.target.value==='ru'?'ru':'tg';
- saveLanguage(lang);
- if(!useFileViewer){
-  const url=new URL(location.href);
-  if(url.searchParams.has('lang')){url.searchParams.set('lang',lang);try{history.replaceState(null,'',url);}catch{}}
- }
- render();
 });
 
 $('schoolSearch').addEventListener('input',fillSchoolChoices);

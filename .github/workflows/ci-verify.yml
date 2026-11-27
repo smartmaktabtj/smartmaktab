@@ -1,4 +1,4 @@
-name: SmartMaktab — проверка кода, браузера и Android Java
+name: SmartMaktab — санҷиши код, браузер ва Android Java
 on:
   pull_request:
     branches: [main]
@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
       - run: npm ci --no-audit --no-fund
       - run: |
-          for f in shared/*.mjs cabinets/school/*.mjs admin/*.mjs startup/wizard.js native/windows/main.cjs admin-desktop/*.cjs admin-desktop/*.mjs; do
+          for f in shared/*.mjs cabinets/school/*.mjs admin/*.mjs startup/wizard.js native/windows/*.cjs native/admin-windows/*.cjs; do
             node --check "$f"
           done
       - run: npm test
@@ -90,10 +90,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
@@ -103,9 +99,7 @@ jobs:
           accept-android-sdk-licenses: 'true'
           log-accepted-android-sdk-licenses: 'false'
       - run: |
-          npm ci --no-audit --no-fund
-          python3 scripts/build_startup.py
-          python3 scripts/stage-native-web.py native/android/app/src/main/assets/web
+          python3 scripts/stage-native-web.py native/android/app/src/main/assets
       - name: Compile Android Java sources (compile-only verification)
         run: |
           keytool -genkeypair -v -storetype JKS -keystore /tmp/ci-verify.jks \

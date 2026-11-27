@@ -7,14 +7,6 @@ import {
   canPositionVerifySchoolStaff,
   computeSubscriptionPackagePrice,
 } from '../shared/position-catalog.mjs';
-import {
-  canonicalRegionName,
-  flattenTerritorySeedRows,
-  getDistrictNames,
-  getJamoatsForDistrict,
-  getRegionNames,
-  getVillagesForJamoat,
-} from '../shared/tajikistan-locations.mjs';
 import { evaluateLicenseState, mountLicenseGate } from '../shared/license-guard.mjs';
 import { submitReceiptForVerification } from '../shared/ocr-receipt.mjs';
 
@@ -60,6 +52,7 @@ before(async () => {
     '../supabase/migrations/20261126000400_phase2_registries_payroll_grades_verification_hierarchy.sql',
     '../supabase/migrations/20261126000500_account_verification.sql',
     '../supabase/migrations/20261127000100_public_bootstrap_rpc.sql',
+    '../supabase/migrations/20261128000100_stage0_cleanup.sql',
   ]) {
     await db.exec(await read(m));
   }
@@ -92,25 +85,14 @@ before(async () => {
 
 after(() => db.close());
 
-test('Tajikistan locations catalog covers all 5 regions, districts, jamoats, villages and seed consistency', async () => {
-  const rows = flattenTerritorySeedRows();
-  assert.equal(rows.length, 958);
-  assert.deepEqual(getRegionNames(), ['Душанбе', 'Суғд', 'Хатлон', 'ВМКБ', 'Ноҳияҳои тобеи ҷумҳурӣ']);
-  assert.equal(canonicalRegionName('Вилояти Суғд'), 'Суғд');
-  assert.equal(canonicalRegionName('Вилояти Хатлон'), 'Хатлон');
-
-  const sughdDistricts = getDistrictNames('Вилояти Суғд');
-  assert.ok(sughdDistricts.includes('Хуҷанд'));
-  assert.ok(sughdDistricts.includes('Исфара'));
-  assert.ok(getJamoatsForDistrict('Вилояти Суғд', 'Исфара').includes('Ворух'));
-  assert.ok(getVillagesForJamoat('Суғд', 'Исфара', 'Ворух').includes('Ворух'));
-
-  // Seed SQL has 0 SM-001..SM-088 pre-seeded schools, 75 authorities, 958 locations, and zero writes to generated parent_kind
-  const seedSql = await read('../supabase/seed_tajikistan_schools.sql');
-  assert.match(seedSql, /delete\s+from\s+public\.organizations/i);
-  assert.equal((seedSql.match(/values\s*\([^;]*'education_authority'/gi) || []).length, 75);
-  assert.equal(/insert\s+into\s+public\.organizations[^;]*'school'/i.test(seedSql), false);
-  assert.equal(/parent_kind\s*=/.test(seedSql), false);
+test('Tajikistan locations table schema, Stage 0 tariff seed (24 positions), and generated parent_kind guard', async () => {
+  const bootstrap = (await as(0, () => q('select public.get_registration_bootstrap() as b'), 'anon'))[0].b;
+  assert.equal(bootstrap.tariffs.length, 20);
+  const allTariffs = await as(1, () => q('select position_code from public.role_tariffs order by sort_order'));
+  assert.equal(allTariffs.length, 24);
+  assert.ok(allTariffs.some(r => r.position_code === 'office-clerk'));
+  assert.ok(allTariffs.some(r => r.position_code === 'raesat-clerk'));
+  assert.ok(Array.isArray(bootstrap.locations));
 
   const mig5 = await read('../supabase/migrations/20261126000500_account_verification.sql');
   assert.equal(/\bparent_kind\s*=/.test(mig5), false);

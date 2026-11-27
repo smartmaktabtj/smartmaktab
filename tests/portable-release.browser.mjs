@@ -32,25 +32,27 @@ test('desktop: portable file opens Оғоз without native gzip, and opens separ
   assert.equal(await frame.locator('#smMainModules').isVisible(),true);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
-test('Android viewport: installable manifest assets exist and the cached PWA opens Оғоз offline',async()=>{
+test('Android viewport: manifest assets exist, self-cleaning SW unregisters, and online cabinets work on mobile',async()=>{
  const browser=await chromium.launch();
  try{
   const ctx=await browser.newContext({...devices['Pixel 7'],reducedMotion:'reduce'});
   await ctx.route('https://*.supabase.co/**',route=>route.abort());
   const page=await ctx.newPage();page.setDefaultTimeout(8000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(site);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
+  await page.goto(site);
   const manifest=await (await page.request.get(`${site}/manifest.webmanifest`)).json();
   assert.equal(manifest.display,'standalone');for(const icon of manifest.icons)assert.equal((await page.request.get(`${site}/${icon.src}`)).status(),200);
-  await ctx.setOffline(true);await page.reload();
+  const swRes=await page.request.get(`${site}/sw.js`);
+  assert.equal(swRes.status(),200);
+  assert.match(await swRes.text(),/unregister/);
   await (await ready(page)).click();
-  const frame=page.frameLocator('#offlineFrameSlot iframe');await frame.locator('#smMainModules').waitFor();
-  assert.equal(await frame.locator('#workspaceSchool').textContent(),'МТМУ № 88');
-  await frame.locator('#workspaceSettingsToggle').click();assert.equal(await frame.locator('#teacherSubjects').isVisible(),true);
-  assert.ok(await frame.locator('html').evaluate(node=>node.scrollWidth<=innerWidth));
-  await backView(frame);await frame.locator('#smMainModules [data-open-phase2="smGradesPanel"]').click();assert.equal(await frame.locator('#smGradesPanel').isVisible(),true);
-  assert.equal(await frame.locator('#teacherSubjects').isVisible(),false);assert.deepEqual(errors,[]);
-  await page.goto(`${site}/cabinets/maorif/subjects/informatics.html?school=demo-b&lang=tg`);
-  await page.frameLocator('#offlineFrameSlot iframe').locator('#workspaceSchool').waitFor({state:'attached'});
-  assert.equal(await page.frameLocator('#offlineFrameSlot iframe').locator('#workspaceSchool').textContent(),'МТМУ № 4');
+  await page.waitForURL('**/cabinets/school/teacher.html?school=demo-88&lang=tg');
+  assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
+  await page.locator('#workspaceSettingsToggle').click();assert.equal(await page.locator('#teacherSubjects').isVisible(),true);
+  assert.ok(await page.locator('html').evaluate(node=>node.scrollWidth<=innerWidth));
+  await backView(page);await page.locator('#smMainModules [data-open-phase2="smGradesPanel"]').click();assert.equal(await page.locator('#smGradesPanel').isVisible(),true);
+  assert.equal(await page.locator('#teacherSubjects').isVisible(),false);assert.deepEqual(errors,[]);
+  await page.goto(`${site}/cabinets/maorif/head.html?school=demo-b&lang=tg`);
+  await page.locator('#workspaceSchool').waitFor({state:'attached'});
+  assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 4');
  }finally{await browser.close();}
 });

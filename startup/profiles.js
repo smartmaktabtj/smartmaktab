@@ -1,22 +1,70 @@
 // Role-specific working controls and unified school directory helpers.
+const TAJIK_REGIONS=['Душанбе','Суғд','Хатлон','ВМКБ','Ноҳияҳои тобеи ҷумҳурӣ'];
+function canonicalRegionName(raw){
+ const s=String(raw||'').trim();
+ if(!s)return '';
+ const low=s.toLocaleLowerCase();
+ if(low.includes('душанбе'))return 'Душанбе';
+ if(low.includes('суғд')||low.includes('сугд')||low.includes('согд'))return 'Суғд';
+ if(low.includes('хатлон'))return 'Хатлон';
+ if(low.includes('вмкб')||low.includes('бадахшон')||low.includes('гбао'))return 'ВМКБ';
+ if(low.includes('тобеи')||low.includes('ррп')||low.includes('республик'))return 'Ноҳияҳои тобеи ҷумҳурӣ';
+ return s;
+}
+function stripDistrictPrefix(dist){
+ return String(dist||'').trim().toLocaleLowerCase().replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i,'').replace(/\s+/g,' ');
+}
+function getRegionNames(extraRows=[]){
+ const out=new Set(TAJIK_REGIONS);
+ for(const row of extraRows||[])if(row?.region_name)out.add(canonicalRegionName(row.region_name));
+ return [...out];
+}
+function getDistrictNames(regionRaw,extraRows=[]){
+ const reg=canonicalRegionName(regionRaw),out=new Set();
+ for(const row of extraRows||[]){
+  if((!reg||canonicalRegionName(row.region_name)===reg)&&row.district_name)out.add(String(row.district_name).trim());
+ }
+ return [...out].sort((a,b)=>a.localeCompare(b,'tg'));
+}
+function getJamoatsForDistrict(regionRaw,districtRaw,extraRows=[]){
+ const reg=canonicalRegionName(regionRaw),dist=String(districtRaw||'').trim(),distStripped=stripDistrictPrefix(dist),out=new Set();
+ for(const row of extraRows||[]){
+  const rowDist=String(row.district_name||'').trim();
+  const dOk=!dist||rowDist.toLocaleLowerCase()===dist.toLocaleLowerCase()||(distStripped&&stripDistrictPrefix(rowDist)===distStripped);
+  if((!reg||canonicalRegionName(row.region_name)===reg)&&dOk&&row.jamoat_name)out.add(String(row.jamoat_name).trim());
+ }
+ return [...out].sort((a,b)=>a.localeCompare(b,'tg'));
+}
+function getVillagesForJamoat(regionRaw,districtRaw,jamoatRaw,extraRows=[]){
+ const reg=canonicalRegionName(regionRaw),dist=String(districtRaw||'').trim(),distStripped=stripDistrictPrefix(dist),jam=String(jamoatRaw||'').trim(),out=new Set();
+ for(const row of extraRows||[]){
+  const rOk=!reg||canonicalRegionName(row.region_name)===reg;
+  const rowDist=String(row.district_name||'').trim();
+  const dOk=!dist||rowDist.toLocaleLowerCase()===dist.toLocaleLowerCase()||(distStripped&&stripDistrictPrefix(rowDist)===distStripped);
+  const jOk=!jam||String(row.jamoat_name||'').trim().toLocaleLowerCase()===jam.toLocaleLowerCase();
+  if(rOk&&dOk&&jOk&&row.village_name)out.add(String(row.village_name).trim());
+ }
+ return [...out].sort((a,b)=>a.localeCompare(b,'tg'));
+}
+
 const fieldCopy={
- loading:['Загрузка дополнительных полей…','Майдонҳои иловагӣ бор мешаванд…'],
- failed:['Не удалось открыть дополнительные поля.','Майдонҳои иловагӣ кушода нашуданд.'],
- required:['Заполните обязательные поля анкеты.','Майдонҳои ҳатмиро пур кунед.'],
- experience:['Стаж директором должен быть не больше общего стажа.','Собиқаи директорӣ набояд аз собиқаи умумӣ зиёд бошад.'],
- none:['Школы не найдены.','Мактаб ёфт нашуд.'],
- same:['Как у основной должности','Мисли вазифаи асосӣ'],
- pick:['Выберите школу','Мактабро интихоб кунед'],
- class:['Классы, в которых вы преподаёте','Синфҳое, ки дарс медиҳед'],
- other:['Укажите другой язык.','Забони дигарро нависед.'],
+ loading:'Майдонҳои иловагӣ бор мешаванд…',
+ failed:'Майдонҳои иловагӣ кушода нашуданд.',
+ required:'Майдонҳои ҳатмиро пур кунед.',
+ experience:'Собиқаи директорӣ набояд аз собиқаи умумӣ зиёд бошад.',
+ none:'Мактаб ёфт нашуд.',
+ same:'Мисли вазифаи асосӣ',
+ pick:'Мактабро интихоб кунед',
+ class:'Синфҳое, ки дарс медиҳед',
+ other:'Забони дигарро нависед.',
 };
-const fp=key=>fieldCopy[key][lang==='tg'?1:0];
+const fp=key=>fieldCopy[key];
 const docsForRole=new Map();
 const SKIP_DUPLICATE_KEYS=new Set([
  'first','last','directorFirst','directorLast','directorMiddle','directorBirth',
  'directorGender','directorSpecialty','directorEduYears','directorDiploma','directorOtherLanguage',
 ]);
-const localize=node=>{if(lang==='tg')for(const element of node.querySelectorAll('[data-tg]'))element.textContent=element.dataset.tg;};
+const localize=node=>{for(const element of node.querySelectorAll('[data-tg]'))element.textContent=element.dataset.tg;};
 function dataForRole(id){let fields=state.fields.get(id);if(!fields){fields=Object.create(null);state.fields.set(id,fields);}return fields;}
 function roleDoc(id,pack){
  if(!docsForRole.has(id))docsForRole.set(id,new DOMParser().parseFromString(pack.routes[roster.get(id).path].html,'text/html'));

@@ -30,10 +30,10 @@ async function openEmbedded(path,options={}){
  if(seq!==openSeq)return false;
  const route=typeof path==='string'&&Object.hasOwn(pack.routes,path)?pack.routes[path]:null;
  if(!route){
-  viewerNode('offlineNavStatus').hidden=false;viewerNode('offlineNavStatus').textContent=document.documentElement.lang==='tg'?'Ин бахш танҳо дар пешнамоиши корӣ дастрас аст.':'Этот раздел доступен только в рабочем предпросмотре.';
+  viewerNode('offlineNavStatus').hidden=false;viewerNode('offlineNavStatus').textContent='Ин бахш танҳо дар пешнамоиши корӣ дастрас аст.';
   return false;
  }
- const lang=validLanguage(options.lang)?options.lang:document.documentElement.lang;
+ const lang='tg';
  const school=/^[a-z0-9-]+$/i.test(options.school??'')?options.school:'';
  embeddedChannel=Array.from(crypto.getRandomValues(new Uint32Array(4)),item=>item.toString(16)).join('-');
  const ctx={path,channel:embeddedChannel,school,lang,hash:options.hash??'',store:embeddedStore,theme:startupTheme.mode()};
@@ -61,7 +61,6 @@ function closeEmbedded(){
 window.addEventListener('message',event=>{
  const info=event.data;
  if(!embeddedFrame||event.source!==embeddedFrame.contentWindow||info?.channel!==embeddedChannel)return;
- if(info.type==='language'&&validLanguage(info.value)){saveLanguage(info.value);applyViewerLanguage(info.value);}
  if(info.type==='theme')startupTheme.set(info.value);
  if(info.type==='reader-mode')viewerNode('offlineDeck').classList.toggle('reader-active',info.value===true);
  if(info.type==='open')openEmbedded(info.path,{lang:info.lang,school:info.school,hash:info.hash});
@@ -70,5 +69,3 @@ window.addEventListener('message',event=>{
  if(info.type==='store'&&typeof info.value==='string'&&info.value.length<=12000)embeddedStore[info.key]=info.value;
 });
 viewerNode('offlineBack').addEventListener('click',closeEmbedded);
-
-function applyViewerLanguage(value){$('lang').value=value;$('lang').dispatchEvent(new Event('change'));}

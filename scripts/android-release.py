@@ -60,7 +60,7 @@ if __name__=='__main__':
             hits=[x.replace(':','').lower() for x in re.findall(r'SHA256:\s*([A-Fa-f0-9:]{64,95})',output)]
             if hits!=[pin]: fail('Unexpected AAB signer')
             with zipfile.ZipFile(path) as archive:
-                if archive.testzip() or not {'BundleConfig.pb','base/manifest/AndroidManifest.xml','base/assets/web/index.html'}.issubset(archive.namelist()):fail('Invalid Android App Bundle structure')
+                if archive.testzip() or not {'BundleConfig.pb','base/manifest/AndroidManifest.xml','base/assets/windows-release-repository.txt'}.issubset(archive.namelist()):fail('Invalid Android App Bundle structure')
         output=root/'release';shutil.rmtree(output,ignore_errors=True);output.mkdir()
         dest=output/f'SmartMaktab-{env["SM_RELEASE_VERSION"]}-Android.{fmt.lower()}';shutil.copyfile(path,dest)
         (output/'SHA256SUMS.txt').write_text(f'{hashlib.sha256(dest.read_bytes()).hexdigest()}  {dest.name}\n',encoding='utf-8')

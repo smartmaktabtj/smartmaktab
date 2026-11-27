@@ -12,7 +12,7 @@ test('startup embeds exactly the active registry without publishing earlier vers
  assert.match(html,/id="themeToggle"/);
  assert.doesNotMatch(html,/@@ROLE_DATA@@|@@VIEWER_DATA@@|@@STARTUP_JS@@|<script[^>]+src=/);
  const embedded=JSON.parse(gunzipSync(Buffer.from(html.match(/id="sm-embedded-pages" data-pack="([^"]+)"/)[1],'base64')));
- assert.equal(Object.keys(embedded.routes).length,54);
+ assert.equal(Object.keys(embedded.routes).length,24);
  for(const row of JSON.parse(registry))assert.ok(embedded.routes[row.path],row.id);
  assert.equal(embedded.dashboard,undefined);
 });

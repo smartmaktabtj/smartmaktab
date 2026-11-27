@@ -1,14 +1,14 @@
-name: SmartMaktab — Windows для распространения (без подписи)
+name: SmartMaktab — Windows барои нашр (бе имзо)
 on:
   workflow_dispatch:
     inputs:
       windows_version:
-        description: 'Версия Windows (X.Y.Z)'
+        description: 'Версияи Windows (X.Y.Z)'
         type: string
         default: '1.0.0'
         required: true
       confirm_unsigned:
-        description: 'Подтвердите выпуск без подписи: напишите PUBLISH-UNSIGNED'
+        description: 'Барои нашр бе имзои рақамӣ PUBLISH-UNSIGNED нависед'
         type: string
         required: true
 permissions:
@@ -23,8 +23,6 @@ jobs:
     env:
       SM_RELEASE_VERSION: ${{ inputs.windows_version }}
       SM_CONFIRM_PUBLIC_UNSIGNED: ${{ inputs.confirm_unsigned }}
-      SM_CONTENT_PUBLIC_KEY: ${{ vars.SM_CONTENT_PUBLIC_KEY }}
-      SM_CONTENT_FEED: ${{ vars.SM_CONTENT_FEED }}
       MAY_PUBLISH: ${{ !github.event.repository.private && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     steps:
       - name: Check unsigned distribution inputs
@@ -33,7 +31,6 @@ jobs:
           if ($env:MAY_PUBLISH -cne 'true') { throw 'Use the default branch of the public repository that hosts the Android downloads' }
           if ($env:SM_CONFIRM_PUBLIC_UNSIGNED -cne 'PUBLISH-UNSIGNED') { throw 'Type PUBLISH-UNSIGNED to confirm an unsigned build for distribution' }
           if ($env:SM_RELEASE_VERSION -cnotmatch '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$') { throw 'Version must be X.Y.Z' }
-          if ([string]::IsNullOrWhiteSpace($env:SM_CONTENT_PUBLIC_KEY)) { throw 'Add repository variable SM_CONTENT_PUBLIC_KEY before building for USB updates' }
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -41,23 +38,10 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            native/windows/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Prepare and package Windows x64
+          cache-dependency-path: native/windows/package-lock.json
+      - name: Package Windows x64 and ia32
         shell: pwsh
         run: |
-          node scripts/windows-content.cjs configure
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm ci --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/build_startup.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/stage-native-web.py native/windows/web
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm --prefix native/windows ci --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location native/windows
@@ -155,14 +139,11 @@ jobs:
           test "$(sha256sum -- "$setup" | cut -d' ' -f1)" = "$(grep -F "  $setup" SHA256SUMS.txt | cut -d' ' -f1)"
           test "$(sha256sum -- "$exe64" | cut -d' ' -f1)" = "$(grep -F "  $exe64" SHA256SUMS.txt | cut -d' ' -f1)"
           test "$(sha256sum -- "$exe32" | cut -d' ' -f1)" = "$(grep -F "  $exe32" SHA256SUMS.txt | cut -d' ' -f1)"
-          # Check if release exists and delete it
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag exists, deleting..."
             gh release delete "$tag" --yes --cleanup-tag || true
             sleep 2
           fi
-          # Create new release
           gh release create "$tag" "$setup" "$exe64" "$exe32" SHA256SUMS.txt \
-            --target "$COMMIT" --title "SmartMaktab Windows $VERSION — без подписи (универсальный установщик)" \
+            --target "$COMMIT" --title "SmartMaktab Windows $VERSION — насбкунандаи универсалӣ (бе имзо)" \
             --latest=false \
-            --notes 'Главный файл: SmartMaktab-*-Windows-Setup-UNSIGNED.exe — универсальный установщик Windows 7/8.1/10/11. При установке сам определяет 32- или 64-битную Windows и ставит нужную версию. Отдельные x64 и ia32 тоже в релизе. Установщики не подписаны Authenticode. SmartScreen или политики организации могут заблокировать установку. Windows 7: нужен SP1 и обновления SHA-2 (KB3033920). Контрольные суммы SHA-256 в SHA256SUMS.txt. Для обновления материалов используйте подписанные пакеты .smupdate.' 
+            --notes 'Файли асосӣ: SmartMaktab-*-Windows-Setup-UNSIGNED.exe — насбкунандаи универсалӣ барои Windows 7/8.1/10/11 (32- ва 64-бита). Барнома мустақиман аз платформаи зиндаи SmartMaktab кор мекунад.'

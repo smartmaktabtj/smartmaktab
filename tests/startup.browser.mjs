@@ -12,7 +12,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   page.setDefaultTimeout(5500);
   const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>requests.push(request.url()));
   await page.route('https://*.supabase.co/**',route=>route.abort());
-  await page.goto(`${base}/?lang=ru`);
+  await page.goto(`${base}/?lang=tg`);
 
   // Step 0: Auth screen + authority toggle + update icon
   assert.equal(await page.locator('#loginForm').isVisible(),true);
@@ -31,7 +31,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   await page.locator('#toExtras').click();
   assert.equal(await page.locator('#extraChoices input').count(),0);
   assert.equal(await page.locator('#noExtras').isVisible(),true);
-  assert.match(await page.locator('#totalPriceAmount').textContent(),/50\s+сомони/);
+  assert.match(await page.locator('#totalPriceAmount').textContent(),/50\s+сомонӣ/);
   await page.locator('[data-step="2"] [data-back="1"]').click();
 
   // Facilities head (Group B) -> only Canteen head (1 extra)
@@ -60,18 +60,18 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   await page.locator(`#extraChoices input[value=${b}]`).check();
   await page.locator('#aliyaAddonToggle').check();
   // 50 (Director) + 40 (Academic Deputy) + 20 (Method Group) + 30 (Aliya) = 140 somoni
-  assert.match(await page.locator('#totalPriceAmount').textContent(),/140\s+сомони/);
+  assert.match(await page.locator('#totalPriceAmount').textContent(),/140\s+сомонӣ/);
 
   // Step 3: Unified personal profile + custom method name (demo-mode without credentials)
   await page.locator('#toProfile').click();
   assert.equal(await page.locator('#customMethodWrap').isVisible(),true);
-  await page.locator('#customMethodNameInput').fill('Методобъединение точных наук');
+  await page.locator('#customMethodNameInput').fill('Иттиҳодияи илмҳои дақиқ');
   await fillStartupProfile(page,{first:'Нав',last:'Озмоишӣ'});
   await page.locator('#toSchoolStep').click();
 
   // Step 4: School choice & summary
   assert.equal(await page.locator('#results .row').count(),3);
-  assert.match(await page.locator('#results').textContent(),/Методобъединение точных наук/);
+  assert.match(await page.locator('#results').textContent(),/Иттиҳодияи илмҳои дақиқ/);
   assert.equal(await page.locator('#results a').count(),0);
   assert.equal(await page.locator('#demoModeWarning').isVisible(),true);
   assert.equal(await page.locator('#retryBootstrapBtn').isVisible(),true);
@@ -82,7 +82,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   await page.locator('#begin').click();
 
   // Cabinet view: unified Profile drawer + Update icon + clean header workspace switcher
-  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=ru');
+  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=tg');
   await page.locator('#workspaceSwitch').waitFor();
   assert.deepEqual(await page.locator('#workspaceSwitch option').evaluateAll(nodes=>nodes.map(node=>node.value)),['school-director',a,b]);
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
@@ -97,9 +97,9 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
 
   await page.locator('#workspaceSwitch').selectOption(b);
-  await page.waitForURL('**/cabinets/school/five-method-groups.html?school=demo-88&lang=ru');
+  await page.waitForURL('**/cabinets/school/five-method-groups.html?school=demo-88&lang=tg');
   await page.locator('#workspaceSwitch').selectOption('school-director');
-  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=ru');
+  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=tg');
   assert.ok(requests.every(url=>!decodeURI(url).includes('Озмоишӣ')));
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
@@ -121,6 +121,7 @@ test('startup works inside the offline file viewer with independent profile edit
   await frame.locator('#toProfile').click();
   await fillStartupProfile(frame,{first:'Демо',last:'Озмоиш',teacherClass:'5'});
   await frame.locator('#toSchoolStep').click();
+  await page.waitForTimeout(50);
   await frame.locator('#schoolSearch').fill('88');await frame.locator('#begin').click();
   const cabinet=frame.frameLocator('#offlineFrameSlot iframe');
   await cabinet.getByRole('heading',{name:'Омӯзгор',exact:true}).waitFor();
@@ -136,7 +137,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   page.setDefaultTimeout(5500);
   await page.route('https://*.supabase.co/**',route=>route.abort());
-  await page.goto(`${base}/?lang=ru`);
+  await page.goto(`${base}/?lang=tg`);
   await page.locator('#goToRegister').click();
   await page.locator('#primaryChoices input[value=school-teacher]').check();
   await page.locator('#toExtras').click();
@@ -145,7 +146,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
   await fillStartupProfile(page,{first:'Демо',last:'Озмоиш',teacherClass:'5Б'});
   await page.locator('#toSchoolStep').click();
   await chooseInitialSchool(page);
-  await page.waitForURL('**/teacher.html?school=demo-a&lang=ru');
+  await page.waitForURL('**/teacher.html?school=demo-a&lang=tg');
   await page.locator('#workspaceSettingsToggle').click();
   await page.locator('#teacherSchoolChecks input[value=demo-b]').check();
   await page.locator('#teacherSaveWorkplaces').click();
@@ -155,24 +156,24 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
    if(!await page.locator('#workspaceSettings').isVisible())await page.locator('#workspaceSettingsToggle').click();
    await pickClass(page.locator('#teacherProfileClasses'),classCode);
    await page.locator('#instructionLanguage').selectOption(lang);
-   await page.locator('#teacherProfile').getByRole('button',{name:'Сохранить профиль'}).click();
+   await page.locator('#teacherProfile').getByRole('button',{name:'Сабти профил'}).click();
   }
   await page.locator('#teacherSchoolLinks a').click();
-  await page.waitForURL('**/teacher.html?school=demo-b&lang=ru');
+  await page.waitForURL('**/teacher.html?school=demo-b&lang=tg');
   assert.equal(await page.locator('#selectedSchool').textContent(),'МТМУ № 4');
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 4');
   await settings('9Б','ru');
-  assert.equal(await page.locator('#profileClasses').textContent(),'9Б · Информатика');
+  assert.equal(await page.locator('#profileClasses').textContent(),'9Б · Технологияи иттилоотӣ');
   await page.locator('#teacherSchoolLinks a').click();
-  await page.waitForURL('**/teacher.html?school=demo-a&lang=ru');
+  await page.waitForURL('**/teacher.html?school=demo-a&lang=tg');
   await page.locator('#workspaceSettingsToggle').click();
   await page.locator('#teacherProfileSummary').waitFor();
-  assert.equal(await page.locator('#profileClasses').textContent(),'5Б · Информатика');
-  assert.equal(await page.locator('#profileInstruction').textContent(),'Таджикский');
+  assert.equal(await page.locator('#profileClasses').textContent(),'5Б · Технологияи иттилоотӣ');
+  assert.equal(await page.locator('#profileInstruction').textContent(),'Тоҷикӣ');
   await page.locator('#teacherSchoolLinks a').click();
-  await page.waitForURL('**/teacher.html?school=demo-b&lang=ru');
+  await page.waitForURL('**/teacher.html?school=demo-b&lang=tg');
   await page.locator('#workspaceSwitch').selectOption('school-library-head');
-  await page.waitForURL('**/library-head.html?school=demo-a&lang=ru');
+  await page.waitForURL('**/library-head.html?school=demo-a&lang=tg');
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);
  }finally{await browser.close();}
 });
@@ -182,9 +183,9 @@ test('current version has no archive routes and the night setting persists acros
  try{
   const page=await browser.newPage({serviceWorkers:'block',colorScheme:'light',reducedMotion:'reduce'});
   await page.route('https://*.supabase.co/**',route=>route.abort());
-  await page.goto(`${base}/?lang=ru`);
-  await page.locator('#lang').selectOption('ru');
-  await page.getByRole('button',{name:'Ночной режим'}).click();
+  await page.goto(`${base}/?lang=tg`);
+  assert.equal(await page.locator('#lang').count(),0);
+  await page.locator('#themeToggle').click();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
   for(const route of ['/dashboard.html','/onboarding/index.html','/dev/'])assert.equal((await page.request.get(base+route)).status(),404,route);
   await page.locator('#goToRegister').click();
@@ -194,14 +195,12 @@ test('current version has no archive routes and the night setting persists acros
   await fillStartupProfile(page,{first:'Демо',last:'Озмоиш'});
   await page.locator('#toSchoolStep').click();
   await chooseInitialSchool(page);
-  await page.waitForURL('**/academic-deputy.html?school=demo-a&lang=ru');
-  await page.getByRole('button',{name:'Дневной режим'}).waitFor();
+  await page.waitForURL('**/academic-deputy.html?school=demo-a&lang=tg');
   assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
   assert.equal(await page.locator('body').evaluate(body=>getComputedStyle(body).backgroundColor),'rgb(17, 26, 23)');
   await page.reload();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
-  await page.getByRole('button',{name:'Дневной режим'}).click();
+  await page.locator('#themeToggle').click();
   await page.locator('.brand').click();
-  await page.getByRole('button',{name:'Ночной режим'}).waitFor();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
  }finally{await browser.close();}
 });
@@ -212,7 +211,7 @@ test('cloud registration fails closed when backend is unreachable with login cre
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   page.setDefaultTimeout(5500);
   await page.route('https://*.supabase.co/**',route=>route.abort());
-  await page.goto(`${base}/?lang=ru`);
+  await page.goto(`${base}/?lang=tg`);
   await page.locator('#goToRegister').click();
   await page.locator('#primaryChoices input[value=school-director]').check();
   await page.locator('#toExtras').click();
@@ -221,12 +220,10 @@ test('cloud registration fails closed when backend is unreachable with login cre
   await page.locator('#toSchoolStep').click();
 
   assert.equal(await page.locator('#demoModeWarning').isVisible(),false);
-  // Demo schools must NOT appear when user provided cloud login+password
   const cloudOpts=await page.locator('#schoolChoice option').evaluateAll(o=>o.map(x=>x.value));
   assert.equal(cloudOpts.includes('demo-88'),false);
   assert.equal(await page.locator('#begin').isDisabled(),true);
 
-  // Adding a school manually enables Оғоз, but offline/unreachable backend fails closed
   await page.locator('#toggleNewSchoolBtn').click();
   await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
   await page.locator('#newSchoolDistrict').fill('Исфара');
@@ -234,13 +231,11 @@ test('cloud registration fails closed when backend is unreachable with login cre
   await page.waitForFunction(()=>!document.getElementById('begin')?.disabled);
   await page.locator('#begin').click();
 
-  // Must stay on Step 4 with visible error and no silent cabinet entry or resume session saved
   await page.waitForFunction(()=>Boolean(document.getElementById('beginError')?.textContent?.trim())&&!document.getElementById('begin')?.disabled);
   assert.equal(new URL(page.url()).pathname,'/');
   assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.active-cabinet.v1')),null);
   assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.cloud.session.v1')),null);
 
-  // Going back to Step 3 and clearing login/password switches cleanly to explicit demo mode
   await page.locator('#toggleNewSchoolBtn').click();
   await page.locator('[data-step="4"] [data-back="3"]').click();
   await page.locator('#regLogin').fill('');
@@ -251,7 +246,7 @@ test('cloud registration fails closed when backend is unreachable with login cre
   await page.locator('#schoolSearch').fill('88');
   assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
   await page.locator('#begin').click();
-  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=ru');
+  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=tg');
  }finally{await browser.close();}
 });
 
@@ -295,7 +290,7 @@ test('cloud self-registration saves account with canonical Tajik phone and signs
     return json({
      user_id:userUuid,
      is_super_admin:false,
-     profile:{full_name:'Сангов Олим',preferred_lang:'ru',login_name:'927001122',profile_details:{first:'Олим',last:'Сангов',birthYear:'1985',gender:'male',specialty:'Педагогика',eduYears:'10',education:'higher',languages:['tg']}},
+     profile:{full_name:'Сангов Олим',preferred_lang:'tg',login_name:'927001122',profile_details:{first:'Олим',last:'Сангов',birthYear:'1985',gender:'male',specialty:'Педагогика',eduYears:'10',education:'higher',languages:['tg']}},
      memberships:[{organization_id:schoolUuid,organization_name:'МТМУ № 88',kind:'school',role:'director',primary_position:'school-director',extra_positions:[],aliya_enabled:false,active_devices_count:1,max_devices:2}],
     });
    }
@@ -304,12 +299,11 @@ test('cloud self-registration saves account with canonical Tajik phone and signs
  }
 
  try{
-  // Device 1: register using +992 phone format and cloud school
   const ctx1=await browser.newContext({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   await mockSupabase(ctx1);
   const page1=await ctx1.newPage();
   page1.setDefaultTimeout(5500);
-  await page1.goto(`${base}/?lang=ru`);
+  await page1.goto(`${base}/?lang=tg`);
   await page1.locator('#goToRegister').click();
   await page1.locator('#primaryChoices input[value=school-director]').check();
   await page1.locator('#toExtras').click();
@@ -321,7 +315,7 @@ test('cloud self-registration saves account with canonical Tajik phone and signs
   assert.equal(await page1.locator('#schoolChoice').inputValue(),schoolUuid);
   await page1.locator('#begin').click();
 
-  await page1.waitForURL(`**/cabinets/school/director.html?school=${schoolUuid}&lang=ru`);
+  await page1.waitForURL(`**/cabinets/school/director.html?school=${schoolUuid}&lang=tg`);
   assert.equal(registeredBody?.action,'register');
   assert.equal(registeredBody?.organization_id,schoolUuid);
   assert.equal(registeredBody?.login,'+992 92 700 11 22');
@@ -329,20 +323,18 @@ test('cloud self-registration saves account with canonical Tajik phone and signs
   assert.equal(savedSess?.access_token,'tok-reg-1');
   await ctx1.close();
 
-  // Device 2: clean storage, sign in using 9-digit local phone format without +992
   const ctx2=await browser.newContext({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   await mockSupabase(ctx2);
   const page2=await ctx2.newPage();
   page2.setDefaultTimeout(5500);
-  await page2.goto(`${base}/?lang=ru`);
+  await page2.goto(`${base}/?lang=tg`);
   await page2.locator('#loginIdentifier').fill('927001122');
   await page2.locator('#loginPassword').fill('secret123');
   await page2.locator('#loginSubmit').click();
 
-  await page2.waitForURL(`**/cabinets/school/director.html?school=${schoolUuid}&lang=ru`);
+  await page2.waitForURL(`**/cabinets/school/director.html?school=${schoolUuid}&lang=tg`);
   await page2.locator('#workspaceSettingsToggle').click();
   assert.equal(await page2.locator('#profFirst').inputValue(),'Олим');
   await ctx2.close();
  }finally{await browser.close();}
 });
-

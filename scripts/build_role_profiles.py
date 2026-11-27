@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update only managed profile/picker and sidebar buttons in physical cabinet pages."""
+"""Update only managed profile/picker and header controls in physical cabinet pages."""
 from pathlib import Path
 from html import escape
 import json,re
@@ -9,7 +9,7 @@ fields={}
 for line in (ROOT/'startup/role-profile-fields.txt').read_text().splitlines():
     if line and not line.startswith('#'):
         role,ru,tg=line.split('|'); fields[role]=list(zip(ru.split(';'),tg.split(';'),strict=True))
-assert len(fields)==53 and set(fields)=={r['id'] for r in rows}-{'school-director'}
+assert len(fields)==23 and set(fields)=={r['id'] for r in rows}-{'school-director'}
 documents={}
 for line in (ROOT/'startup/role-documents.txt').read_text().splitlines():
     if line and not line.startswith('#'):
@@ -17,26 +17,26 @@ for line in (ROOT/'startup/role-documents.txt').read_text().splitlines():
         documents[ident]=(list(zip(ru.split(';'),tg.split(';'),strict=True)),materials_ru,materials_tg)
 assert set(documents)=={r['id'] for r in rows}
 class_roles={'school-class-teacher','school-primary-deputy','school-military-preparation-deputy','school-upper-class-method-group','school-lower-class-method-group'}
-def txt(ru,tg):return f'<span data-tg="{escape(tg, quote=True)}">{escape(ru)}</span>'
+def txt(ru,tg):return f'<span data-tg="{escape(tg, quote=True)}">{escape(tg)}</span>'
 def entry(row):
     id=row['id']; director=id=='school-director'
     roles=''
     if not director:
-        names=[] if id=='school-girls-council-chair' else [('first','Имя','Ном',60,True),('last','Фамилия','Насаб',60,True)]
+        names=[] if id=='school-girls-council-chair' else [('first','Ном','Ном',60,True),('last','Насаб','Насаб',60,True)]
         extras=[(f'work-{i}',ru,tg,120,i==1) for i,(ru,tg) in enumerate(fields[id],1)]
-        work_context=[('period','Период работы (например: 2026/27)','Давраи кор (масалан: 2026/27)',24,False)] if id not in ['school-girls-council-chair','school-sozmon','advisers-sozmon'] else []
+        work_context=[('period','Давраи кор (масалан: 2026/27)','Давраи кор (масалан: 2026/27)',24,False)] if id not in ['school-girls-council-chair','school-sozmon'] else []
         def field(key,ru,tg,maxlen,required):
             if id in class_roles and key=='work-1':
                 variant='single' if id=='school-class-teacher' else 'multi'
                 return f'<div class="class-field"><strong>{txt(ru,tg)}</strong><div data-role-class="{variant}" data-field="{key}" data-required="true"></div></div>'
             return f'<label class="field">{txt(ru,tg)}<input data-intake-field="{key}" maxlength="{maxlen}"'+(' required' if required else '')+'></label>'
         form=''.join(field(*args) for args in names+extras+work_context)
-        roles=f'''<section class="section no-print" id="roleIntake"><h2>{txt('Анкета должности','Варақаи вазифа')} · {escape(row['title'])}</h2><p class="small">{txt('Пример для этой должности. Не вводите реальные личные данные.','Намуна барои ҳамин вазифа. Маълумоти воқеии шахсиро ворид накунед.')}</p>
-<form id="roleIntakeForm" inert autocomplete="off"><div class="steps">{form}</div><div class="control"><button type="button" id="saveRoleIntake" class="button">{txt('Сохранить анкету','Сабти варақа')}</button></div></form><p class="small" role="status" id="roleIntakeStatus"></p></section>'''
-    scope=('Выбор учреждения не меняет права доступа.','Рӯйхат намоишӣ аст. Интихоби муассиса минтақаи дастрасиро иваз намекунад.')
-    picker=f'''<section class="section no-print" id="institutionPicker" hidden><h2>{txt('Выбор школы','Интихоби мактаб')}</h2><p class="small">{txt(*scope)}</p><div class="steps">
-<label class="field">{txt('Поиск школы по номеру или названию','Ҷустуҷӯи мактаб аз рӯи рақам ё ном')}<input id="institutionSearch" type="search" maxlength="80" autocomplete="off" placeholder="МТМУ № 88"></label>
-<label class="field">{txt('Школа','Мактаб')}<select id="institutionChoice"></select></label></div><div class="control"><button class="button" type="button" id="confirmInstitution">{txt('Выбрать школу','Интихоби мактаб')}</button></div><p class="small" role="status" id="institutionStatus"></p></section>'''
+        roles=f'''<section class="section no-print" id="roleIntake"><h2>{txt('Варақаи вазифа','Варақаи вазифа')} · {escape(row['title'])}</h2><p class="small">{txt('Намуна барои ҳамин вазифа. Маълумоти воқеии шахсиро ворид накунед.','Намуна барои ҳамин вазифа. Маълумоти воқеии шахсиро ворид накунед.')}</p>
+<form id="roleIntakeForm" inert autocomplete="off"><div class="steps">{form}</div><div class="control"><button type="button" id="saveRoleIntake" class="button">{txt('Сабти варақа','Сабти варақа')}</button></div></form><p class="small" role="status" id="roleIntakeStatus"></p></section>'''
+    scope=('Рӯйхат намоишӣ аст. Интихоби муассиса минтақаи дастрасиро иваз намекунад.','Рӯйхат намоишӣ аст. Интихоби муассиса минтақаи дастрасиро иваз намекунад.')
+    picker=f'''<section class="section no-print" id="institutionPicker" hidden><h2>{txt('Интихоби мактаб','Интихоби мактаб')}</h2><p class="small">{txt(*scope)}</p><div class="steps">
+<label class="field">{txt('Ҷустуҷӯи мактаб аз рӯи рақам ё ном','Ҷустуҷӯи мактаб аз рӯи рақам ё ном')}<input id="institutionSearch" type="search" maxlength="80" autocomplete="off" placeholder="МТМУ № 88"></label>
+<label class="field">{txt('Мактаб','Мактаб')}<select id="institutionChoice"></select></label></div><div class="control"><button class="button" type="button" id="confirmInstitution">{txt('Интихоби мактаб','Интихоби мактаб')}</button></div><p class="small" role="status" id="institutionStatus"></p></section>'''
     return '<!-- ROLE-PROFILE START -->\n'+roles+'\n'+picker+'\n<!-- ROLE-PROFILE END -->'
 def header_html(row):
     prefix='../'*(len(Path(row['path']).parts)-1)
@@ -44,8 +44,7 @@ def header_html(row):
         f'<header class="top"><div class="teacher-context">'
         f'<a class="brand top-brand" href="{prefix}index.html"><span class="logo" aria-hidden="true">S</span><span class="brand-name">SmartMaktab</span></a>'
         f'<h1 class="crumb">{escape(row["title"])}</h1>'
-        f'<span class="tag" id="workspaceSchool">—</span></div><div class="actions">\n'
-        f'<select id="cabinetLang" class="lang-select" aria-label="Забон / Язык"><option value="tg">Тоҷикӣ</option><option value="ru">Русский</option></select></div></header>'
+        f'<span class="tag" id="workspaceSchool">—</span></div><div class="actions"></div></header>'
     )
 
 for row in rows:
@@ -72,4 +71,3 @@ for row in rows:
         s=s[:point]+'\n'+block+'\n'+s[point:]
     s=re.sub(r'\s*<!-- ROLE-WORKSPACE START -->.*?<!-- ROLE-WORKSPACE END -->', '', s, count=1, flags=re.S)
     p.write_text(s+tail)
-

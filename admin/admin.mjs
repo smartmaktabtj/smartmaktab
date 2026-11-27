@@ -9,14 +9,74 @@ import {
   getRoleForPosition,
   getSubscriptionPackage,
 } from '../shared/position-catalog.mjs';
-import {
-  getDistrictNames,
-  getJamoatsForDistrict,
-  getRegionNames,
-  getVillagesForJamoat,
-} from '../shared/tajikistan-locations.mjs';
 
-const LANG_STORAGE_KEY = 'smartmaktab.admin.lang.v1';
+const TAJIK_REGIONS = ['Душанбе', 'Суғд', 'Хатлон', 'ВМКБ', 'Ноҳияҳои тобеи ҷумҳурӣ'];
+
+function canonicalRegionName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const low = s.toLocaleLowerCase();
+  if (low.includes('душанбе')) return 'Душанбе';
+  if (low.includes('суғд') || low.includes('сугд') || low.includes('согд')) return 'Суғд';
+  if (low.includes('хатлон')) return 'Хатлон';
+  if (low.includes('вмкб') || low.includes('бадахшон') || low.includes('гбао')) return 'ВМКБ';
+  if (low.includes('тобеи') || low.includes('ррп') || low.includes('республик')) return 'Ноҳияҳои тобеи ҷумҳурӣ';
+  return s;
+}
+
+function stripDistrictPrefix(dist) {
+  return String(dist || '').trim().toLocaleLowerCase().replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i, '').replace(/\s+/g, ' ');
+}
+
+function getRegionNames(extraRows = []) {
+  const out = new Set(TAJIK_REGIONS);
+  for (const row of extraRows || []) if (row?.region_name) out.add(canonicalRegionName(row.region_name));
+  return [...out];
+}
+
+function getDistrictNames(regionRaw, extraRows = []) {
+  const reg = canonicalRegionName(regionRaw);
+  const out = new Set();
+  for (const row of extraRows || []) {
+    if ((!reg || canonicalRegionName(row.region_name) === reg) && row.district_name) {
+      out.add(String(row.district_name).trim());
+    }
+  }
+  return [...out].sort((a, b) => a.localeCompare(b, 'tg'));
+}
+
+function getJamoatsForDistrict(regionRaw, districtRaw, extraRows = []) {
+  const reg = canonicalRegionName(regionRaw);
+  const dist = String(districtRaw || '').trim();
+  const distStripped = stripDistrictPrefix(dist);
+  const out = new Set();
+  for (const row of extraRows || []) {
+    const rowDist = String(row.district_name || '').trim();
+    const dOk = !dist || rowDist.toLocaleLowerCase() === dist.toLocaleLowerCase() || (distStripped && stripDistrictPrefix(rowDist) === distStripped);
+    if ((!reg || canonicalRegionName(row.region_name) === reg) && dOk && row.jamoat_name) {
+      out.add(String(row.jamoat_name).trim());
+    }
+  }
+  return [...out].sort((a, b) => a.localeCompare(b, 'tg'));
+}
+
+function getVillagesForJamoat(regionRaw, districtRaw, jamoatRaw, extraRows = []) {
+  const reg = canonicalRegionName(regionRaw);
+  const dist = String(districtRaw || '').trim();
+  const distStripped = stripDistrictPrefix(dist);
+  const jam = String(jamoatRaw || '').trim();
+  const out = new Set();
+  for (const row of extraRows || []) {
+    const rOk = !reg || canonicalRegionName(row.region_name) === reg;
+    const rowDist = String(row.district_name || '').trim();
+    const dOk = !dist || rowDist.toLocaleLowerCase() === dist.toLocaleLowerCase() || (distStripped && stripDistrictPrefix(rowDist) === distStripped);
+    const jOk = !jam || String(row.jamoat_name || '').trim().toLocaleLowerCase() === jam.toLocaleLowerCase();
+    if (rOk && dOk && jOk && row.village_name) {
+      out.add(String(row.village_name).trim());
+    }
+  }
+  return [...out].sort((a, b) => a.localeCompare(b, 'tg'));
+}
 
 const copy = {
   tg: {
@@ -150,15 +210,13 @@ const copy = {
     planPrice: 'Нархи асосӣ (TJS)',
     planDays: 'Муҳлат (рӯз)',
     recipientPhone: 'Рақами қабулкунанда (Амонатбонк / DCity)',
-    roleTariffsTitle: 'Тарифҳои инфиродӣ барои ҳар як вазифа (54 вазифа)',
+    roleTariffsTitle: 'Тарифҳои инфиродӣ барои ҳар як вазифа (24 вазифа)',
     tariffGroupFilter: 'Гурӯҳи вазифаҳо',
     tariffSearch: 'Ҷустуҷӯи вазифа',
-    groupAll: 'Ҳамаи вазифаҳо (54)',
+    groupAll: 'Ҳамаи вазифаҳо (24)',
     groupSchool: 'Мактаб (20 вазифа)',
-    groupMaorif: 'Шуъбаи маориф — мушовирон (20)',
-    groupSubject: 'Шуъбаи маориф — фаннӣ (11)',
-    groupOffice: 'Шуъбаи маориф — роҳбарият (2)',
-    groupRaesat: 'Раёсати маориф (1)',
+    groupOffice: 'Шуъбаи маориф (2)',
+    groupRaesat: 'Раёсати маориф (2)',
     approve30: 'Тасдиқ + 30 рӯз',
     approve365: 'Тасдиқ + 365 рӯз',
     reject: 'Рад кардан',
@@ -376,14 +434,9 @@ const copy = {
 };
 
 const $ = id => document.getElementById(id);
-let lang = 'tg';
-try {
-  const savedLang = globalThis.localStorage?.getItem(LANG_STORAGE_KEY);
-  if (savedLang === 'ru' || savedLang === 'tg') lang = savedLang;
-} catch {}
-$('admLang').value = lang;
+const lang = 'tg';
 
-const t = key => copy[lang][key] || key;
+const t = key => copy.tg[key] || key;
 const client = createCloudClient({
   config: getCloudConfig(),
   storage: globalThis.localStorage,
@@ -1550,12 +1603,6 @@ function emptyRow(cols) {
   tr.append(td);
   return tr;
 }
-
-$('admLang').addEventListener('change', e => {
-  lang = e.target.value;
-  try { globalThis.localStorage?.setItem(LANG_STORAGE_KEY, lang); } catch {}
-  applyTranslations();
-});
 
 for (const btn of document.querySelectorAll('.adm-tabs button')) {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));

@@ -32,7 +32,7 @@ export const POSITION_COMPAT_GROUPS = Object.freeze({
   ]),
 });
 
-export const AUTHORITY_LOGIN_POSITIONS = Object.freeze(['office-head', 'raesat-head']);
+export const AUTHORITY_LOGIN_POSITIONS = Object.freeze(['office-head', 'office-clerk', 'raesat-head', 'raesat-clerk']);
 
 export const SCHOOL_ACCOUNT_VERIFIER_POSITIONS = Object.freeze([
   'school-director',
@@ -76,45 +76,11 @@ export const POSITION_CATALOG = Object.freeze([
   { id: 'school-subject-room-head', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Мудири кабинети фаннӣ', titleRu: 'Заведующий предметным кабинетом', defaultBasePrice: 15, defaultExtraPrice: 15, sortOrder: 19 },
   { id: 'school-teacher', group: 'school', compatGroup: 'C', accessRole: 'teacher', titleTg: 'Омӯзгор', titleRu: 'Учитель', defaultBasePrice: 10, defaultExtraPrice: 10, sortOrder: 20 },
 
-  // Education authority leadership (admin-issued logins only)
-  { id: 'office-head', group: 'office', accessRole: 'maorif', titleTg: 'Мудири маориф', titleRu: 'Заведующий маорифом', defaultBasePrice: 40, defaultExtraPrice: 40, sortOrder: 21 },
-  { id: 'office-accounting', group: 'office', accessRole: 'maorif', titleTg: 'Муҳосиботи маориф', titleRu: 'Бухгалтерия маорифа', defaultBasePrice: 30, defaultExtraPrice: 30, sortOrder: 22, hiddenFromLogin: true },
-  { id: 'raesat-head', group: 'raesat', accessRole: 'authority_viewer', titleTg: 'Сардори раёсат', titleRu: 'Начальник управления', defaultBasePrice: 50, defaultExtraPrice: 50, sortOrder: 23 },
-
-  // 20 Maorif advisers (hidden from login/registration; accessible via super-admin / existing cabinet registry)
-  { id: 'advisers-school-leadership', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Роҳбарони мактабҳо', titleRu: 'Методист · Руководители школ', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 30, hiddenFromLogin: true },
-  { id: 'advisers-academic-work', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Кори таълимӣ', titleRu: 'Методист · Учебная работа', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 31, hiddenFromLogin: true },
-  { id: 'advisers-upbringing', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Кори тарбиявӣ', titleRu: 'Методист · Воспитательная работа', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 32, hiddenFromLogin: true },
-  { id: 'advisers-primary-administration', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Зинаи ибтидоӣ', titleRu: 'Методист · Начальная ступень', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 33, hiddenFromLogin: true },
-  { id: 'advisers-military-preparation', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Омодагии ҳарбӣ', titleRu: 'Методист · Военная подготовка', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 34, hiddenFromLogin: true },
-  { id: 'advisers-sozmon', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Созмон', titleRu: 'Методист · Созмон', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 35, hiddenFromLogin: true },
-  { id: 'advisers-facilities', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Хоҷагӣ ва амвол', titleRu: 'Методист · Хозяйственная работа', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 36, hiddenFromLogin: true },
-  { id: 'advisers-libraries', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Китобхонаҳо', titleRu: 'Методист · Школьные библиотеки', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 37, hiddenFromLogin: true },
-  { id: 'advisers-school-meals', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Ғизои мактабӣ', titleRu: 'Методист · Школьное питание', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 38, hiddenFromLogin: true },
-  { id: 'advisers-education-quality', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Сифати таҳсилот', titleRu: 'Методист · Качество образования', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 39, hiddenFromLogin: true },
-  { id: 'advisers-psychological-services', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Хадамоти равоншиносӣ', titleRu: 'Методист · Психологическая служба', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 40, hiddenFromLogin: true },
-  { id: 'advisers-records-management', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Коргузорӣ', titleRu: 'Методист · Делопроизводство', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 41, hiddenFromLogin: true },
-  { id: 'advisers-school-accounting', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Муҳосиботи мактабҳо', titleRu: 'Методист · Бухгалтерии школ', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 42, hiddenFromLogin: true },
-  { id: 'advisers-class-leadership', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Роҳбарии синф', titleRu: 'Методист · Классное руководство', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 43, hiddenFromLogin: true },
-  { id: 'advisers-girls-councils', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Шӯроҳои духтарон', titleRu: 'Методист · Советы девушек', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 44, hiddenFromLogin: true },
-  { id: 'advisers-upper-class-method-work', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Методикаи синфҳои боло', titleRu: 'Методист · Старшие классы', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 45, hiddenFromLogin: true },
-  { id: 'advisers-lower-class-method-work', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Методикаи синфҳои поён', titleRu: 'Методист · Младшие классы', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 46, hiddenFromLogin: true },
-  { id: 'advisers-method-groups', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Иттиҳодияҳои методӣ', titleRu: 'Методист · Методобъединения', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 47, hiddenFromLogin: true },
-  { id: 'advisers-subject-rooms', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Кабинетҳои фаннӣ', titleRu: 'Методист · Предметные кабинеты', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 48, hiddenFromLogin: true },
-  { id: 'advisers-teaching-support', group: 'advisers', accessRole: 'maorif', titleTg: 'Мушовир · Дастгирии омӯзгорон', titleRu: 'Методист · Сопровождение учителей', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 49, hiddenFromLogin: true },
-
-  // 11 Subject advisers (hidden from login/registration)
-  { id: 'subjects-tajik-language-literature', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Забон ва адабиёти тоҷик', titleRu: 'Предметник · Таджикский язык', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 50, hiddenFromLogin: true },
-  { id: 'subjects-russian-language', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Забони русӣ', titleRu: 'Предметник · Русский язык', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 51, hiddenFromLogin: true },
-  { id: 'subjects-english-language', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Забони англисӣ', titleRu: 'Предметник · Английский язык', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 52, hiddenFromLogin: true },
-  { id: 'subjects-informatics', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Информатика', titleRu: 'Предметник · Информатика', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 53, hiddenFromLogin: true },
-  { id: 'subjects-mathematics', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Математика', titleRu: 'Предметник · Математика', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 54, hiddenFromLogin: true },
-  { id: 'subjects-physics', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Физика', titleRu: 'Предметник · Физика', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 55, hiddenFromLogin: true },
-  { id: 'subjects-chemistry', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Химия', titleRu: 'Предметник · Химия', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 56, hiddenFromLogin: true },
-  { id: 'subjects-biology', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Биология', titleRu: 'Предметник · Биология', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 57, hiddenFromLogin: true },
-  { id: 'subjects-history', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Таърих', titleRu: 'Предметник · История', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 58, hiddenFromLogin: true },
-  { id: 'subjects-geography', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · География', titleRu: 'Предметник · География', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 59, hiddenFromLogin: true },
-  { id: 'subjects-primary-teaching', group: 'subjects', accessRole: 'maorif', titleTg: 'Мушовир · Таълими ибтидоӣ', titleRu: 'Предметник · Начальное обучение', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 60, hiddenFromLogin: true },
+  // Education authority leadership & clerks (admin-issued logins)
+  { id: 'office-head', group: 'office', accessRole: 'maorif', titleTg: 'Мудири маориф', titleRu: 'Мудири маориф', defaultBasePrice: 40, defaultExtraPrice: 40, sortOrder: 21 },
+  { id: 'office-clerk', group: 'office', accessRole: 'maorif', titleTg: 'Коргаргузори маориф', titleRu: 'Коргаргузори маориф', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 22 },
+  { id: 'raesat-head', group: 'raesat', accessRole: 'authority_viewer', titleTg: 'Сардори раёсат', titleRu: 'Сардори раёсат', defaultBasePrice: 50, defaultExtraPrice: 50, sortOrder: 23 },
+  { id: 'raesat-clerk', group: 'raesat', accessRole: 'authority_viewer', titleTg: 'Коргаргузори раёсат', titleRu: 'Коргаргузори раёсат', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 24 },
 ]);
 
 const BY_ID = new Map(POSITION_CATALOG.map(item => [item.id, item]));
@@ -206,8 +172,8 @@ export function getPositionsForOrg(org, tariffs = null, { includeHidden = true }
   const items = POSITION_CATALOG.filter(item => {
     if (!includeHidden && item.hiddenFromLogin) return false;
     if (!isAuthority) return item.group === 'school';
-    if (tier === 'raesat') return item.group === 'raesat' || item.group === 'office' || item.group === 'advisers' || item.group === 'subjects';
-    return item.group === 'office' || item.group === 'advisers' || item.group === 'subjects';
+    if (tier === 'raesat') return item.group === 'raesat' || item.group === 'office';
+    return item.group === 'office';
   });
   const tMap = Array.isArray(tariffs) && tariffs.length
     ? new Map(tariffs.map(t => [t.position_code || t.id, t]))
@@ -269,9 +235,9 @@ export function isCabinetPermitted(membership, cabinetId) {
     case 'staff':
       return meta.group === 'school' && cabinetId !== 'school-director';
     case 'maorif':
-      return meta.group === 'office' || meta.group === 'advisers' || meta.group === 'subjects';
+      return meta.group === 'office';
     case 'authority_viewer':
-      return meta.group === 'raesat' || meta.group === 'office' || meta.group === 'advisers' || meta.group === 'subjects';
+      return meta.group === 'raesat' || meta.group === 'office';
     default:
       return false;
   }

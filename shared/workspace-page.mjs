@@ -1,4 +1,3 @@
-import {mountWindowsContent} from './windows-content-ui.mjs';
 import {setupUnifiedUpdateMenu} from './native-shell.mjs';
 import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
@@ -272,70 +271,19 @@ export function setupWorkspace({configured,school}){
  const teacher=!!$('teacherSubjects');if(teacher)drawer.append($('teacherSubjects'));
  if($('teacherBookPanel'))article.append($('teacherBookPanel'));
 
- $('cabinetLang').before(toggle);
+ const actionsEl=document.querySelector('header.top .actions');
+ const themeEl=$('themeToggle');
+ if(themeEl)themeEl.before(toggle); else actionsEl?.append(toggle);
 
  setupSchoolForms(article,formsBar,school);setupCloudWorkspace(article,profCard.cloudHost,school);
- const views=initWorkspaceViews(article);mountWindowsContent(article,views);
+ const views=initWorkspaceViews(article);
 
- setupUnifiedUpdateMenu($('cabinetLang'),()=>{
-  if($('windowsContent')){
-   views.open('windowsContent',$('cabinetUpdateTrigger'));
-   return true;
-  }
-  return false;
- });
+ setupUnifiedUpdateMenu($('themeToggle')||actionsEl);
 
  for(const id of ['workspaceSettings','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate','cloudWorkspacePanel'])$(id)?.classList.add('sm-screen');
- const entries={directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],adviserSchools:['Школы','Мактабҳо','▦'],adviserDocuments:['Документы направления','Ҳуҷҷатҳои самт','▤'],raesatCoverage:['Полнота сведений','Пуррагии маълумот','▤']};
+ const entries={directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],raesatCoverage:['Полнота сведений','Пуррагии маълумот','▤']};
  for(const [id,values] of Object.entries(entries))views.shortcut(id,...values);
  setupPhase2Panels(article,mainModules,school,views);
-
- function syncCustomUpdateSections(payload){
-  if(!payload)return;
-  const curLang=tg()?'tg':'ru';
-  const customRoles=Array.isArray(payload.customRoles)?payload.customRoles:[];
-  for(const cr of customRoles){
-   const crCats=Array.isArray(payload.cabinets?.[cr.id])?payload.cabinets[cr.id]:[];
-   const secId=`smCustomRole-${cr.id}`;
-   let sec=$(secId);
-   const created=!sec;
-   if(!sec){
-    sec=document.createElement('section');
-    sec.id=secId;
-    sec.className='section sm-screen no-print';
-    article.append(sec);
-   }
-   const h2=document.createElement('h2');
-   h2.textContent=cr.title?.[curLang]||cr.id;
-   sec.replaceChildren(h2);
-   if(!crCats.length){
-    const p=document.createElement('p');
-    p.className='small';
-    p.textContent=label('Материалы для этой должности пока пусты.','Барои ин вазифа мавод ҳанӯз холӣ аст.');
-    sec.append(p);
-   }else{
-    for(const cat of crCats){
-     const det=document.createElement('details');det.open=true;
-     const sum=document.createElement('summary');sum.textContent=cat.title?.[curLang]||cat.id;
-     det.append(sum);
-     for(const s of cat.sections||[]){
-      const blk=document.createElement('section');
-      const h=document.createElement('h4');h.textContent=s.title?.[curLang]||'';
-      const p=document.createElement('p');p.textContent=s.text?.[curLang]||'';p.style.whiteSpace='pre-wrap';
-      blk.append(h,p);det.append(blk);
-     }
-     sec.append(det);
-    }
-   }
-   if(created)views.shortcut(secId,cr.title?.ru||cr.id,cr.title?.tg||cr.id,'◇');
-  }
- }
-
- let lastContentPayload=null;
- document.addEventListener('sm:content-updated',ev=>{
-  if(ev.detail)lastContentPayload=ev.detail;
-  syncCustomUpdateSections(lastContentPayload);
- });
 
  function sync(){
   const title=label('Профиль','Профил');
@@ -348,7 +296,6 @@ export function setupWorkspace({configured,school}){
   const badge=$('workspaceSchool');
   if(badge)badge.textContent=school()?.name??label('Не выбрано','Интихоб нашудааст');
   profCard.syncLabels();
-  syncCustomUpdateSections(lastContentPayload);
   views.refresh();
  }
  function setSettings(open){if(open)views.open('workspaceSettings',toggle);else views.close('workspaceSettings');sync();}
@@ -357,7 +304,7 @@ export function setupWorkspace({configured,school}){
   clearActiveResume();
   const dest=new URL('index.html',appRoot);
   dest.searchParams.set('register','1');
-  dest.searchParams.set('lang',tg()?'tg':'ru');
+  dest.searchParams.set('lang','tg');
   openCabinetView(dest);
  });
  signOutApp.addEventListener('click',()=>{
@@ -365,7 +312,7 @@ export function setupWorkspace({configured,school}){
   persistentStore.removeItem(cloudSessionKey);
   const dest=new URL('index.html',appRoot);
   dest.searchParams.set('setup','1');
-  dest.searchParams.set('lang',tg()?'tg':'ru');
+  dest.searchParams.set('lang','tg');
   openCabinetView(dest);
  });
  const navState=new MutationObserver(sync);navState.observe(article,{attributes:true,attributeFilter:['data-sm-screen']});

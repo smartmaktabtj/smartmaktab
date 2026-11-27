@@ -1,20 +1,20 @@
-name: SmartMaktab — подписанный релиз
+name: SmartMaktab — нашри имзодор (Android APK/AAB)
 on:
   workflow_dispatch:
     inputs:
       format:
-        description: 'Что собрать (только один формат)'
+        description: 'Чӣ сохта шавад (APK ё AAB)'
         type: choice
-        options: [EXE, APK, AAB]
+        options: [APK, AAB]
         required: true
         default: APK
       release_version:
-        description: 'Релизная версия X.Y.Z'
+        description: 'Версияи нашр X.Y.Z'
         type: string
         default: '1.0.0'
         required: true
       android_version_code:
-        description: 'Android versionCode (увеличивать для Google Play, для EXE игнорируется)'
+        description: 'Android versionCode (барои Google Play зиёд кунед)'
         type: string
         default: '1'
         required: true
@@ -27,95 +27,6 @@ env:
   SM_RELEASE_VERSION: ${{ inputs.release_version }}
   SM_ANDROID_VERSION_CODE: ${{ inputs.android_version_code }}
 jobs:
-  windows:
-    if: inputs.format == 'EXE'
-    runs-on: windows-2022
-    timeout-minutes: 38
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Check release settings before building
-        shell: pwsh
-        run: |
-          if ($env:SM_RELEASE_VERSION -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Version must be X.Y.Z' }
-          node -e "require('./native/windows/builder.cjs')"
-        env:
-          WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE }}
-          WINDOWS_SIGN_PUBLISHER: ${{ vars.WINDOWS_SIGN_PUBLISHER }}
-          WINDOWS_SIGN_ENDPOINT: ${{ vars.WINDOWS_SIGN_ENDPOINT }}
-          WINDOWS_SIGN_ACCOUNT: ${{ vars.WINDOWS_SIGN_ACCOUNT }}
-          WINDOWS_SIGN_PROFILE: ${{ vars.WINDOWS_SIGN_PROFILE }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_BASE64 }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            native/windows/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Prepare web assets and Windows dependencies
-        shell: pwsh
-        env:
-          SM_CONTENT_PUBLIC_KEY: ${{ vars.SM_CONTENT_PUBLIC_KEY }}
-          SM_CONTENT_FEED: ${{ vars.SM_CONTENT_FEED }}
-        run: |
-          node scripts/windows-content.cjs configure
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm ci --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/build_startup.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/stage-native-web.py native/windows/web
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm --prefix native/windows ci --no-audit --no-fund
-          exit $LASTEXITCODE
-      - name: Package and sign Windows EXE
-        shell: pwsh
-        env:
-          WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE }}
-          WINDOWS_SIGN_PUBLISHER: ${{ vars.WINDOWS_SIGN_PUBLISHER }}
-          WINDOWS_SIGN_ENDPOINT: ${{ vars.WINDOWS_SIGN_ENDPOINT }}
-          WINDOWS_SIGN_ACCOUNT: ${{ vars.WINDOWS_SIGN_ACCOUNT }}
-          WINDOWS_SIGN_PROFILE: ${{ vars.WINDOWS_SIGN_PROFILE }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_BASE64 }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: npm --prefix native/windows run dist
-      - name: Verify installer and packaged executable signatures
-        shell: pwsh
-        env:
-          WINDOWS_SIGN_PUBLISHER: ${{ vars.WINDOWS_SIGN_PUBLISHER }}
-        run: |
-          $dir = 'native/windows/release'
-          $files = @(Get-ChildItem $dir -Filter '*-Windows-x64.exe' -File)
-          if ($files.Count -ne 1) { throw 'Expected one installer' }
-          $application = Join-Path $dir 'win-unpacked/SmartMaktab.exe'
-          foreach ($file in @($files[0].FullName, $application)) {
-            $s = Get-AuthenticodeSignature -FilePath $file
-            if ($s.Status -ne 'Valid' -or !$s.TimeStamperCertificate -or !$s.SignerCertificate) { throw "No trusted timestamped signature: $file ($($s.Status))" }
-            $owner = $s.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
-            if ($owner -cne $env:WINDOWS_SIGN_PUBLISHER) { throw 'Unexpected signing publisher' }
-          }
-          $hex = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hex  $($files[0].Name)" | Set-Content "$dir/SHA256SUMS.txt" -Encoding utf8NoBOM
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SmartMaktab-${{ inputs.release_version }}-EXE-signed
-          path: |
-            native/windows/release/*-Windows-x64.exe
-            native/windows/release/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 14
   android:
     if: inputs.format == 'APK' || inputs.format == 'AAB'
     runs-on: ubuntu-24.04
@@ -138,10 +49,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
@@ -153,13 +60,11 @@ jobs:
           packages: 'platforms;android-36 build-tools;36.0.0'
           accept-android-sdk-licenses: 'true'
           log-accepted-android-sdk-licenses: 'false'
-      - name: Prepare web assets
+      - name: Prepare Android release assets
         run: |
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
           test -f "$ANDROID_HOME/platforms/android-36/android.jar"
-          npm ci --no-audit --no-fund
-          python3 scripts/build_startup.py
-          python3 scripts/stage-native-web.py native/android/app/src/main/assets/web
+          python3 scripts/stage-native-web.py native/android/app/src/main/assets
       - name: Build and verify selected signed package
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

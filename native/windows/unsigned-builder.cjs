@@ -12,7 +12,7 @@ module.exports = {
   forceCodeSigning: false,
   extraMetadata: { version },
   directories: { output: 'unsigned-release' },
-  files: ['main.cjs','preload.cjs','content.cjs','content-ipc.cjs','content-config.json','web/**/*'],
-  win: { target: ['nsis'], icon: 'web/pwa-512.png', signExecutable: false, artifactName: 'SmartMaktab-${version}-Windows-${arch}-UNSIGNED.${ext}' },
+  files: ['main.cjs', 'preload.cjs', 'icon.png'],
+  win: { target: ['nsis'], icon: 'icon.png', signExecutable: false, artifactName: 'SmartMaktab-${version}-Windows-${arch}-UNSIGNED.${ext}' },
   nsis: { oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true },
 };

@@ -40,7 +40,7 @@ function attachDropdown(details,menu){
 }
 if(bridge)globalThis.smartMaktabBack=()=>{const openMenu=document.querySelector('details.sm-native-files[open]');if(openMenu){openMenu.open=false;return true;}return !document.dispatchEvent(new Event('sm:native-back',{cancelable:true}));};
 
-export function setupUnifiedUpdateMenu(anchor,onOpenMaterials){
+export function setupUnifiedUpdateMenu(anchor){
  if(!anchor)return null;
  const win=globalThis.SmartMaktabWindows;
  const details=document.createElement('details');
@@ -49,6 +49,8 @@ export function setupUnifiedUpdateMenu(anchor,onOpenMaterials){
  const summary=document.createElement('summary');
  summary.className='theme-toggle sm-upd-trigger';
  summary.id='cabinetUpdateTrigger';
+ summary.title='Навсозӣ';
+ summary.setAttribute('aria-label','Навсозӣ');
  const icon=document.createElement('span');
  icon.setAttribute('aria-hidden','true');
  icon.textContent='↻';
@@ -60,32 +62,25 @@ export function setupUnifiedUpdateMenu(anchor,onOpenMaterials){
 
  const menu=document.createElement('div');
  const appUpdate=document.createElement('button');
- const contentUpdate=document.createElement('button');
  const downloadWin=document.createElement('button');
  const status=document.createElement('p');
  status.className='small';
  status.hidden=true;
  status.style.margin='2px 4px 0';
- for(const btn of [appUpdate,contentUpdate,downloadWin]){btn.type='button';btn.className='button alt';}
- menu.append(appUpdate,contentUpdate,downloadWin,status);
+ appUpdate.type='button';
+ appUpdate.className='button alt';
+ appUpdate.textContent='Навсозии барнома';
+ downloadWin.type='button';
+ downloadWin.className='button alt';
+ downloadWin.textContent='Боргирӣ барои Windows (.exe)';
+ menu.append(appUpdate,downloadWin,status);
  details.append(summary,menu);
- anchor.before(details);
+ if(anchor.classList?.contains('actions'))anchor.append(details);
+ else anchor.before(details);
  attachDropdown(details,menu);
-
- const language=()=>document.documentElement.lang==='tg'?'tg':'ru';
- function refresh(){
-  const tg=language()==='tg';
-  summary.title=tg?'Навсозӣ':'Обновление';
-  summary.setAttribute('aria-label',tg?'Навсозӣ':'Обновление');
-  appUpdate.textContent=tg?'Навсозии барнома':'Обновление приложения';
-  contentUpdate.textContent=tg?'Навсозии мавод':'Обновление материалов';
-  downloadWin.textContent=tg?'Боргирӣ барои Windows (.exe)':'Скачать для Windows (.exe)';
- }
 
  appUpdate.addEventListener('click',async()=>{
   details.open=false;
-  const tg=language()==='tg';
-  if(bridge){void send({action:'checkAssetUpdate',lang:language()}).catch(()=>{});return;}
   if(win?.checkAppRelease){
    const res=await win.checkAppRelease().catch(()=>({status:'network'}));
    if(res?.status==='available'&&res.downloadUrl){
@@ -94,30 +89,26 @@ export function setupUnifiedUpdateMenu(anchor,onOpenMaterials){
    }
    status.hidden=false;
    status.textContent=res?.status==='up-to-date'
-    ?(tg?`Нусхаи навтарин (${res.currentVersion}) насб аст.`:`Установлена актуальная версия (${res.currentVersion}).`)
-    :(tg?'Санҷиш имконнопазир (интернет лозим).':'Проверка недоступна (нужен интернет).');
+    ?`Нусхаи навтарин (${res.currentVersion}) насб аст.`
+    :'Санҷиш имконнопазир (интернет лозим).';
    details.open=true;
    return;
   }
-  try{const reg=await navigator.serviceWorker?.getRegistration?.();await reg?.update?.();}catch{}
+  try{
+   const regs=await navigator.serviceWorker?.getRegistrations?.();
+   if(regs)await Promise.all(regs.map(r=>r.unregister()));
+   const keys=await globalThis.caches?.keys?.();
+   if(keys)await Promise.all(keys.map(k=>caches.delete(k)));
+  }catch{}
+  if(bridge){location.reload();return;}
   status.hidden=false;
-  status.textContent=tg?'Нусха санҷида шуд.':'Версия проверена.';
-  details.open=true;
- });
-
- contentUpdate.addEventListener('click',()=>{
-  details.open=false;
-  const tg=language()==='tg';
-  if(bridge){void send({action:'downloadContentUpdate',lang:language()}).catch(()=>{});return;}
-  if(typeof onOpenMaterials==='function'&&onOpenMaterials())return;
-  status.hidden=false;
-  status.textContent=tg?'Бастаҳои навсозии мавод дар барномаи Windows ё Android боргирӣ мешаванд.':'Пакеты обновления материалов доступны в приложении Windows или Android.';
+  status.textContent='Нусха санҷида шуд.';
   details.open=true;
  });
 
  downloadWin.addEventListener('click',()=>{
   details.open=false;
-  if(bridge){void send({action:'downloadWindows',lang:language()}).catch(()=>{});return;}
+  if(bridge){void send({action:'downloadWindows',lang:'tg'}).catch(()=>{});return;}
   const url='https://github.com/smartmaktabtj/smartmaktab/releases/latest';
   if(win?.openAppDownload)void win.openAppDownload('https://github.com/smartmaktabtj/smartmaktab/releases').catch(()=>{});
   else window.open(url,'_blank','noopener');
@@ -126,15 +117,7 @@ export function setupUnifiedUpdateMenu(anchor,onOpenMaterials){
  if(win?.checkAppRelease){
   void win.checkAppRelease().then(r=>{if(r?.status==='available')dot.hidden=false;}).catch(()=>{});
  }
- if(win?.autoCheckContent){
-  void win.autoCheckContent().then(r=>{
-   if(r?.status==='available'||r?.status==='applied')dot.hidden=false;
-   if(r?.status==='applied')document.dispatchEvent(new CustomEvent('sm:content-updated',{detail:r.payload}));
-  }).catch(()=>{});
- }
 
- refresh();
- document.addEventListener('cabinet:language',refresh);
  return {dot};
 }
 export function setupNativePrograms(anchor){return setupUnifiedUpdateMenu(anchor);}

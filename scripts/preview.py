@@ -20,13 +20,6 @@ ROUTES = {
     "/pwa-512.png": "pwa-512.png",
     "/manifest.webmanifest": "manifest.webmanifest",
 }
-DEV_ROUTES = {
-    "/dev": "dev/index.html",
-    "/dev/": "dev/index.html",
-    "/dev/index.html": "dev/index.html",
-    "/dev/style.css": "dev/style.css",
-    "/dev/client.bundle.js": "dev/client.bundle.js",
-}
 
 for pdf_asset in ('pdf.min.mjs','pdf.worker.min.mjs'):
     ROUTES[f'/vendor/pdf/{pdf_asset}']=f'vendor/pdf/{pdf_asset}'
@@ -75,12 +68,6 @@ class PreviewHandler(SimpleHTTPRequestHandler):
         if path not in ROUTES:
             self.send_error(404, "Not part of the live preview")
             return None
-        if path == "/dev":
-            self.send_response(308)
-            self.send_header("Location", "/dev/")
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return None
         if self.aliya is not None and path == '/cabinets/school/teacher.html':
             content = (ROOT / ROUTES[path]).read_bytes().replace(b'</head>', b'<meta name="sm-aliya-gateway" content="local"></head>', 1)
             self.send_response(HTTPStatus.OK); self.send_header('Content-Type','text/html; charset=utf-8')
@@ -100,12 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=4180)
     parser.add_argument("--open", action="store_true", help="Open the app in the local browser after the server has started")
     parser.add_argument("--with-aliya", action="store_true", help="Enable the existing Aliya gateway adapter on loopback, using environment settings")
-    parser.add_argument("--with-dev", action="store_true", help="Enable the archived Dev UI on loopback only")
     args = parser.parse_args()
-    if args.with_dev:
-        if args.host != '127.0.0.1':
-            parser.error('--with-dev requires --host 127.0.0.1')
-        ROUTES.update(DEV_ROUTES)
     if args.with_aliya:
         if args.host != '127.0.0.1': parser.error('--with-aliya requires --host 127.0.0.1')
         try: PreviewHandler.aliya = AliyaGateway()

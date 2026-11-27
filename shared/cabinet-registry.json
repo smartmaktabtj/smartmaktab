@@ -195,339 +195,9 @@
     "number": 20,
     "path": "cabinets/school/teacher.html",
     "title": "Омӯзгор",
-    "description": "Учитель",
+    "description": "Омӯзгор",
     "mode": "example",
     "descriptionTg": "Омӯзгор"
-  },
-  {
-    "id": "advisers-school-leadership",
-    "group": "advisers",
-    "number": 1,
-    "path": "cabinets/maorif/advisers/school-leadership.html",
-    "title": "Роҳбарони мактабҳо",
-    "description": "Руководители школ",
-    "mode": "shell",
-    "schoolCounterpart": "director",
-    "descriptionTg": "Роҳбарони мактабҳо"
-  },
-  {
-    "id": "advisers-academic-work",
-    "group": "advisers",
-    "number": 2,
-    "path": "cabinets/maorif/advisers/academic-work.html",
-    "title": "Кори таълимӣ",
-    "description": "Учебная работа",
-    "mode": "shell",
-    "schoolCounterpart": "academic-deputy",
-    "descriptionTg": "Кори таълимӣ"
-  },
-  {
-    "id": "advisers-upbringing",
-    "group": "advisers",
-    "number": 3,
-    "path": "cabinets/maorif/advisers/upbringing.html",
-    "title": "Кори тарбиявӣ",
-    "description": "Воспитательная работа",
-    "mode": "shell",
-    "schoolCounterpart": "upbringing-deputy",
-    "descriptionTg": "Кори тарбиявӣ"
-  },
-  {
-    "id": "advisers-primary-administration",
-    "group": "advisers",
-    "number": 4,
-    "path": "cabinets/maorif/advisers/primary-administration.html",
-    "title": "Зинаи ибтидоӣ",
-    "description": "Организация начальной ступени",
-    "mode": "shell",
-    "schoolCounterpart": "primary-deputy",
-    "descriptionTg": "Ташкили зинаи ибтидоӣ"
-  },
-  {
-    "id": "advisers-military-preparation",
-    "group": "advisers",
-    "number": 5,
-    "path": "cabinets/maorif/advisers/military-preparation.html",
-    "title": "Омодагии ҳарбӣ",
-    "description": "Военная подготовка",
-    "mode": "shell",
-    "schoolCounterpart": "military-preparation-deputy",
-    "descriptionTg": "Омодагии ҳарбӣ"
-  },
-  {
-    "id": "advisers-sozmon",
-    "group": "advisers",
-    "number": 6,
-    "path": "cabinets/maorif/advisers/sozmon.html",
-    "title": "Созмон",
-    "description": "Функции уточняются",
-    "mode": "shell",
-    "schoolCounterpart": "sozmon",
-    "descriptionTg": "Вазифаҳо дар ҳоли мушаххасшавӣ"
-  },
-  {
-    "id": "advisers-facilities",
-    "group": "advisers",
-    "number": 7,
-    "path": "cabinets/maorif/advisers/facilities.html",
-    "title": "Хоҷагӣ ва амвол",
-    "description": "Хозяйственная работа",
-    "mode": "shell",
-    "schoolCounterpart": "facilities-head",
-    "descriptionTg": "Кори хоҷагӣ"
-  },
-  {
-    "id": "advisers-libraries",
-    "group": "advisers",
-    "number": 8,
-    "path": "cabinets/maorif/advisers/libraries.html",
-    "title": "Китобхонаҳо",
-    "description": "Школьные библиотеки",
-    "mode": "shell",
-    "schoolCounterpart": "library-head",
-    "descriptionTg": "Китобхонаҳои мактабӣ"
-  },
-  {
-    "id": "advisers-school-meals",
-    "group": "advisers",
-    "number": 9,
-    "path": "cabinets/maorif/advisers/school-meals.html",
-    "title": "Ғизои мактабӣ",
-    "description": "Школьное питание",
-    "mode": "shell",
-    "schoolCounterpart": "canteen-head",
-    "descriptionTg": "Ғизои мактабӣ"
-  },
-  {
-    "id": "advisers-education-quality",
-    "group": "advisers",
-    "number": 10,
-    "path": "cabinets/maorif/advisers/education-quality.html",
-    "title": "Сифати таҳсилот",
-    "description": "Качество образования",
-    "mode": "shell",
-    "schoolCounterpart": "education-quality",
-    "descriptionTg": "Сифати таҳсилот"
-  },
-  {
-    "id": "advisers-psychological-services",
-    "group": "advisers",
-    "number": 11,
-    "path": "cabinets/maorif/advisers/psychological-services.html",
-    "title": "Хадамоти равоншиносӣ",
-    "description": "Психологическая служба",
-    "mode": "shell",
-    "schoolCounterpart": "psychologist",
-    "descriptionTg": "Хадамоти равоншиносӣ"
-  },
-  {
-    "id": "advisers-records-management",
-    "group": "advisers",
-    "number": 12,
-    "path": "cabinets/maorif/advisers/records-management.html",
-    "title": "Коргузорӣ",
-    "description": "Делопроизводство",
-    "mode": "shell",
-    "schoolCounterpart": "records-clerk",
-    "descriptionTg": "Коргузорӣ"
-  },
-  {
-    "id": "advisers-school-accounting",
-    "group": "advisers",
-    "number": 13,
-    "path": "cabinets/maorif/advisers/school-accounting.html",
-    "title": "Муҳосиботи мактабҳо",
-    "description": "Сопровождение школьных бухгалтерий",
-    "mode": "shell",
-    "schoolCounterpart": "accountant",
-    "descriptionTg": "Дастгирии муҳосиботи мактабҳо"
-  },
-  {
-    "id": "advisers-class-leadership",
-    "group": "advisers",
-    "number": 14,
-    "path": "cabinets/maorif/advisers/class-leadership.html",
-    "title": "Роҳбарии синф",
-    "description": "Классное руководство",
-    "mode": "shell",
-    "schoolCounterpart": "class-teacher",
-    "descriptionTg": "Роҳбарии синф"
-  },
-  {
-    "id": "advisers-girls-councils",
-    "group": "advisers",
-    "number": 15,
-    "path": "cabinets/maorif/advisers/girls-councils.html",
-    "title": "Шӯроҳои духтарон",
-    "description": "Советы девушек",
-    "mode": "shell",
-    "schoolCounterpart": "girls-council-chair",
-    "descriptionTg": "Шӯроҳои духтарон"
-  },
-  {
-    "id": "advisers-upper-class-method-work",
-    "group": "advisers",
-    "number": 16,
-    "path": "cabinets/maorif/advisers/upper-class-method-work.html",
-    "title": "Кори методии синфҳои боло",
-    "description": "Методическая работа старших классов",
-    "mode": "shell",
-    "schoolCounterpart": "upper-class-method-group",
-    "descriptionTg": "Кори методии синфҳои болоӣ"
-  },
-  {
-    "id": "advisers-lower-class-method-work",
-    "group": "advisers",
-    "number": 17,
-    "path": "cabinets/maorif/advisers/lower-class-method-work.html",
-    "title": "Кори методии синфҳои поён",
-    "description": "Методическая работа младших классов",
-    "mode": "shell",
-    "schoolCounterpart": "lower-class-method-group",
-    "descriptionTg": "Кори методии синфҳои поёнӣ"
-  },
-  {
-    "id": "advisers-method-groups",
-    "group": "advisers",
-    "number": 18,
-    "path": "cabinets/maorif/advisers/method-groups.html",
-    "title": "Иттиҳодияҳои методӣ",
-    "description": "Методические объединения",
-    "mode": "shell",
-    "schoolCounterpart": "five-method-groups",
-    "descriptionTg": "Иттиҳодияҳои методӣ"
-  },
-  {
-    "id": "advisers-subject-rooms",
-    "group": "advisers",
-    "number": 19,
-    "path": "cabinets/maorif/advisers/subject-rooms.html",
-    "title": "Кабинетҳои фаннӣ",
-    "description": "Предметные кабинеты",
-    "mode": "shell",
-    "schoolCounterpart": "subject-room-head",
-    "descriptionTg": "Утоқҳои фаннӣ"
-  },
-  {
-    "id": "advisers-teaching-support",
-    "group": "advisers",
-    "number": 20,
-    "path": "cabinets/maorif/advisers/teaching-support.html",
-    "title": "Дастгирии омӯзгорон",
-    "description": "Сопровождение учителей",
-    "mode": "shell",
-    "schoolCounterpart": "teacher",
-    "descriptionTg": "Дастгирии омӯзгорон"
-  },
-  {
-    "id": "subjects-tajik-language-literature",
-    "group": "subjects",
-    "number": 1,
-    "path": "cabinets/maorif/subjects/tajik-language-literature.html",
-    "title": "Мушовири забон ва адабиёти тоҷик",
-    "description": "Таджикский язык и литература",
-    "mode": "shell",
-    "descriptionTg": "Забон ва адабиёти тоҷик"
-  },
-  {
-    "id": "subjects-russian-language",
-    "group": "subjects",
-    "number": 2,
-    "path": "cabinets/maorif/subjects/russian-language.html",
-    "title": "Мушовири забони русӣ",
-    "description": "Русский язык",
-    "mode": "shell",
-    "descriptionTg": "Забони русӣ"
-  },
-  {
-    "id": "subjects-english-language",
-    "group": "subjects",
-    "number": 3,
-    "path": "cabinets/maorif/subjects/english-language.html",
-    "title": "Мушовири забони англисӣ",
-    "description": "Английский язык",
-    "mode": "shell",
-    "descriptionTg": "Забони англисӣ"
-  },
-  {
-    "id": "subjects-informatics",
-    "group": "subjects",
-    "number": 4,
-    "path": "cabinets/maorif/subjects/informatics.html",
-    "title": "Мушовири информатика",
-    "description": "Информатика",
-    "mode": "example",
-    "descriptionTg": "Информатика"
-  },
-  {
-    "id": "subjects-mathematics",
-    "group": "subjects",
-    "number": 5,
-    "path": "cabinets/maorif/subjects/mathematics.html",
-    "title": "Математика",
-    "description": "Математика",
-    "mode": "proposed",
-    "descriptionTg": "Математика"
-  },
-  {
-    "id": "subjects-physics",
-    "group": "subjects",
-    "number": 6,
-    "path": "cabinets/maorif/subjects/physics.html",
-    "title": "Физика",
-    "description": "Физика",
-    "mode": "proposed",
-    "descriptionTg": "Физика"
-  },
-  {
-    "id": "subjects-chemistry",
-    "group": "subjects",
-    "number": 7,
-    "path": "cabinets/maorif/subjects/chemistry.html",
-    "title": "Химия",
-    "description": "Химия",
-    "mode": "proposed",
-    "descriptionTg": "Химия"
-  },
-  {
-    "id": "subjects-biology",
-    "group": "subjects",
-    "number": 8,
-    "path": "cabinets/maorif/subjects/biology.html",
-    "title": "Биология",
-    "description": "Биология",
-    "mode": "proposed",
-    "descriptionTg": "Биология"
-  },
-  {
-    "id": "subjects-history",
-    "group": "subjects",
-    "number": 9,
-    "path": "cabinets/maorif/subjects/history.html",
-    "title": "Таърих",
-    "description": "История",
-    "mode": "proposed",
-    "descriptionTg": "Таърих"
-  },
-  {
-    "id": "subjects-geography",
-    "group": "subjects",
-    "number": 10,
-    "path": "cabinets/maorif/subjects/geography.html",
-    "title": "География",
-    "description": "География",
-    "mode": "proposed",
-    "descriptionTg": "География"
-  },
-  {
-    "id": "subjects-primary-teaching",
-    "group": "subjects",
-    "number": 11,
-    "path": "cabinets/maorif/subjects/primary-teaching.html",
-    "title": "Таълими ибтидоӣ",
-    "description": "Методика начального обучения",
-    "mode": "proposed",
-    "descriptionTg": "Методикаи таълими ибтидоӣ"
   },
   {
     "id": "office-head",
@@ -535,19 +205,19 @@
     "number": 1,
     "path": "cabinets/maorif/head.html",
     "title": "Мудири маориф",
-    "description": "Заведующий маорифом",
+    "description": "Мудири маориф",
     "mode": "shell",
     "descriptionTg": "Мудири маориф"
   },
   {
-    "id": "office-accounting",
+    "id": "office-clerk",
     "group": "office",
     "number": 2,
-    "path": "cabinets/maorif/accounting.html",
-    "title": "Муҳосиботи маориф",
-    "description": "Бухгалтерия органа маориф",
+    "path": "cabinets/maorif/clerk.html",
+    "title": "Коргаргузори маориф",
+    "description": "Коргаргузори шуъбаи маориф",
     "mode": "shell",
-    "descriptionTg": "Муҳосиботи шуъбаи маориф"
+    "descriptionTg": "Коргаргузори шуъбаи маориф"
   },
   {
     "id": "raesat-head",
@@ -555,8 +225,18 @@
     "number": 1,
     "path": "cabinets/raesat/head.html",
     "title": "Сардори раёсат",
-    "description": "Начальник управления образования",
+    "description": "Сардори раёсати маориф",
     "mode": "example",
-    "descriptionTg": "Сардори раёсат"
+    "descriptionTg": "Сардори раёсати маориф"
+  },
+  {
+    "id": "raesat-clerk",
+    "group": "raesat",
+    "number": 2,
+    "path": "cabinets/raesat/clerk.html",
+    "title": "Коргаргузори раёсат",
+    "description": "Коргаргузори раёсати маориф",
+    "mode": "shell",
+    "descriptionTg": "Коргаргузори раёсати маориф"
   }
 ]

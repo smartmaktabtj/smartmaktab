@@ -1,14 +1,14 @@
-name: SmartMaktab Admin Studio — сборка Windows EXE
+name: SmartMaktab Admin — сохтани Windows EXE
 on:
   workflow_dispatch:
     inputs:
       admin_version:
-        description: 'Версия Admin Studio (X.Y.Z)'
+        description: 'Версияи Admin (X.Y.Z)'
         type: string
         default: '1.0.0'
         required: true
       confirm_unsigned:
-        description: 'Для сборки без Authenticode подписи введите PUBLISH-UNSIGNED'
+        description: 'Барои сохтан бе имзои рақамӣ PUBLISH-UNSIGNED нависед'
         type: string
         default: 'PUBLISH-UNSIGNED'
         required: true
@@ -37,23 +37,19 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Stage assets and build Admin Studio EXE
+          cache-dependency-path: native/admin-windows/package-lock.json
+      - name: Build Admin Windows EXE
         shell: pwsh
         run: |
-          python scripts/stage-admin-desktop.py
+          npm --prefix native/admin-windows ci --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm --prefix admin-desktop install --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Push-Location admin-desktop
+          Push-Location native/admin-windows
           npx --no-install electron-builder --config builder.cjs --win nsis --x64 --publish never
           exit $LASTEXITCODE
       - name: Verify installer and write SHA256SUMS
         shell: pwsh
         run: |
-          $out = Join-Path $PWD 'admin-desktop/release'
+          $out = Join-Path $PWD 'native/admin-windows/release'
           $expected = "SmartMaktab-Admin-${env:SM_ADMIN_VERSION}-Windows-x64-UNSIGNED.exe"
           $file = Get-Item (Join-Path $out $expected) -ErrorAction SilentlyContinue
           if ($null -eq $file) { throw "Missing $expected" }
@@ -63,5 +59,5 @@ jobs:
         with:
           name: SmartMaktab-Admin-Windows-${{ inputs.admin_version }}
           path: |
-            admin-desktop/release/*.exe
-            admin-desktop/release/SHA256SUMS.txt
+            native/admin-windows/release/*.exe
+            native/admin-windows/release/SHA256SUMS.txt

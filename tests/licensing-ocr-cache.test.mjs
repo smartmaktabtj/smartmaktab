@@ -276,19 +276,21 @@ test('cloud UI and license helpers survive sandboxed frames without localStorage
   }
 });
 
-test('position catalog covers all 54 positions, tariff calculation, and anti-sharing cabinet checks', async () => {
-  assert.equal(POSITION_CATALOG.length, 54);
+test('position catalog covers all 24 positions, tariff calculation, and anti-sharing cabinet checks', async () => {
+  assert.equal(POSITION_CATALOG.length, 24);
   assert.equal(getRoleForPosition('school-director'), 'school_admin');
   assert.equal(getRoleForPosition('school-library-head'), 'staff');
   assert.equal(getRoleForPosition('office-head'), 'maorif');
+  assert.equal(getRoleForPosition('office-clerk'), 'maorif');
   assert.equal(getRoleForPosition('raesat-head'), 'authority_viewer');
+  assert.equal(getRoleForPosition('raesat-clerk'), 'authority_viewer');
 
   const schoolPositions = getPositionsForOrg({ kind: 'school' });
   assert.equal(schoolPositions.length, 20);
   const maorifPositions = getPositionsForOrg({ kind: 'education_authority', authority_tier: 'maorif' });
-  assert.equal(maorifPositions.length, 33);
+  assert.equal(maorifPositions.length, 2);
   const raesatPositions = getPositionsForOrg({ kind: 'education_authority', authority_tier: 'raesat' });
-  assert.equal(raesatPositions.length, 34);
+  assert.equal(raesatPositions.length, 4);
 
   assert.equal(isCabinetPermitted({ primary_position: 'school-teacher', extra_positions: ['school-class-teacher'], account_active: true }, 'school-teacher'), true);
   assert.equal(isCabinetPermitted({ primary_position: 'school-teacher', extra_positions: ['school-class-teacher'], account_active: true }, 'school-class-teacher'), true);
