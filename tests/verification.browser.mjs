@@ -230,7 +230,7 @@ test('Verification & Territory browser: verification form submission, primary-on
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
 
-    // Pre-seed cloud session & local profile in localStorage before opening primary cabinet (Director)
+    // Pre-seed cloud session, local workspace & profile in localStorage before opening primary cabinet (Director)
     await page.goto(`${base}/cabinets/school/director.html?school=${orgId}&lang=ru`);
     await page.evaluate(({ orgId }) => {
       localStorage.setItem('smartmaktab.cloud.session.v1', JSON.stringify({
@@ -240,6 +240,17 @@ test('Verification & Territory browser: verification form submission, primary-on
         user: { id: '44444444-4444-4444-8444-444444444444' },
       }));
       localStorage.setItem('smartmaktab.cloud.last_org.v1', orgId);
+      localStorage.setItem('smartmaktab.demo.workspace.v1', JSON.stringify({
+        primary: 'school-director',
+        schools: {
+          'school-director': orgId,
+          'school-five-method-groups': orgId,
+        },
+        roles: [
+          { id: 'school-director', path: 'cabinets/school/director.html', title: 'Директор' },
+          { id: 'school-five-method-groups', path: 'cabinets/school/five-method-groups.html', title: 'Методобъединение' },
+        ],
+      }));
       localStorage.setItem('smartmaktab.profile.v1', JSON.stringify({
         organizationId: orgId,
         organizationName: 'МТМУ № 77',
