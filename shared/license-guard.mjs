@@ -13,8 +13,16 @@ const copy = {
   days: ['рӯз', 'дн.'],
   lockTitle: ['Дастрасии мактаб маҳдуд карда шуд', 'Доступ ограничен'],
   lockExpired: [
-    'Муҳлати иҷозатнома ва 30 рӯзи давраи имтиёзӣ ба охир расид. Барои идома додан пардохтро тасдиқ кунед ё онлайн санҷед.',
-    'Срок лицензии и 30-дневный льготный период истекли. Подтвердите оплату или выполните онлайн-проверку.',
+    'Муҳлати иҷозатнома ба охир расид. Барои идома додан пардохтро тасдиқ кунед ё онлайн санҷед.',
+    'Срок подписки истёк. Подтвердите оплату или выполните онлайн-проверку.',
+  ],
+  lockTrialExpired: [
+    'Моҳи аввали ройгон ба анҷом расид. Барои идомаи кор бо барнома обунаро пардохт кунед.',
+    'Первый бесплатный месяц завершён. Для продолжения работы с программой оплатите подписку.',
+  ],
+  payPrimaryOnlyNote: [
+    'Пардохти обуна танҳо аз тирезаи вазифаи асосии шумо анҷом дода мешавад:',
+    'Оплата подписки выполняется только в окне вашей основной должности:',
   ],
   lockClock: [
     'Таърихи дастгоҳ ба ақиб баргардонида шудааст. Иҷозатномаро онлайн санҷед.',
@@ -120,11 +128,18 @@ export function evaluateLicenseState(record, nowMs = Date.now(), cabinetId = '')
     const daysLeft = Math.max(0, Math.ceil((expiresMs - nowMs) / MS_PER_DAY));
     return { status: record.status, allowed: true, reason: 'valid', daysLeft, graceDaysLeft: graceDays, clockTampered: false };
   }
-  if (nowMs <= graceEndMs && record.status !== 'expired') {
+  if (graceDays > 0 && nowMs <= graceEndMs && record.status !== 'expired') {
     const graceDaysLeft = Math.max(0, Math.ceil((graceEndMs - nowMs) / MS_PER_DAY));
     return { status: 'grace', allowed: true, reason: 'offline_grace', daysLeft: 0, graceDaysLeft, clockTampered: false };
   }
-  return { status: 'locked', allowed: false, reason: 'grace_expired', daysLeft: 0, graceDaysLeft: 0, clockTampered: false };
+  return {
+    status: 'locked',
+    allowed: false,
+    reason: record.status === 'trial' ? 'trial_expired' : 'grace_expired',
+    daysLeft: 0,
+    graceDaysLeft: 0,
+    clockTampered: false,
+  };
 }
 
 function safeStorage(storage) {
@@ -196,7 +211,7 @@ export function clearCachedLicense(orgId, storage) {
   try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
 }
 
-export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment } = {}) {
+export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment, isPrimaryPosition = true, primaryPosition = null } = {}) {
   const lang = document.documentElement.lang === 'ru' ? 'ru' : 'tg';
   const tg = () => lang === 'tg';
   const t = k => copy[k][tg() ? 0 : 1];
@@ -224,11 +239,21 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
     else if (state.reason === 'suspended') p.textContent = t('lockSuspended');
     else if (state.reason === 'device_limit_reached') p.textContent = t('lockDeviceLimit');
     else if (state.reason === 'account_disabled') p.textContent = t('lockDisabled');
+    else if (state.reason === 'trial_expired') p.textContent = t('lockTrialExpired');
     else if (state.reason === 'position_not_allowed') {
       const posLabel = state.primaryPosition ? ` (${t('allowedPositionPrefix')} ${formatPositionTitle(state.primaryPosition, lang)})` : '';
       p.textContent = `${t('lockPosition')}${posLabel}`;
     } else {
       p.textContent = t('lockExpired');
+    }
+    if (!isPrimaryPosition && (primaryPosition || record?.primary_position)) {
+      const noteP = document.createElement('p');
+      noteP.className = 'small';
+      const primCode = primaryPosition || record?.primary_position;
+      noteP.textContent = `${t('payPrimaryOnlyNote')} ${formatPositionTitle(primCode, lang)}`;
+      box.append(h, p, noteP);
+    } else {
+      box.append(h, p);
     }
     const row = document.createElement('div');
     row.className = 'control';
@@ -240,7 +265,7 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
       btn.addEventListener('click', onVerifyOnline);
       row.append(btn);
     }
-    if (typeof onOpenPayment === 'function') {
+    if (isPrimaryPosition && typeof onOpenPayment === 'function') {
       const pay = document.createElement('button');
       pay.type = 'button';
       pay.className = 'button alt';
@@ -248,7 +273,7 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
       pay.addEventListener('click', onOpenPayment);
       row.append(pay);
     }
-    box.append(h, p, row);
+    box.append(row);
     container.append(box);
   }
   return state;

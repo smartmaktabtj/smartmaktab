@@ -159,7 +159,7 @@
 <span class="price-pill">+30 сомонӣ</span>
 </div>
 <div class="total-bar">
-<span class="small" id="priceWarning" data-tg="Диққат: ҳар як вазифаи иловагӣ ва Алия ба маблағи умумӣ илова карда мешавад.">Важно: каждая дополнительная должность и Алия увеличивают итоговую стоимость.</span>
+<span class="small" id="priceWarning" data-tg="Моҳи 1-ум ройгон (30 рӯз) · Баъд барои 3, 6, 9, 12 моҳ тахфиф то 15%. Ҳар вазифаи иловагӣ ва Алия ба маблағ илова мешавад.">1-й месяц бесплатно (30 дней) · Далее скидка до 15% за 3, 6, 9, 12 мес. Каждая доп. должность и Алия увеличивают стоимость.</span>
 <span class="total-val" id="totalPriceAmount">Ҳамагӣ: 0 сомонӣ / моҳ</span>
 </div>
 </div>
@@ -235,11 +235,15 @@
 <button type="button" class="button alt" id="toggleNewSchoolBtn" data-tg="Мактаби мо дар рӯйхат нест — Илова кардан">Нашей школы нет в списке — Добавить</button>
 </div>
 <div id="newSchoolForm" class="row" hidden style="margin-top:10px">
-<p class="small" data-tg="Вилоят ва ноҳияро интихоб карда, номи мактабатонро ворид кунед:">Выберите область и район, затем укажите название вашей школы:</p>
+<p class="small" data-tg="Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:">Выберите область, район, джамоат и село, затем укажите название вашей школы:</p>
 <div class="inputs">
 <label class="field"><span data-tg="Вилоят / Шаҳр">Область / Регион</span><select id="newSchoolRegion"></select></label>
 <label class="field"><span data-tg="Шаҳр / Ноҳия (Маориф)">Город / Район (Маориф)</span><input id="newSchoolDistrict" list="newSchoolDistrictList" maxlength="120" placeholder="Хуҷанд / Данғара"></label>
 <datalist id="newSchoolDistrictList"></datalist>
+<label class="field"><span data-tg="Ҷамоат / Шаҳрак">Джамоат / Посёлок</span><select id="newSchoolJamoatSelect"></select></label>
+<label class="field" id="newSchoolJamoatCustomWrap" hidden><span data-tg="Номи ҷамоат (дастӣ)">Название джамоата (вручную)</span><input id="newSchoolJamoatCustom" maxlength="120" placeholder="Ҷамоати ..."></label>
+<label class="field"><span data-tg="Деҳа / Маҳалла / Шаҳр">Село / Населённый пункт</span><select id="newSchoolVillageSelect"></select></label>
+<label class="field" id="newSchoolVillageCustomWrap" hidden><span data-tg="Номи деҳа (дастӣ)">Название села (вручную)</span><input id="newSchoolVillageCustom" maxlength="120" placeholder="Деҳаи ..."></label>
 <label class="field"><span data-tg="Номи мактаб">Название школы</span><input id="newSchoolName" maxlength="160" placeholder="МТМУ № 99"></label>
 <label class="field"><span data-tg="Рамзи мактаб (ихтиёрӣ)">Код школы (необязательно)</span><input id="newSchoolCode" maxlength="40" placeholder="SM-099"></label>
 </div>

@@ -54,6 +54,7 @@
 
       <nav class="adm-tabs" role="tablist">
         <button type="button" class="btn alt" data-tab="orgs" data-t="tabOrgs"></button>
+        <button type="button" class="btn alt" data-tab="verifications" data-t="tabVerifications"></button>
         <button type="button" class="btn alt" data-tab="roles" data-t="tabRoles"></button>
         <button type="button" class="btn alt" data-tab="licenses" data-t="tabLicenses"></button>
         <button type="button" class="btn alt" data-tab="plans" data-t="tabPlans"></button>
@@ -94,6 +95,16 @@
             <input id="orgDistrict" maxlength="120" list="districtDatalist">
             <datalist id="districtDatalist"></datalist>
             <small data-t="districtHint"></small>
+          </label>
+          <label class="adm-field">
+            <span data-t="jamoat"></span>
+            <input id="orgJamoat" maxlength="120" list="jamoatDatalist">
+            <datalist id="jamoatDatalist"></datalist>
+          </label>
+          <label class="adm-field">
+            <span data-t="village"></span>
+            <input id="orgVillage" maxlength="120" list="villageDatalist">
+            <datalist id="villageDatalist"></datalist>
           </label>
           <label class="adm-field">
             <span data-t="orgParent"></span>
@@ -143,6 +154,25 @@
               </tr>
             </thead>
             <tbody id="orgsTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 1Б. ВЕРИФИКАЦИЯ АККАУНТОВ И НОВЫХ ШКОЛ -->
+      <section class="adm-card" data-pane="verifications" hidden>
+        <h2 data-t="tabVerifications"></h2>
+        <p class="adm-hint" data-t="verificationsHint"></p>
+        <div class="adm-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-t="colUser"></th>
+                <th data-t="colOrgPosition"></th>
+                <th data-t="colIdentity"></th>
+                <th data-t="colActions"></th>
+              </tr>
+            </thead>
+            <tbody id="verificationsTbody"></tbody>
           </table>
         </div>
       </section>

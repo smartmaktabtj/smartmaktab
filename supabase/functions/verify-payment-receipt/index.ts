@@ -86,6 +86,8 @@ Deno.serve(async (req: Request) => {
       ? body.extra_positions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
       : [];
     const includeAliya = body?.include_aliya === true;
+    const rawMonths = Number(body?.months ?? 1);
+    const months = [1, 3, 6, 9, 12].includes(rawMonths) ? rawMonths : 1;
     const currency = typeof body?.currency === 'string' ? body.currency.trim() : 'TJS';
     let ocrText = typeof body?.ocr_text === 'string' ? body.ocr_text : '';
     let ocrSource = ocrText ? 'client_tesseract' : 'none';
@@ -158,6 +160,7 @@ Deno.serve(async (req: Request) => {
       p_primary_position: primaryPosition,
       p_extra_positions: extraPositions,
       p_include_aliya: includeAliya,
+      p_months: months,
     });
 
     if (error) {

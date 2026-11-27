@@ -20,6 +20,10 @@ import {
   loadAnalyticsSummary,
   resolvePhase2Context,
 } from './phase2-store.mjs';
+import { persistentStore } from './cabinet-runtime.mjs';
+import { createCloudClient } from './cloud-client.mjs';
+import { getCloudConfig } from './cloud-config.mjs';
+import { canPositionVerifySchoolStaff, formatPositionTitle } from './position-catalog.mjs';
 import {
   parseStudentImportFile,
   buildStudentsCsv,
@@ -87,6 +91,45 @@ export function setupPhase2Panels(article, docs, school, views) {
       organizationName: s?.name || '',
     });
   };
+
+  function getAuthedCloudClient() {
+    try {
+      const cl = createCloudClient({
+        config: getCloudConfig(persistentStore),
+        storage: persistentStore,
+        storageKey: 'smartmaktab.cloud.session.v1',
+      });
+      return cl?.session?.access_token ? cl : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function dbLockBannerHtml() {
+    const c = ctx();
+    if (!c.hasCloudSession || c.verified) return '';
+    const msg = c.verificationStatus === 'rejected'
+      ? txt(
+        'Дархости тасдиқи шумо рад ва нест карда шуд. Дастрасӣ ба пойгоҳи додаҳо маҳдуд аст — ба директор ё маориф муроҷиат намоед.',
+        'Ваша заявка отклонена и удалена. Доступ к базе данных закрыт — обратитесь к директору или в Маориф.',
+      )
+      : txt(
+        'Ҳисоби шумо ҳанӯз верификатсия нашудааст. То тасдиқ танҳо реҷаи маҳаллӣ/файлӣ кор мекунад, пойгоҳи додаҳо баста аст.',
+        'Аккаунт не верифицирован. До подтверждения работает только локальный режим с файлами, база данных закрыта.',
+      );
+    return `
+      <div class="notice sm-db-verif-lock" role="status">
+        <p class="small">${esc(msg)}</p>
+        <button type="button" class="button alt" data-open-account-verif="1">${esc(txt('Верификатсия', 'Верификация'))}</button>
+      </div>
+    `;
+  }
+
+  article.addEventListener('click', ev => {
+    if (ev.target?.closest?.('[data-open-account-verif]')) {
+      document.dispatchEvent(new CustomEvent('sm:open-account-verification'));
+    }
+  });
 
   // Entry group in #workspaceDocs + #cabinetRailNav (never bloating #cabinetHome on teacher.html)
   const docsWrap = document.createElement('div');
@@ -157,6 +200,7 @@ export function setupPhase2Panels(article, docs, school, views) {
 
       panel.innerHTML = `
         <h2 tabindex="-1">${esc(txt('Феҳристи хонандагон ва воридот (Word / Excel)', 'Реестр учеников и импорт (Word / Excel)'))}</h2>
+        ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Файлҳои .docx, .xlsx, .csv ё .tsv-ро ворид кунед ё хонандаро дастӣ илова намоед.', 'Загрузите файл .docx, .xlsx, .csv или .tsv, либо добавьте ученика вручную.'))}</p>
         <div class="sm-p2-kpis">
           <div class="sm-p2-kpi"><span>${esc(txt('Ҳамагӣ хонандагон', 'Всего учеников'))}</span><b>${filtered.length}</b></div>
@@ -328,6 +372,7 @@ export function setupPhase2Panels(article, docs, school, views) {
 
       panel.innerHTML = `
         <h2 tabindex="-1">${esc(txt('Соатҳои дарсӣ ва дараҷаи тахассусии омӯзгор', 'Учебные часы и квалификационная категория учителя'))}</h2>
+        ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Меъёри 1 ставка = 18 соат/ҳафта. Ин маълумот барои муҳосиб дар ҳисоббаробаркунии маош истифода мешавад.', 'Норма 1 ставки = 18 ч/нед. Данные используются бухгалтером для расчёта зарплаты.'))}</p>
         <div class="sm-p2-kpis">
           <div class="sm-p2-kpi"><span>${esc(txt('Омӯзгорон дар рӯйхат', 'Учителей в списке'))}</span><b>${state.rows.length}</b></div>
@@ -459,6 +504,7 @@ export function setupPhase2Panels(article, docs, school, views) {
 
       panel.innerHTML = `
         <h2 tabindex="-1">${esc(txt('Ҳисоббаробаркунии маош ва тақвими истироҳат', 'Расчёт заработной платы и календарь исключений'))}</h2>
+        ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Тарифҳо, андоз ва рӯзҳои истироҳат/идро танзим кунед. Зер кардани сана дар тақвим онро аз рӯзҳои корӣ хориҷ мекунад.', 'Настройте тарифы, налоги и выходные/праздничные дни. Нажатие на дату исключает её из рабочих дней.'))}</p>
         <div class="sm-p2-kpis">
           <div class="sm-p2-kpi"><span>${esc(txt('Рӯзҳои кории моҳ', 'Рабочих дней'))}</span><b>${calc.calendar.effectiveWorkingDays} / ${calc.calendar.possibleWorkingDays}</b></div>
@@ -649,6 +695,7 @@ export function setupPhase2Panels(article, docs, school, views) {
 
       panel.innerHTML = `
         <h2 tabindex="-1">${esc(txt('Баҳоҳои чорякии роҳбари синф ва сифат', 'Четвертные оценки классного руководителя'))}</h2>
+        ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Меъёри 10-холаи Тоҷикистон: сифат = баҳои 8–10, азхудкунӣ = баҳои 4–10.', '10-балльная шкала РТ: качество = 8–10 баллов, успеваемость = 4–10 баллов.'))}</p>
         <div class="sm-p2-grid">
           <label class="field"><span>${esc(txt('Давра / Чоряк', 'Период / Четверть'))}</span>
@@ -769,6 +816,7 @@ export function setupPhase2Panels(article, docs, school, views) {
 
       panel.innerHTML = `
         <h2 tabindex="-1">${esc(txt('Таҳлили зиндаи сифат ва омори муассиса', 'Живая аналитика качества и сводка'))}</h2>
+        ${dbLockBannerHtml()}
         <p class="small">${esc(summary.organization_name || '')}</p>
         <div class="sm-p2-kpis">
           <div class="sm-p2-kpi"><span>${esc(txt('Хонандагон', 'Учеников'))}</span><b>${summary.student_count || 0}</b></div>
@@ -800,7 +848,7 @@ export function setupPhase2Panels(article, docs, school, views) {
       'Иерархическая проверка документов от сотрудника к директору и в маориф',
     );
 
-    let state = { items: [], statusMsg: '' };
+    let state = { items: [], accountQueue: [], canReviewAccounts: false, statusMsg: '' };
     const statusBadge = st => {
       const map = {
         pending: txt('Интизор', 'Ожидает'),
@@ -813,9 +861,59 @@ export function setupPhase2Panels(article, docs, school, views) {
     };
 
     renderVerification = async () => {
-      state.items = await loadVerifications(ctx());
+      const c = ctx();
+      state.items = await loadVerifications(c);
+      state.accountQueue = [];
+      state.canReviewAccounts = false;
+
+      const cl = getAuthedCloudClient();
+      let prof = {};
+      try { prof = JSON.parse(persistentStore.getItem('smartmaktab.profile.v1') || '{}') || {}; } catch {}
+      const canReview = Boolean(
+        cl && c.verified && (isAuthority || prof.canReviewVerifications || canPositionVerifySchoolStaff(prof.primaryPosition || cabinetId)),
+      );
+      if (canReview) {
+        state.canReviewAccounts = true;
+        try {
+          const rows = await cl.getPendingAccountVerifications(isAuthority ? null : (c.orgId && /^[0-9a-f-]{36}$/i.test(c.orgId) ? c.orgId : null));
+          if (Array.isArray(rows)) state.accountQueue = rows;
+        } catch {}
+      }
+
+      const accountSectionHtml = c.hasCloudSession ? `
+        <section class="section" style="margin-bottom:14px">
+          <h3>${esc(txt('Верификатсияи ҳисобҳо (Корманд → Директор → Маориф)', 'Верификация аккаунтов (Сотрудник → Директор → Маориф)'))}</h3>
+          ${!c.verified ? dbLockBannerHtml() : ''}
+          ${state.canReviewAccounts ? `
+            <p class="small">${esc(txt('Дархостҳои воридшуда бо ФИО, санаи таваллуд, телефон ва рақами шиноснома:', 'Входящие заявки с ФИО, датой рождения, телефоном и номером паспорта:'))}</p>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>${esc(txt('Корманд ва вазифа', 'Пользователь и должность'))}</th><th>${esc(txt('Мактаб / Ҷамоат', 'Школа / Джамоат'))}</th><th>${esc(txt('Санаи таваллуд', 'Дата рождения'))}</th><th>${esc(txt('Телефон / Шиноснома', 'Телефон / Паспорт'))}</th><th>${esc(txt('Қарор', 'Решение'))}</th></tr></thead>
+                <tbody>
+                  ${state.accountQueue.length ? state.accountQueue.map(req => `
+                    <tr>
+                      <td><strong>${esc(req.full_name)}</strong><div class="small">${esc(formatPositionTitle(req.primary_position, getLang()))}</div></td>
+                      <td>${esc(req.organization_name || '')}<div class="small">${esc([req.district_name, req.jamoat_name, req.village_name].filter(Boolean).join(' · '))}</div></td>
+                      <td>${esc(req.birth_date || '')}</td>
+                      <td>${esc(req.phone || '')}<div class="small">${esc(req.passport_number || '')}</div></td>
+                      <td>
+                        <div class="sm-p2-actions" style="margin:0">
+                          <button type="button" class="button" data-acc-act="verified" data-acc-id="${esc(req.membership_id || req.id || '')}">${esc(txt('Тасдиқ', 'Подтвердить'))}</button>
+                          <button type="button" class="button alt" data-acc-act="rejected" data-acc-id="${esc(req.membership_id || req.id || '')}">${esc(txt('Рад ва нест кардан', 'Отклонить и удалить'))}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `).join('') : `<tr><td colspan="5" class="small">${esc(txt('Дархости нави верификатсияи аккаунт нест.', 'Новых заявок на верификацию аккаунтов нет.'))}</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+        </section>
+      ` : '';
+
       panel.innerHTML = `
         <h2 tabindex="-1">${esc(txt('Иерархияи санҷиш ва тасдиқ: Корманд → Директор → Маориф', 'Иерархия проверки: Сотрудник → Директор → Маориф'))}</h2>
+        ${accountSectionHtml}
         <p class="small">${esc(txt('Ҳар як ҳуҷҷат, нақша ё баҳогузорӣ аввал аз тасдиқи директор гузашта, сипас ба шуъбаи маориф фиристода мешавад.', 'Документы и отчёты сначала проверяет директор школы, затем утверждает отдел образования (Маориф).'))}</p>
         ${!isAuthority ? `
           <form id="smVerifForm" class="sm-p2-grid" autocomplete="off">
@@ -902,6 +1000,31 @@ export function setupPhase2Panels(article, docs, school, views) {
         });
       });
 
+      panel.querySelectorAll('[data-acc-act]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const cl2 = getAuthedCloudClient();
+          if (!cl2) return;
+          const rawDecision = btn.dataset.accAct;
+          const decision = rawDecision === 'approved' ? 'verified' : rawDecision;
+          const membershipId = btn.dataset.accId;
+          btn.disabled = true;
+          try {
+            await cl2.reviewAccountVerification({
+              p_membership_id: membershipId,
+              p_decision: decision,
+              p_note: '',
+            });
+            state.statusMsg = decision === 'verified'
+              ? txt('Ҳисоб тасдиқ карда шуд.', 'Аккаунт подтверждён.')
+              : txt('Дархост рад ва нест карда шуд.', 'Заявка отклонена и удалена.');
+            await renderVerification();
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            await renderVerification();
+          }
+        });
+      });
+
       panel.querySelectorAll('[data-mao-act]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const decision = btn.dataset.maoAct;
@@ -948,6 +1071,7 @@ export function setupPhase2Panels(article, docs, school, views) {
 
   document.addEventListener('cabinet:language', syncLabels);
   document.addEventListener('cabinet:school', () => refreshAll(true));
+  document.addEventListener('sm:cloud-context-changed', () => refreshAll(true));
 
   docsTitle.textContent = txt('Модулҳои корӣ ва таҳлил', 'Рабочие модули и аналитика');
   for (const item of navEntries) {

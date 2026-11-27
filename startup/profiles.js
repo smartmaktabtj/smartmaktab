@@ -107,21 +107,29 @@ const DEFAULT_REGIONS=['Душанбе','Вилояти Суғд','Вилоят�
 function readLocalCustomSchools(){
  try{const v=JSON.parse(localStorage.getItem('smartmaktab.custom_schools.v1')||'[]');return Array.isArray(v)?v:[];}catch{return [];}
 }
+function formatSchoolAddress(s){
+ return [s?.district_name,s?.jamoat_name,s?.village_name].filter(Boolean).join(', ');
+}
 function buildMergedSchoolCatalog(){
+ const cloudReady=state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools);
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools:[];
  const localCustom=readLocalCustomSchools();
- const base=cloud.length
-  ? cloud.map(s=>({
-     id:s.id,
-     name:s.name+(s.district_name?` (${s.district_name})`:''),
-     isCloud:true,
-     raw:s,
-    }))
+ const base=cloudReady
+  ? cloud.map(s=>{
+     const addr=formatSchoolAddress(s);
+     return {
+      id:s.id,
+      name:s.name+(addr?` (${addr})`:''),
+      isCloud:true,
+      raw:s,
+     };
+    })
   : schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:null}));
  const seen=new Set(base.map(b=>b.id));
  for(const c of localCustom){
   if(c?.id&&!seen.has(c.id)){
-   base.push({id:c.id,name:c.name+(c.district_name?` (${c.district_name})`:''),isCloud:false,raw:c});
+   const addr=formatSchoolAddress(c);
+   base.push({id:c.id,name:c.name+(addr?` (${addr})`:''),isCloud:false,raw:c});
   }
  }
  return base;
@@ -130,7 +138,7 @@ function filterMergedSchools(term){
  const q=String(term||'').trim().toLocaleLowerCase();
  const all=buildMergedSchoolCatalog();
  if(!q)return all;
- return all.filter(s=>s.name.toLocaleLowerCase().includes(q)||(s.raw?.school_code||'').toLocaleLowerCase().includes(q));
+ return all.filter(s=>s.name.toLocaleLowerCase().includes(q)||(s.raw?.school_code||'').toLocaleLowerCase().includes(q)||(s.raw?.jamoat_name||'').toLocaleLowerCase().includes(q)||(s.raw?.village_name||'').toLocaleLowerCase().includes(q));
 }
 function resolveSchoolTitle(schoolId){
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools.find(s=>s.id===schoolId):null;
@@ -141,15 +149,66 @@ function resolveSchoolTitle(schoolId){
 }
 function populateNewSchoolTerritory(){
  const regSel=$('newSchoolRegion'),distList=$('newSchoolDistrictList');
+ const jamSel=$('newSchoolJamoatSelect'),jamCustomWrap=$('newSchoolJamoatCustomWrap');
+ const vilSel=$('newSchoolVillageSelect'),vilCustomWrap=$('newSchoolVillageCustomWrap');
  if(!regSel||!distList)return;
  const auths=Array.isArray(state.cloudAuthorities)?state.cloudAuthorities:[];
- const regions=[...new Set([...auths.map(a=>a.region_name).filter(Boolean),...DEFAULT_REGIONS])];
+ const locs=Array.isArray(state.cloudLocations)&&state.cloudLocations.length?state.cloudLocations:null;
+ const regionSet=new Set(DEFAULT_REGIONS);
+ for(const a of auths){
+  if(!a.region_name)continue;
+  const c=canonicalRegionName(a.region_name);
+  if(![...regionSet].some(r=>canonicalRegionName(r)===c))regionSet.add(a.region_name);
+ }
+ if(locs){
+  for(const r of getRegionNames(locs)){
+   if(![...regionSet].some(x=>canonicalRegionName(x)===canonicalRegionName(r)))regionSet.add(r);
+  }
+ }
+ const regions=[...regionSet];
  const prevReg=regSel.value||state.newSchool?.region_name||'';
  regSel.replaceChildren(new Option(fp('pick'),''),...regions.map(r=>new Option(r,r)));
- if(regions.includes(prevReg))regSel.value=prevReg;
+ const matchingReg=regions.find(r=>r===prevReg||canonicalRegionName(r)===canonicalRegionName(prevReg));
+ if(matchingReg)regSel.value=matchingReg;
  const curReg=regSel.value;
- const districts=[...new Set(auths.filter(a=>a.authority_tier==='maorif'&&(!curReg||a.region_name===curReg)).map(a=>a.district_name).filter(Boolean))];
+ const canonReg=canonicalRegionName(curReg);
+
+ const districts=[...new Set([
+  ...getDistrictNames(curReg,locs||undefined),
+  ...auths.filter(a=>a.authority_tier==='maorif'&&(!canonReg||canonicalRegionName(a.region_name)===canonReg)).map(a=>a.district_name).filter(Boolean),
+ ])];
  distList.replaceChildren(...districts.map(d=>Object.assign(document.createElement('option'),{value:d})));
+
+ if(!jamSel||!vilSel)return;
+ const curDist=clean($('newSchoolDistrict')?.value||state.newSchool?.district_name||'');
+ const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
+ const otherLbl=lang==='tg'?'Дигар (дастӣ ворид кардан)':'Другой (ввести вручную)';
+ const pickOptLbl=lang==='tg'?'Интихоб кунед (ихтиёрӣ)':'Выберите (необязательно)';
+ const jamPrev=jamSel.value;
+ jamSel.replaceChildren(
+  new Option(pickOptLbl,''),
+  ...jamoats.map(j=>new Option(j,j)),
+  new Option(otherLbl,'__custom__'),
+ );
+ if(jamPrev&&(jamPrev==='__custom__'||jamoats.includes(jamPrev)))jamSel.value=jamPrev;
+ else if(state.newSchool?.jamoat_name&&jamoats.includes(state.newSchool.jamoat_name))jamSel.value=state.newSchool.jamoat_name;
+ else if(state.newSchool?.jamoat_name&&jamSel.value==='')jamSel.value='__custom__';
+ const isCustomJam=jamSel.value==='__custom__';
+ if(jamCustomWrap)jamCustomWrap.hidden=!isCustomJam;
+
+ const curJam=isCustomJam?clean($('newSchoolJamoatCustom')?.value):jamSel.value;
+ const villages=(curDist&&curJam&&!isCustomJam)?getVillagesForJamoat(curReg,curDist,curJam,locs||undefined):[];
+ const vilPrev=vilSel.value;
+ vilSel.replaceChildren(
+  new Option(pickOptLbl,''),
+  ...villages.map(v=>new Option(v,v)),
+  new Option(otherLbl,'__custom__'),
+ );
+ if(vilPrev&&(vilPrev==='__custom__'||villages.includes(vilPrev)))vilSel.value=vilPrev;
+ else if(state.newSchool?.village_name&&villages.includes(state.newSchool.village_name))vilSel.value=state.newSchool.village_name;
+ else if(state.newSchool?.village_name&&vilSel.value==='')vilSel.value='__custom__';
+ const isCustomVil=vilSel.value==='__custom__';
+ if(vilCustomWrap)vilCustomWrap.hidden=!isCustomVil;
 }
 function canSubmitStep4(){
  if(state.creatingNewSchool){
@@ -180,16 +239,21 @@ function fillSchoolChoices(){
  if(!nextVal&&items.length===1)nextVal=items[0].id;
  choice.value=nextVal;
  state.school=choice.value;
- const hasCloud=Array.isArray(state.cloudSchools)&&state.cloudSchools.length>0;
+ const hasCloudConnection=state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools);
+ const hasCloudSchools=hasCloudConnection&&state.cloudSchools.length>0;
  const hasLogin=Boolean(clean(state.credentials?.login)&&state.credentials?.password);
  const retryBtn=$('retryBootstrapBtn');
- if(retryBtn)retryBtn.hidden=useFileViewer||hasCloud;
+ if(retryBtn)retryBtn.hidden=useFileViewer||hasCloudConnection;
  const demoWarn=$('demoModeWarning');
  if(demoWarn)demoWarn.hidden=hasLogin;
  let notice='';
  if(!items.length){
-  notice=fp('none');
- }else if(!useFileViewer&&!hasCloud){
+  notice=hasCloudConnection&&!hasCloudSchools
+   ?(lang==='tg'
+    ?'Дар пойгоҳи додаҳо ҳанӯз мактаб илова нашудааст. Тугмаи «Мактаби мо дар рӯйхат нест — Илова кардан»-ро пахш кунед.'
+    :'В базе данных школы ещё не добавлены. Нажмите «Нашей школы нет в списке — Добавить», чтобы зарегистрировать вашу школу.')
+   :fp('none');
+ }else if(!useFileViewer&&!hasCloudConnection){
   if(state.bootstrapStatus==='loading'){
    notice=lang==='tg'?'Рӯйхати мактабҳо аз сервер бор мешавад…':'Загрузка списка школ с сервера…';
   }else if(hasLogin){

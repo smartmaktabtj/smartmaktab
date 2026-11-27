@@ -96,7 +96,10 @@ export function resolvePhase2Context(pageCtx = {}) {
   const orgName = pageCtx.organizationName || cloudProfile?.organizationName || 'Мактаби намунавӣ № 1';
   const kind = pageCtx.cabinetId && (pageCtx.cabinetId.startsWith('office-') || pageCtx.cabinetId.startsWith('maorif-') || pageCtx.cabinetId.startsWith('raesat-')) ? 'education_authority' : 'school';
   const tier = pageCtx.cabinetId?.startsWith('raesat-') ? 'raesat' : (kind === 'education_authority' ? 'maorif' : '');
-  const isOnline = Boolean(cloudSess?.access_token && cfg?.url && cfg?.publishableKey && /^[0-9a-f-]{36}$/i.test(String(orgId)));
+  const hasCloudSession = Boolean(cloudSess?.access_token && cfg?.url && cfg?.publishableKey && /^[0-9a-f-]{36}$/i.test(String(orgId)));
+  const verificationStatus = cloudProfile?.verificationStatus || (hasCloudSession ? 'verified' : 'offline');
+  const verified = !hasCloudSession || verificationStatus === 'verified';
+  const isOnline = hasCloudSession && verified;
   const actorRole = pageCtx.cabinetId === 'school-director' ? 'director' : (kind === 'education_authority' ? 'authority_viewer' : 'staff');
   const actorName = cloudProfile?.fullName || pageCtx.userName || pageCtx.cabinetTitle || '';
   return {
@@ -105,6 +108,9 @@ export function resolvePhase2Context(pageCtx = {}) {
     kind,
     tier,
     isOnline,
+    hasCloudSession,
+    verified,
+    verificationStatus,
     accessToken: cloudSess?.access_token || '',
     actorRole,
     actorName,
