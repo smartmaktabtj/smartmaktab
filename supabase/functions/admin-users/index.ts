@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -116,11 +116,9 @@ Deno.serve(async (req) => {
 
     if (action === 'list_users') {
       const authUsers = await listAllAuthUsers(adminClient);
-      const { data: profiles } = await adminClient
-        .from('user_profiles')
-        .select('user_id,full_name,preferred_lang,login_name');
+      const { data: profiles } = await adminClient.rpc('service_list_user_profiles');
       const profileMap = new Map<string, { full_name: string; preferred_lang: string; login_name: string }>();
-      for (const p of profiles ?? []) {
+      for (const p of Array.isArray(profiles) ? profiles : []) {
         profileMap.set(p.user_id, {
           full_name: p.full_name ?? '',
           preferred_lang: p.preferred_lang ?? 'tg',
@@ -173,12 +171,10 @@ Deno.serve(async (req) => {
       const forceResetPassword = body?.reset_password === true;
 
       if (primaryPosition && !role) {
-        const { data: posRow } = await adminClient
-          .from('role_tariffs')
-          .select('access_role')
-          .eq('position_code', primaryPosition)
-          .maybeSingle();
-        if (posRow?.access_role) role = posRow.access_role;
+        const { data: accessRole } = await adminClient.rpc('service_lookup_access_role', {
+          p_position_code: primaryPosition,
+        });
+        if (typeof accessRole === 'string' && accessRole) role = accessRole;
       }
 
       if (!/^[0-9a-f-]{36}$/i.test(orgId) || !VALID_ROLES.has(role)) {
@@ -240,16 +236,12 @@ Deno.serve(async (req) => {
       }
 
       if (fullName || loginDisplay) {
-        await adminClient.from('user_profiles').upsert(
-          {
-            user_id: targetUserId,
-            full_name: fullName || undefined,
-            login_name: loginDisplay || undefined,
-            preferred_lang: preferredLang,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id' },
-        );
+        await adminClient.rpc('service_upsert_user_profile', {
+          p_user_id: targetUserId,
+          p_full_name: fullName || null,
+          p_login_name: loginDisplay || null,
+          p_preferred_lang: preferredLang,
+        });
       }
 
       const { data: membershipId, error: rpcErr } = await userClient.rpc('admin_assign_membership', {

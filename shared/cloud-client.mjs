@@ -68,6 +68,21 @@ export function createCloudClient({
   }
 
   async function fetchRegistrationBootstrap() {
+    try {
+      const rpcRes = await fetchImpl(`${config.url}/rest/v1/rpc/get_registration_bootstrap`, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (rpcRes.ok) {
+        const rpcData = await rpcRes.json().catch(() => null);
+        if (rpcData && Array.isArray(rpcData.schools)) {
+          return rpcData;
+        }
+      }
+    } catch {
+      // Fallback to Edge Function below
+    }
     const res = await fetchImpl(`${config.url}/functions/v1/register-user?action=bootstrap`, {
       method: 'GET',
       headers: { apikey: config.publishableKey },

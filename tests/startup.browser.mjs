@@ -223,8 +223,17 @@ test('cloud registration fails closed when backend is unreachable with login cre
   await page.locator('#toSchoolStep').click();
 
   assert.equal(await page.locator('#demoModeWarning').isVisible(),false);
-  await page.locator('#schoolSearch').fill('88');
-  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
+  // Demo schools must NOT appear when user provided cloud login+password
+  const cloudOpts=await page.locator('#schoolChoice option').evaluateAll(o=>o.map(x=>x.value));
+  assert.equal(cloudOpts.includes('demo-88'),false);
+  assert.equal(await page.locator('#begin').isDisabled(),true);
+
+  // Adding a school manually enables Оғоз, but offline/unreachable backend fails closed
+  await page.locator('#toggleNewSchoolBtn').click();
+  await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
+  await page.locator('#newSchoolDistrict').fill('Исфара');
+  await page.locator('#newSchoolName').fill('МТМУ № 88');
+  await page.waitForFunction(()=>!document.getElementById('begin')?.disabled);
   await page.locator('#begin').click();
 
   // Must stay on Step 4 with visible error and no silent cabinet entry or resume session saved
@@ -234,12 +243,15 @@ test('cloud registration fails closed when backend is unreachable with login cre
   assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.cloud.session.v1')),null);
 
   // Going back to Step 3 and clearing login/password switches cleanly to explicit demo mode
+  await page.locator('#toggleNewSchoolBtn').click();
   await page.locator('[data-step="4"] [data-back="3"]').click();
   await page.locator('#regLogin').fill('');
   await page.locator('#regPassword').fill('');
   await page.locator('#regPassword2').fill('');
   await page.locator('#toSchoolStep').click();
   assert.equal(await page.locator('#demoModeWarning').isVisible(),true);
+  await page.locator('#schoolSearch').fill('88');
+  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
   await page.locator('#begin').click();
   await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=ru');
  }finally{await browser.close();}
