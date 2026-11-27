@@ -207,16 +207,25 @@ test('Verification & Territory browser: verification form submission, primary-on
         });
       }
       if (url.includes('/rpc/get_license_status')) {
+        const nowMs = Date.now();
+        const expIso = new Date(nowMs + 30 * 86_400_000).toISOString();
         return json({
           configured: true,
           organization_id: orgId,
           status: 'trial',
           effective_status: 'trial',
+          plan_code: 'personal_1m',
+          starts_at: new Date(nowMs - 86_400_000).toISOString(),
+          expires_at: expIso,
           grace_days: 0,
+          grace_until: expIso,
+          offline_token_version: 1,
           access_allowed: true,
           days_left: 30,
           grace_days_left: 0,
+          subscription_months: 1,
           verification_status: verifStatus,
+          server_now: new Date(nowMs).toISOString(),
         });
       }
       if (url.includes('/rpc/claim_device_session')) {
