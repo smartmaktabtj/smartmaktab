@@ -1345,6 +1345,7 @@ export function setupPhase2Panels(article, docs, school, views) {
           btn.disabled = true;
           try {
             await cl.managerDeleteUser({ user_id: btn.dataset.usrDelete, org_id: btn.dataset.org });
+            if (state.issuedPass?.user_id === btn.dataset.usrDelete) state.issuedPass = null;
             state.statusMsg = txt('Корбар ҳазф карда шуд.', 'Пользователь удалён.');
             await renderUsers({ refresh: true });
           } catch (err) {

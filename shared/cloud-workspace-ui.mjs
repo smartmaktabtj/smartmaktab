@@ -325,6 +325,7 @@ export function setupCloudWorkspace(article, group, school) {
   const devicesTitle = make('h3');
   const devicesSummary = make('p', 'small');
   const devicesList = make('ul', 'sm-device-list');
+  devicesList.id = 'cloudDevicesList';
   devicesBox.append(devicesTitle, devicesSummary, devicesList);
 
   const cloudList = make('ul');

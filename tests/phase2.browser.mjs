@@ -409,7 +409,7 @@ test('Stage 2 browser: Director "Корбарон" module manages users, devices
 
     // Delete user -> row disappears
     await page.locator(`[data-usr-delete="${teacherUid}"]`).click();
-    await page.waitForFunction(() => !(document.getElementById('smUsersPanel')?.textContent || '').includes('Алиева Мадина'));
+    await page.waitForFunction(() => !(document.querySelector('#smUsersPanel tbody')?.textContent || '').includes('Алиева Мадина'));
 
     assert.ok(rpcCalls.some(([k, b]) => k === 'admin-users' && b.action === 'manager_reset_password' && b.user_id === teacherUid));
     assert.ok(rpcCalls.some(([k, b]) => k === 'reset_devices' && b.p_membership_id === teacherMemId));
