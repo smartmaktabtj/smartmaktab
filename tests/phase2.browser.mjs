@@ -374,6 +374,7 @@ test('Stage 2 browser: Director "Корбарон" module manages users, devices
       }));
     }, { orgId, dirUid });
     await page.reload();
+    await homeView(page);
 
     await page.locator('#smMainModules [data-open-phase2="smUsersPanel"]').click();
     await page.locator('#smUsersPanel').waitFor();
@@ -510,15 +511,16 @@ test('Stage 2 browser: Per-kind device quota lock allows self-unlink on lock scr
     await page.reload();
 
     // Lock screen appears because 1 desktop slot is already taken by Office PC
-    await page.locator('.sm-license-gate').waitFor();
-    await page.waitForFunction(() => (document.querySelector('.sm-license-gate')?.textContent || '').includes('Office PC'));
-    assert.match(await page.locator('.sm-license-gate').innerText(), /компютер/i);
+    await page.locator('#licenseGateBanner .sm-license-lock').waitFor();
+    await page.waitForFunction(() => (document.querySelector('#licenseGateBanner .sm-license-lock')?.textContent || '').includes('Office PC'));
+    assert.match(await page.locator('#licenseGateBanner .sm-license-lock').innerText(), /компютер/i);
 
     // Self-unlink Office PC right from the lock screen -> gate closes & cabinet unlocks
-    await page.locator('.sm-license-gate [data-revoke-device="dev-old-pc"]').click();
-    await page.locator('.sm-license-gate').waitFor({ state: 'hidden' });
+    await page.locator('#licenseGateBanner [data-revoke-device="dev-old-pc"]').click();
+    await page.locator('#licenseGateBanner .sm-license-lock').waitFor({ state: 'hidden' });
 
     // Open cloud panel & check "Дастгоҳҳои ман" shows Android App (mobile)
+    await homeView(page);
     await page.locator('#workspaceSettingsToggle').click();
     await page.locator('[data-cloud-panel-trigger]').click();
     await page.locator('#cloudDevicesBox:not([hidden])').waitFor();

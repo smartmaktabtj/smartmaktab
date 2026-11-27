@@ -304,6 +304,7 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
           const unlinkBtn = document.createElement('button');
           unlinkBtn.type = 'button';
           unlinkBtn.className = 'button alt';
+          unlinkBtn.dataset.revokeDevice = d.device_id;
           unlinkBtn.textContent = t('unlinkOldDevice');
           unlinkBtn.addEventListener('click', async () => {
             unlinkBtn.disabled = true;
