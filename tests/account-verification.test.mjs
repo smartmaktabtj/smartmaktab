@@ -59,6 +59,7 @@ before(async () => {
     '../supabase/migrations/20261126000300_aliya_addon_profiles_positions.sql',
     '../supabase/migrations/20261126000400_phase2_registries_payroll_grades_verification_hierarchy.sql',
     '../supabase/migrations/20261126000500_account_verification.sql',
+    '../supabase/migrations/20261127000100_public_bootstrap_rpc.sql',
   ]) {
     await db.exec(await read(m));
   }
@@ -320,4 +321,18 @@ test('DB blocks unverified accounts, Maorif verifies/rejects+hard-deletes Direct
   const ctxAfterPay = (await as(3, () => q('select public.get_my_workspace_context() as c')))[0].c;
   assert.equal(ctxAfterPay.memberships[0].subscription_months, 6);
   assert.equal(ctxAfterPay.memberships[0].subscription_status, 'active');
+});
+
+test('anon public.get_registration_bootstrap() returns catalogs while direct table selects stay denied', async () => {
+  const boot = (await as(0, () => q('select public.get_registration_bootstrap() as b'), 'anon'))[0].b;
+  assert.ok(Array.isArray(boot.schools) && boot.schools.length >= 2);
+  assert.ok(Array.isArray(boot.authorities) && boot.authorities.length >= 2);
+  assert.ok(Array.isArray(boot.tariffs) && boot.tariffs.length >= 10);
+  assert.ok(Array.isArray(boot.locations));
+  assert.equal(boot.aliya_price_tjs, 30);
+
+  // Direct table access for anon must remain strictly denied
+  await denied(as(0, () => q('select id from public.organizations'), 'anon'));
+  await denied(as(0, () => q('select id from public.tajikistan_locations'), 'anon'));
+  await denied(as(0, () => q('select position_code from public.role_tariffs'), 'anon'));
 });

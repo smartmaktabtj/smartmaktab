@@ -113,6 +113,7 @@ function formatSchoolAddress(s){
 function buildMergedSchoolCatalog(){
  const cloudReady=state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools);
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools:[];
+ const hasLogin=Boolean(clean(state.credentials?.login)&&state.credentials?.password);
  const localCustom=readLocalCustomSchools();
  const base=cloudReady
   ? cloud.map(s=>{
@@ -124,7 +125,7 @@ function buildMergedSchoolCatalog(){
       raw:s,
      };
     })
-  : schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:null}));
+  : (hasLogin?[]:schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:null})));
  const seen=new Set(base.map(b=>b.id));
  for(const c of localCustom){
   if(c?.id&&!seen.has(c.id)){
@@ -246,20 +247,31 @@ function fillSchoolChoices(){
  if(retryBtn)retryBtn.hidden=useFileViewer||hasCloudConnection;
  const demoWarn=$('demoModeWarning');
  if(demoWarn)demoWarn.hidden=hasLogin;
+ const diag=state.bootstrapError?` (${state.bootstrapError})`:'';
  let notice='';
  if(!items.length){
-  notice=hasCloudConnection&&!hasCloudSchools
-   ?(lang==='tg'
+  if(hasCloudConnection&&!hasCloudSchools){
+   notice=lang==='tg'
     ?'Дар пойгоҳи додаҳо ҳанӯз мактаб илова нашудааст. Тугмаи «Мактаби мо дар рӯйхат нест — Илова кардан»-ро пахш кунед.'
-    :'В базе данных школы ещё не добавлены. Нажмите «Нашей школы нет в списке — Добавить», чтобы зарегистрировать вашу школу.')
-   :fp('none');
+    :'В базе данных школы ещё не добавлены. Нажмите «Нашей школы нет в списке — Добавить», чтобы зарегистрировать вашу школу.';
+  }else if(!useFileViewer&&!hasCloudConnection&&hasLogin){
+   if(state.bootstrapStatus==='loading'){
+    notice=lang==='tg'?'Рӯйхати мактабҳо аз сервер бор мешавад…':'Загрузка списка школ с сервера…';
+   }else{
+    notice=lang==='tg'
+     ?`Рӯйхати мактабҳо аз сервер бор нашуд${diag}. «Аз нав бор кардан»-ро пахш кунед ё мактабатонро дастӣ илова кунед.`
+     :`Не удалось загрузить список школ с сервера${diag}. Нажмите «Повторить» при включённом интернете или добавьте школу вручную ниже.`;
+   }
+  }else{
+   notice=fp('none');
+  }
  }else if(!useFileViewer&&!hasCloudConnection){
   if(state.bootstrapStatus==='loading'){
    notice=lang==='tg'?'Рӯйхати мактабҳо аз сервер бор мешавад…':'Загрузка списка школ с сервера…';
   }else if(hasLogin){
    notice=lang==='tg'
-    ?'Рӯйхати мактабҳо аз сервер бор нашуд. «Аз нав бор кардан»-ро пахш кунед ё мактабатонро дастӣ илова кунед.'
-    :'Не удалось загрузить список школ с сервера. Нажмите «Повторить» при включённом интернете или добавьте школу вручную ниже.';
+    ?`Рӯйхати мактабҳо аз сервер бор нашуд${diag}. «Аз нав бор кардан»-ро пахш кунед ё мактабатонро дастӣ илова кунед.`
+    :`Не удалось загрузить список школ с сервера${diag}. Нажмите «Повторить» при включённом интернете или добавьте школу вручную ниже.`;
   }else{
    notice=lang==='tg'?'Пайваст бо сервер нест — мактабҳои демо нишон дода шудаанд.':'Сервер школ недоступен — показаны локальные демо-школы.';
   }

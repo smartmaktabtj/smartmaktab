@@ -378,3 +378,112 @@ test('Verification & Territory browser: Admin Verifications tab approves/rejects
     await adminSrv.close();
   }
 });
+
+test('Step 4 bootstrap falls back/uses Data API RPC when Edge Function bootstrap fails and omits demo schools for cloud login', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+    const newSchoolId = '55555555-5555-4555-8555-555555555555';
+    const maorifId = '22222222-2222-4222-8222-222222222222';
+    const memId = '66666666-6666-4666-8666-666666666666';
+    let capturedPayload = null;
+
+    await ctx.route('https://*.supabase.co/**', async route => {
+      const req = route.request();
+      const url = req.url();
+      const json = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+      if (url.includes('/rest/v1/rpc/get_registration_bootstrap')) {
+        return json({
+          schools: [],
+          authorities: [{ id: maorifId, name: 'Маорифи ш. Исфара', authority_tier: 'maorif', region_name: 'Суғд', district_name: 'Исфара' }],
+          locations: [{ region_name: 'Суғд', district_name: 'Исфара', jamoat_name: 'Ворух', village_name: 'Ворух' }],
+          tariffs: [{ position_code: 'school-director', base_price_tjs: 50, extra_price_tjs: 20, title_tg: 'Директор', title_ru: 'Директор' }],
+          aliya_price_tjs: 30,
+        });
+      }
+      if (url.includes('/functions/v1/register-user?action=bootstrap')) {
+        return json({ error: 'edge_unavailable' }, 500);
+      }
+      if (url.includes('/functions/v1/register-user') && req.method() === 'POST') {
+        capturedPayload = JSON.parse(req.postData() || '{}');
+        return json({
+          user_id: '77777777-7777-4777-8777-777777777777',
+          school: { id: newSchoolId, name: 'МТМУ № 81', region_name: 'Суғд', district_name: 'Исфара', jamoat_name: 'Ворух', village_name: 'Ворух', verification_status: 'pending' },
+          session: { access_token: 'tok_dir_81', refresh_token: 'ref_dir_81', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: '77777777-7777-4777-8777-777777777777' } },
+        });
+      }
+      if (url.includes('/rpc/get_my_workspace_context')) {
+        return json({
+          is_super_admin: false,
+          profile: { full_name: 'Раҳимов Алишер', preferred_lang: 'tg', login_name: 'dir81' },
+          memberships: [{
+            membership_id: memId,
+            organization_id: newSchoolId,
+            organization_name: 'МТМУ № 81',
+            organization_verification_status: 'pending',
+            kind: 'school',
+            region_name: 'Суғд',
+            district_name: 'Исфара',
+            role: 'director',
+            primary_position: 'school-director',
+            extra_positions: [],
+            max_devices: 1,
+            account_active: true,
+            verification_status: 'unverified',
+            subscription_status: 'trial',
+            subscription_months: 1,
+            subscription_days_left: 30,
+          }],
+        });
+      }
+      if (url.includes('/rpc/get_license_status')) {
+        return json({
+          configured: true,
+          organization_id: newSchoolId,
+          status: 'trial',
+          effective_status: 'trial',
+          grace_days: 0,
+          access_allowed: true,
+          days_left: 30,
+          grace_days_left: 0,
+          verification_status: 'unverified',
+        });
+      }
+      if (url.includes('/rpc/claim_device_session')) {
+        return json({ allowed: true, reason: 'registered', verification_status: 'unverified', primary_position: 'school-director', extra_positions: [] });
+      }
+      return json([]);
+    });
+
+    const page = await ctx.newPage();
+    page.setDefaultTimeout(10000);
+    await page.goto(`${base}/?register=1&lang=tg`);
+    await page.locator('#primaryChoices input[value="school-director"]').check();
+    await page.locator('#toExtras').click();
+    await page.locator('#toProfile').click();
+    await fillStartupProfile(page, { first: 'Алишер', last: 'Раҳимов', login: 'dir81', password: 'Password81' });
+    await page.locator('#toSchoolStep').click();
+
+    // Even with Edge Function bootstrap failing (500), RPC bootstrap loaded cleanly: no demo schools (МТМУ № 45), retry hidden
+    const optionTexts = await page.locator('#schoolChoice option').allInnerTexts();
+    assert.ok(!optionTexts.some(t => t.includes('МТМУ № 45')), 'Demo school МТМУ № 45 must not appear for cloud signup');
+    assert.equal(await page.locator('#retryBootstrapBtn').isHidden(), true);
+
+    await page.locator('#toggleNewSchoolBtn').click();
+    await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
+    await page.locator('#newSchoolDistrict').fill('ш. Исфара');
+    await page.locator('#newSchoolJamoatSelect option[value="Ворух"]').waitFor({ state: 'attached' });
+    await page.locator('#newSchoolJamoatSelect').selectOption('Ворух');
+    await page.locator('#newSchoolVillageSelect option[value="Ворух"]').waitFor({ state: 'attached' });
+    await page.locator('#newSchoolVillageSelect').selectOption('Ворух');
+    await page.locator('#newSchoolName').fill('МТМУ № 81');
+    await page.waitForFunction(() => !document.getElementById('begin')?.disabled);
+    await page.locator('#begin').click();
+
+    await page.waitForURL(/\/cabinets\/school\/director\.html/);
+    assert.equal(capturedPayload?.new_school?.parent_id, maorifId);
+    assert.equal(capturedPayload?.new_school?.name, 'МТМУ № 81');
+  } finally {
+    await browser.close();
+  }
+});

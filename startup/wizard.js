@@ -72,6 +72,7 @@ const empty=()=>({
  cloudLocations:null,
  cloudTariffs:null,
  bootstrapStatus:'idle',
+ bootstrapError:'',
 });
 let state=empty();
 let step=wantsRegister?1:0;
@@ -364,49 +365,88 @@ function render(){
  }
 }
 
-function describeRegError(code){
+function describeRegError(code,statusCode){
  const c=String(code||'');
  if(c==='invalid_login')return t('invalidCreds');
  if(c==='password_too_short')return t('invalidCreds');
  if(c==='login_already_exists')return t('duplicateLogin');
- if(c==='school_name_required'||c==='region_and_district_required'||c==='school_not_found'||c==='invalid_school'){
+ if(c==='school_name_required'||c==='region_and_district_required'||c==='school_not_found'||c==='invalid_school'||c==='school_create_failed'||c==='invalid_parent_authority'){
   return lang==='tg'
    ?'Маълумоти мактаб нодуруст аст. Мактабро аз рӯйхат интихоб кунед ё номи мактабу ноҳияро пурра ворид намоед.'
    :'Проверьте данные школы: выберите школу из списка или полностью укажите регион, район и название школы.';
  }
- return c||t('regNetworkFail');
+ if(c)return statusCode?`${c} (HTTP ${statusCode})`:c;
+ return statusCode?`${t('regNetworkFail')} (HTTP ${statusCode})`:t('regNetworkFail');
 }
 
-// Fetch real schools & updated tariffs from Supabase register-user Edge Function
+function applyBootstrapPayload(data){
+ state.cloudSchools=data.schools;
+ if(Array.isArray(data?.authorities)&&data.authorities.length)state.cloudAuthorities=data.authorities;
+ if(Array.isArray(data?.locations)&&data.locations.length)state.cloudLocations=data.locations;
+ if(Array.isArray(data?.tariffs)&&data.tariffs.length)state.cloudTariffs=data.tariffs;
+ state.bootstrapStatus='ready';
+ state.bootstrapError='';
+}
+
+// Fetch real schools, authorities, locations & tariffs via Data API RPC first, falling back to Edge Function
 let bootstrapPromise=null;
 async function loadRegistrationBootstrap(opts={}){
  const force=Boolean(opts?.force);
- if(useFileViewer){state.bootstrapStatus='offline';return false;}
- if(navigator.onLine===false){state.bootstrapStatus='error';if(step===4)fillSchoolChoices();return false;}
+ if(useFileViewer){state.bootstrapStatus='offline';state.bootstrapError='';return false;}
+ if(navigator.onLine===false){state.bootstrapStatus='error';state.bootstrapError='offline';if(step===4)fillSchoolChoices();return false;}
  if(!force&&state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools))return true;
  if(bootstrapPromise)return bootstrapPromise;
  state.bootstrapStatus='loading';
+ state.bootstrapError='';
  if(step===4)fillSchoolChoices();
  bootstrapPromise=(async()=>{
   const ctrl=typeof AbortController==='function'?new AbortController():null;
-  const timer=ctrl?setTimeout(()=>ctrl.abort(),15000):0;
+  const timer=ctrl?setTimeout(()=>ctrl.abort(),25000):0;
+  let lastErr='';
   try{
-   const res=await fetch(`${cloudCfg.url}/functions/v1/register-user?action=bootstrap`,{
-    method:'GET',
-    headers:{apikey:cloudCfg.publishableKey},
-    ...(ctrl?{signal:ctrl.signal}:{}),
-   });
-   if(!res.ok){state.bootstrapStatus='error';return false;}
-   const data=await res.json().catch(()=>null);
-   if(!data||!Array.isArray(data.schools)){state.bootstrapStatus='error';return false;}
-   state.cloudSchools=data.schools;
-   if(Array.isArray(data?.authorities)&&data.authorities.length)state.cloudAuthorities=data.authorities;
-   if(Array.isArray(data?.locations)&&data.locations.length)state.cloudLocations=data.locations;
-   if(Array.isArray(data?.tariffs)&&data.tariffs.length)state.cloudTariffs=data.tariffs;
-   state.bootstrapStatus='ready';
-   return true;
-  }catch{
+   try{
+    const rpcRes=await fetch(`${cloudCfg.url}/rest/v1/rpc/get_registration_bootstrap`,{
+     method:'POST',
+     headers:{apikey:cloudCfg.publishableKey,'Content-Type':'application/json'},
+     body:'{}',
+     ...(ctrl?{signal:ctrl.signal}:{}),
+    });
+    if(rpcRes.ok){
+     const rpcData=await rpcRes.json().catch(()=>null);
+     if(rpcData&&Array.isArray(rpcData.schools)){
+      applyBootstrapPayload(rpcData);
+      return true;
+     }
+     lastErr='RPC invalid';
+    }else{
+     lastErr=`RPC HTTP ${rpcRes.status}`;
+    }
+   }catch(err){
+    lastErr=err?.name==='AbortError'?'Timeout':'RPC network';
+   }
+
+   try{
+    const fnRes=await fetch(`${cloudCfg.url}/functions/v1/register-user?action=bootstrap`,{
+     method:'GET',
+     headers:{apikey:cloudCfg.publishableKey},
+     ...(ctrl?{signal:ctrl.signal}:{}),
+    });
+    if(fnRes.ok){
+     const fnData=await fnRes.json().catch(()=>null);
+     if(fnData&&Array.isArray(fnData.schools)){
+      applyBootstrapPayload(fnData);
+      return true;
+     }
+     lastErr='FN invalid';
+    }else{
+     lastErr=`FN HTTP ${fnRes.status}`;
+    }
+   }catch(err){
+    lastErr=err?.name==='AbortError'?'Timeout':'FN network';
+   }
+
    state.bootstrapStatus='error';
+   state.bootstrapError=lastErr||'Network';
    return false;
   }finally{
    if(timer)clearTimeout(timer);
@@ -736,12 +776,13 @@ $('begin').addEventListener('click',async()=>{
   let targetSchoolId=state.creatingNewSchool?'':state.school;
   let newSchoolPayload=null;
   if(state.creatingNewSchool){
-   const distLower=clean(state.newSchool.district_name).toLocaleLowerCase();
+   const normDist=s=>clean(s).toLocaleLowerCase().replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i,'').replace(/\s+/g,' ');
+   const distLower=normDist(state.newSchool.district_name);
    const canonReg=canonicalRegionName(state.newSchool.region_name).toLocaleLowerCase();
    const matchedAuth=Array.isArray(state.cloudAuthorities)
     ? state.cloudAuthorities.find(a=>{
        if(a.authority_tier!=='maorif')return false;
-       const aDist=clean(a.district_name).toLocaleLowerCase();
+       const aDist=normDist(a.district_name);
        const aReg=canonicalRegionName(a.region_name).toLocaleLowerCase();
        const distHit=aDist===distLower||(distLower.length>=3&&(aDist.includes(distLower)||distLower.includes(aDist)));
        return distHit&&(!canonReg||aReg===canonReg);
@@ -827,7 +868,7 @@ $('begin').addEventListener('click',async()=>{
     return;
    }
    if(!regRes.ok||!regJson?.user_id){
-    $('beginError').textContent=describeRegError(regJson?.error);
+    $('beginError').textContent=describeRegError(regJson?.error,regRes.status);
     return;
    }
    if(regJson?.school?.id){
