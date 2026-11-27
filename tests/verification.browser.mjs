@@ -231,7 +231,7 @@ test('Verification & Territory browser: verification form submission, primary-on
     page.on('pageerror', e => errors.push(e.message));
 
     // Pre-seed cloud session & local profile in localStorage before opening primary cabinet (Director)
-    await page.goto(`${base}/cabinets/school/director.html?lang=ru`);
+    await page.goto(`${base}/cabinets/school/director.html?school=${orgId}&lang=ru`);
     await page.evaluate(({ orgId }) => {
       localStorage.setItem('smartmaktab.cloud.session.v1', JSON.stringify({
         access_token: 'mock_dir_jwt',
@@ -241,26 +241,25 @@ test('Verification & Territory browser: verification form submission, primary-on
       }));
       localStorage.setItem('smartmaktab.cloud.last_org.v1', orgId);
       localStorage.setItem('smartmaktab.profile.v1', JSON.stringify({
-        schoolId: orgId,
-        school: orgId,
-        schoolName: 'МТМУ № 77',
-        primary: 'school-director',
+        organizationId: orgId,
+        organizationName: 'МТМУ № 77',
         primaryPosition: 'school-director',
+        verificationStatus: 'unverified',
+        primary: 'school-director',
         extras: ['school-five-method-groups'],
         roles: [
           { id: 'school-director', path: 'cabinets/school/director.html', title: 'Директор' },
           { id: 'school-five-method-groups', path: 'cabinets/school/five-method-groups.html', title: 'Методобъединение' },
         ],
-        schools: {},
         person: { first: 'Бахтиёр', last: 'Каримов' },
         lang: 'ru',
       }));
     }, { orgId });
     await page.reload();
 
-    // Unverified banner & quick Verify trigger visible; open Verification section
-    await page.locator('#accountVerifyTriggerBtn:not([hidden])').waitFor();
-    await page.locator('#accountVerifyTriggerBtn').click();
+    // Unverified banner & Verify button are visible right on the cabinet home screen; clicking opens Verification form
+    await page.locator('#accountVerificationBanner .sm-verif-banner button').waitFor();
+    await page.locator('#accountVerificationBanner .sm-verif-banner button').click();
     await page.locator('#smAccountVerifyForm:not([hidden])').waitFor();
 
     await page.locator('#smAccVerifFullName').fill('Каримов Бахтиёр');
@@ -285,7 +284,8 @@ test('Verification & Territory browser: verification form submission, primary-on
     assert.equal(Number(amount12m), 510);
 
     // Extra position cabinet (five-method-groups) HIDES payment form & shows primary-only notice!
-    await page.goto(`${base}/cabinets/school/five-method-groups.html?lang=ru`);
+    await page.goto(`${base}/cabinets/school/five-method-groups.html?school=${orgId}&lang=ru`);
+    await page.locator('[data-open-view="workspaceDocs"]').first().click();
     await page.locator('[data-cloud-panel-trigger]').click();
     await page.locator('#cloudPayPrimaryOnlyNotice:not([hidden])').waitFor();
     assert.equal(await page.locator('#cloudReceiptForm').isHidden(), true);
