@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 const base=process.env.SM_BASE_URL??'http://localhost:4180';
 
-test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on, unified profile and dynamic sidebar',async()=>{
+test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on, unified profile and clean module grid',async()=>{
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
@@ -88,7 +88,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);
   assert.equal(await page.locator('#cabinetUpdateTrigger').isVisible(),true);
-  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),3);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),6);
   await page.locator('#workspaceSettingsToggle').click();
   assert.equal(await page.locator('#profFirst').inputValue(),'Нав');
   assert.equal(await page.locator('#profLast').inputValue(),'Озмоишӣ');
