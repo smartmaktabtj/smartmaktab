@@ -323,16 +323,46 @@ test('DB blocks unverified accounts, Maorif verifies/rejects+hard-deletes Direct
   assert.equal(ctxAfterPay.memberships[0].subscription_status, 'active');
 });
 
-test('anon public.get_registration_bootstrap() returns catalogs while direct table selects stay denied', async () => {
-  const boot = (await as(0, () => q('select public.get_registration_bootstrap() as b'), 'anon'))[0].b;
-  assert.ok(Array.isArray(boot.schools) && boot.schools.length >= 2);
-  assert.ok(Array.isArray(boot.authorities) && boot.authorities.length >= 2);
-  assert.ok(Array.isArray(boot.tariffs) && boot.tariffs.length >= 10);
-  assert.ok(Array.isArray(boot.locations));
-  assert.equal(boot.aliya_price_tjs, 30);
+test('anon and service_role can call public.get_registration_bootstrap(), and only service_role can call service_register_account()', async () => {
+  for (const role of ['anon', 'service_role']) {
+    const boot = (await as(0, () => q('select public.get_registration_bootstrap() as b'), role))[0].b;
+    assert.ok(Array.isArray(boot.schools) && boot.schools.length >= 2);
+    assert.ok(Array.isArray(boot.authorities) && boot.authorities.length >= 2);
+    assert.ok(Array.isArray(boot.tariffs) && boot.tariffs.length >= 10);
+    assert.ok(Array.isArray(boot.locations));
+    assert.equal(boot.aliya_price_tjs, 30);
+  }
 
-  // Direct table access for anon must remain strictly denied
-  await denied(as(0, () => q('select id from public.organizations'), 'anon'));
-  await denied(as(0, () => q('select id from public.tajikistan_locations'), 'anon'));
-  await denied(as(0, () => q('select position_code from public.role_tariffs'), 'anon'));
+  // Direct table access for anon and service_role must remain strictly denied
+  for (const role of ['anon', 'service_role']) {
+    await denied(as(0, () => q('select id from public.organizations'), role));
+    await denied(as(0, () => q('select id from public.tajikistan_locations'), role));
+    await denied(as(0, () => q('select position_code from public.role_tariffs'), role));
+  }
+
+  // service_register_account is forbidden for anon & authenticated
+  const newUid = uid(88);
+  await q('insert into auth.users values ($1,$2,now())', [newUid, 'new_reg@example.test']);
+  await denied(as(0, () => q("select public.service_register_account($1,null,'{}'::jsonb,'school-director')", [newUid]), 'anon'));
+  await denied(as(3, () => q("select public.service_register_account($1,null,'{}'::jsonb,'school-director')", [newUid]), 'authenticated'));
+
+  // service_role provisions a new school (auto-matching Maorif even with "ш." prefix), profile, and trial membership
+  const regOut = (await as(0, () => q(
+    "select public.service_register_account($1,null,$2::jsonb,'school-director',array['school-teacher']::text[],'Навбаҳор Азиз','tg','aziz88','',jsonb_build_object('requested_aliya',true),'{}'::jsonb) as r",
+    [
+      newUid,
+      JSON.stringify({ name: 'МТМУ № 888', region_name: 'Вилояти Суғд', district_name: 'ш. Исфара', jamoat_name: 'Ворух', village_name: 'Ворух' }),
+    ],
+  ), 'service_role'))[0].r;
+
+  assert.equal(regOut.school?.name, 'МТМУ № 888');
+  assert.equal(regOut.school?.parent_id, maorifId);
+  assert.equal(regOut.school?.verification_status, 'pending');
+  assert.equal(regOut.created_school, true);
+
+  const ctxNew = (await as(88, () => q('select public.get_my_workspace_context() as c')))[0].c;
+  assert.equal(ctxNew.profile.full_name, 'Навбаҳор Азиз');
+  assert.equal(ctxNew.memberships[0].organization_id, regOut.school.id);
+  assert.equal(ctxNew.memberships[0].verification_status, 'unverified');
+  assert.equal(ctxNew.memberships[0].subscription_status, 'trial');
 });

@@ -65,25 +65,6 @@ function normalizeLogin(raw: string): { valid: boolean; email: string; display: 
   };
 }
 
-function normDistrict(s: string): string {
-  return String(s || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i, '')
-    .replace(/\s+/g, ' ');
-}
-
-function canonRegion(s: string): string {
-  const low = String(s || '').trim().toLowerCase();
-  if (!low) return '';
-  if (low.includes('суғд') || low.includes('сугд')) return 'суғд';
-  if (low.includes('хатлон')) return 'хатлон';
-  if (low.includes('душанбе')) return 'душанбе';
-  if (low.includes('вмкб') || low.includes('бадахшон')) return 'вмкб';
-  if (low.includes('тобе') || low.includes('нтҷ') || low.includes('нтм')) return 'нтҷ';
-  return low;
-}
-
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -139,39 +120,10 @@ Deno.serve(async (req: Request) => {
         headers: serviceHeaders(serviceKey),
         body: '{}',
       });
-      if (rpcRes.ok && rpcRes.data && typeof rpcRes.data === 'object' && Array.isArray((rpcRes.data as Record<string, unknown>).schools)) {
-        return json(200, rpcRes.data);
+      if (!rpcRes.ok || !rpcRes.data || typeof rpcRes.data !== 'object') {
+        return json(500, { error: rpcRes.errMsg || 'bootstrap_failed' });
       }
-
-      const [schRes, authRes, tarRes, locRes] = await Promise.all([
-        sbFetch(
-          `${supabaseUrl}/rest/v1/organizations?select=id,name,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status&kind=eq.school&order=name.asc`,
-          { method: 'GET', headers: serviceHeaders(serviceKey) },
-        ),
-        sbFetch(
-          `${supabaseUrl}/rest/v1/organizations?select=id,name,authority_tier,region_name,district_name,parent_id&kind=eq.education_authority&order=region_name.asc,district_name.asc`,
-          { method: 'GET', headers: serviceHeaders(serviceKey) },
-        ),
-        sbFetch(
-          `${supabaseUrl}/rest/v1/role_tariffs?select=position_code,group_code,access_role,title_tg,title_ru,base_price_tjs,extra_price_tjs,duration_days,sort_order&group_code=eq.school&is_active=eq.true&order=sort_order.asc`,
-          { method: 'GET', headers: serviceHeaders(serviceKey) },
-        ),
-        sbFetch(
-          `${supabaseUrl}/rest/v1/tajikistan_locations?select=id,region_name,district_name,jamoat_name,village_name&order=region_name.asc,district_name.asc&limit=5000`,
-          { method: 'GET', headers: serviceHeaders(serviceKey) },
-        ),
-      ]);
-      if (!schRes.ok) return json(500, { error: schRes.errMsg || 'bootstrap_schools_failed' });
-      if (!authRes.ok) return json(500, { error: authRes.errMsg || 'bootstrap_authorities_failed' });
-      if (!tarRes.ok) return json(500, { error: tarRes.errMsg || 'bootstrap_tariffs_failed' });
-      if (!locRes.ok) return json(500, { error: locRes.errMsg || 'bootstrap_locations_failed' });
-      return json(200, {
-        schools: Array.isArray(schRes.data) ? schRes.data : [],
-        authorities: Array.isArray(authRes.data) ? authRes.data : [],
-        tariffs: Array.isArray(tarRes.data) ? tarRes.data : [],
-        locations: Array.isArray(locRes.data) ? locRes.data : [],
-        aliya_price_tjs: 30,
-      });
+      return json(200, rpcRes.data);
     }
 
     if (action !== 'register') {
@@ -180,7 +132,8 @@ Deno.serve(async (req: Request) => {
 
     const loginParsed = normalizeLogin(typeof body.login === 'string' ? body.login : '');
     const password = typeof body.password === 'string' ? body.password : '';
-    let orgId = typeof body.organization_id === 'string' ? body.organization_id.trim() : '';
+    const rawOrgId = typeof body.organization_id === 'string' ? body.organization_id.trim() : '';
+    const isUuidOrg = /^[0-9a-f-]{36}$/i.test(rawOrgId);
     const newSchoolRaw = body.new_school && typeof body.new_school === 'object' && !Array.isArray(body.new_school)
       ? (body.new_school as Record<string, unknown>)
       : null;
@@ -210,127 +163,13 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    let createdSchoolId = '';
-    let resolvedSchool: Record<string, unknown> | null = null;
-
-    if (!/^[0-9a-f-]{36}$/i.test(orgId)) {
+    if (!isUuidOrg) {
       if (!newSchoolRaw) return json(400, { error: 'invalid_school' });
-      const schoolName = typeof newSchoolRaw.name === 'string' ? newSchoolRaw.name.trim().slice(0, 160) : '';
-      let regionName = typeof newSchoolRaw.region_name === 'string' ? newSchoolRaw.region_name.trim().slice(0, 120) : '';
-      let districtName = typeof newSchoolRaw.district_name === 'string' ? newSchoolRaw.district_name.trim().slice(0, 120) : '';
-      const jamoatName = typeof newSchoolRaw.jamoat_name === 'string' ? newSchoolRaw.jamoat_name.trim().slice(0, 120) : '';
-      const villageName = typeof newSchoolRaw.village_name === 'string' ? newSchoolRaw.village_name.trim().slice(0, 120) : '';
-      const schoolCode = typeof newSchoolRaw.school_code === 'string' ? newSchoolRaw.school_code.trim().slice(0, 40) : '';
-      let parentId = typeof newSchoolRaw.parent_id === 'string' && /^[0-9a-f-]{36}$/i.test(newSchoolRaw.parent_id.trim())
-        ? newSchoolRaw.parent_id.trim()
-        : '';
-
+      const schoolName = typeof newSchoolRaw.name === 'string' ? newSchoolRaw.name.trim() : '';
+      const regionName = typeof newSchoolRaw.region_name === 'string' ? newSchoolRaw.region_name.trim() : '';
+      const districtName = typeof newSchoolRaw.district_name === 'string' ? newSchoolRaw.district_name.trim() : '';
       if (schoolName.length < 2) return json(400, { error: 'school_name_required' });
-
-      if (parentId) {
-        const pRes = await sbFetch(
-          `${supabaseUrl}/rest/v1/organizations?select=id,region_name,district_name,authority_tier&id=eq.${encodeURIComponent(parentId)}&kind=eq.education_authority&limit=1`,
-          { method: 'GET', headers: serviceHeaders(serviceKey) },
-        );
-        const parentAuth = Array.isArray(pRes.data) ? (pRes.data[0] as Record<string, string> | undefined) : undefined;
-        if (!parentAuth) return json(400, { error: 'invalid_parent_authority' });
-        if (!regionName && parentAuth.region_name) regionName = parentAuth.region_name;
-        if (!districtName && parentAuth.district_name) districtName = parentAuth.district_name;
-      } else if (districtName) {
-        const aRes = await sbFetch(
-          `${supabaseUrl}/rest/v1/organizations?select=id,region_name,district_name&kind=eq.education_authority&authority_tier=eq.maorif`,
-          { method: 'GET', headers: serviceHeaders(serviceKey) },
-        );
-        const authList = Array.isArray(aRes.data) ? (aRes.data as Array<Record<string, string>>) : [];
-        const targetDist = normDistrict(districtName);
-        const targetReg = canonRegion(regionName);
-        const matchedAuth = authList.find(a => {
-          const aDist = normDistrict(a.district_name);
-          const aReg = canonRegion(a.region_name);
-          const distHit = aDist === targetDist || (targetDist.length >= 3 && (aDist.includes(targetDist) || targetDist.includes(aDist)));
-          return distHit && (!targetReg || !aReg || aReg === targetReg);
-        });
-        if (matchedAuth) {
-          parentId = matchedAuth.id;
-          if (!regionName && matchedAuth.region_name) regionName = matchedAuth.region_name;
-        }
-      }
-
-      if (!regionName || !districtName) {
-        return json(400, { error: 'region_and_district_required' });
-      }
-
-      let matchUrl = `${supabaseUrl}/rest/v1/organizations?select=id,name,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status&kind=eq.school&district_name=eq.${encodeURIComponent(districtName)}&name=ilike.${encodeURIComponent(schoolName)}&limit=1`;
-      if (villageName) matchUrl += `&village_name=eq.${encodeURIComponent(villageName)}`;
-      const existingRes = await sbFetch(matchUrl, { method: 'GET', headers: serviceHeaders(serviceKey) });
-      const existingMatch = Array.isArray(existingRes.data) ? (existingRes.data[0] as Record<string, unknown> | undefined) : undefined;
-
-      if (existingMatch && typeof existingMatch.id === 'string') {
-        orgId = existingMatch.id;
-        resolvedSchool = existingMatch;
-      } else {
-        const insRes = await sbFetch(`${supabaseUrl}/rest/v1/organizations?select=id,name,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status`, {
-          method: 'POST',
-          headers: serviceHeaders(serviceKey, { Prefer: 'return=representation' }),
-          body: JSON.stringify({
-            kind: 'school',
-            name: schoolName,
-            region_name: regionName,
-            district_name: districtName,
-            jamoat_name: jamoatName || null,
-            village_name: villageName || null,
-            school_code: schoolCode || null,
-            parent_id: parentId || null,
-            verification_status: 'pending',
-          }),
-        });
-        const insertedSchool = Array.isArray(insRes.data) ? (insRes.data[0] as Record<string, unknown> | undefined) : undefined;
-        if (!insRes.ok || !insertedSchool || typeof insertedSchool.id !== 'string') {
-          return json(400, { error: insRes.errMsg || 'school_create_failed' });
-        }
-        orgId = insertedSchool.id;
-        createdSchoolId = insertedSchool.id;
-        resolvedSchool = insertedSchool;
-      }
-    }
-
-    const rollbackCreated = async (uid = '') => {
-      if (uid) {
-        try {
-          await sbFetch(`${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(uid)}`, {
-            method: 'DELETE',
-            headers: serviceHeaders(serviceKey),
-          });
-        } catch {}
-      }
-      if (createdSchoolId) {
-        try {
-          await sbFetch(`${supabaseUrl}/rest/v1/organizations?id=eq.${encodeURIComponent(createdSchoolId)}`, {
-            method: 'DELETE',
-            headers: serviceHeaders(serviceKey),
-          });
-        } catch {}
-      }
-    };
-
-    if (!resolvedSchool) {
-      const orgRes = await sbFetch(
-        `${supabaseUrl}/rest/v1/organizations?select=id,name,kind,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status&id=eq.${encodeURIComponent(orgId)}&kind=eq.school&limit=1`,
-        { method: 'GET', headers: serviceHeaders(serviceKey) },
-      );
-      const orgRow = Array.isArray(orgRes.data) ? (orgRes.data[0] as Record<string, unknown> | undefined) : undefined;
-      if (!orgRow) return json(404, { error: 'school_not_found' });
-      resolvedSchool = orgRow;
-    }
-
-    const posRes = await sbFetch(
-      `${supabaseUrl}/rest/v1/role_tariffs?select=position_code,access_role,default_max_devices,is_active&position_code=eq.${encodeURIComponent(primaryPosition)}&is_active=eq.true&limit=1`,
-      { method: 'GET', headers: serviceHeaders(serviceKey) },
-    );
-    const posRow = Array.isArray(posRes.data) ? (posRes.data[0] as Record<string, unknown> | undefined) : undefined;
-    if (!posRow) {
-      await rollbackCreated();
-      return json(400, { error: 'position_unavailable' });
+      if (!regionName || !districtName) return json(400, { error: 'region_and_district_required' });
     }
 
     const createUserRes = await sbFetch(`${supabaseUrl}/auth/v1/admin/users`, {
@@ -351,7 +190,6 @@ Deno.serve(async (req: Request) => {
     const userId = typeof userObj?.id === 'string' ? userObj.id : '';
 
     if (!createUserRes.ok || !userId) {
-      await rollbackCreated();
       const msg = createUserRes.errMsg || 'create_user_failed';
       const status = createUserRes.status === 422 || /already|exists|registered/i.test(msg) ? 409 : 400;
       return json(status, { error: status === 409 ? 'login_already_exists' : msg });
@@ -360,51 +198,41 @@ Deno.serve(async (req: Request) => {
     const enrichedDetails = {
       ...profileDetails,
       requested_aliya: includeAliya,
-      self_registered_school: Boolean(createdSchoolId),
     };
 
-    const profRes = await sbFetch(`${supabaseUrl}/rest/v1/user_profiles?on_conflict=user_id`, {
+    const regRpc = await sbFetch(`${supabaseUrl}/rest/v1/rpc/service_register_account`, {
       method: 'POST',
-      headers: serviceHeaders(serviceKey, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      headers: serviceHeaders(serviceKey),
       body: JSON.stringify({
-        user_id: userId,
-        full_name: fullName,
-        preferred_lang: preferredLang,
-        login_name: loginParsed.display,
-        profile_details: enrichedDetails,
-        updated_at: new Date().toISOString(),
+        p_user_id: userId,
+        p_org_id: isUuidOrg ? rawOrgId : null,
+        p_new_school: isUuidOrg ? null : newSchoolRaw,
+        p_primary_position: primaryPosition,
+        p_extra_positions: extraPositions,
+        p_full_name: fullName,
+        p_preferred_lang: preferredLang,
+        p_login_name: loginParsed.display,
+        p_custom_method_name: customMethodName,
+        p_profile_details: enrichedDetails,
+        p_position_profiles: positionProfiles,
       }),
     });
-    if (!profRes.ok) {
-      await rollbackCreated(userId);
-      return json(500, { error: profRes.errMsg || 'profile_save_failed' });
-    }
 
-    const trialExpiresAt = new Date(Date.now() + 30 * 86400 * 1000).toISOString();
-    const memRes = await sbFetch(`${supabaseUrl}/rest/v1/school_memberships`, {
-      method: 'POST',
-      headers: serviceHeaders(serviceKey, { Prefer: 'return=minimal' }),
-      body: JSON.stringify({
-        user_id: userId,
-        organization_id: orgId,
-        role: posRow.access_role,
-        primary_position: primaryPosition,
-        extra_positions: extraPositions,
-        max_extra_positions: extraPositions.length,
-        max_devices: Number(posRow.default_max_devices ?? 1) || 1,
-        account_active: true,
-        aliya_enabled: false,
-        custom_method_name: customMethodName,
-        position_profiles: positionProfiles,
-        verification_status: 'unverified',
-        subscription_status: 'trial',
-        subscription_months: 1,
-        subscription_expires_at: trialExpiresAt,
-      }),
-    });
-    if (!memRes.ok) {
-      await rollbackCreated(userId);
-      return json(500, { error: memRes.errMsg || 'membership_save_failed' });
+    const regData = regRpc.data && typeof regRpc.data === 'object' ? (regRpc.data as Record<string, unknown>) : null;
+    if (!regRpc.ok || !regData?.school) {
+      try {
+        await sbFetch(`${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+          method: 'DELETE',
+          headers: serviceHeaders(serviceKey),
+        });
+      } catch {}
+      const errCode = regRpc.errMsg || 'register_account_failed';
+      const status = errCode === 'school_not_found'
+        ? 404
+        : /^(invalid_school|school_name_required|region_and_district_required|invalid_parent_authority|position_unavailable|invalid_primary_position)$/.test(errCode)
+          ? 400
+          : 500;
+      return json(status, { error: errCode });
     }
 
     const signKey = publicKey || serviceKey;
@@ -422,9 +250,9 @@ Deno.serve(async (req: Request) => {
         user_id: userId,
         email: loginParsed.email,
         login_name: loginParsed.display,
-        school: resolvedSchool,
+        school: regData.school,
         verification_status: 'unverified',
-        subscription_expires_at: trialExpiresAt,
+        subscription_expires_at: regData.trial_expires_at ?? null,
         session: null,
       });
     }
@@ -433,9 +261,9 @@ Deno.serve(async (req: Request) => {
       user_id: userId,
       email: loginParsed.email,
       login_name: loginParsed.display,
-      school: resolvedSchool,
+      school: regData.school,
       verification_status: 'unverified',
-      subscription_expires_at: trialExpiresAt,
+      subscription_expires_at: regData.trial_expires_at ?? null,
       session: signObj,
       user: signObj.user ?? null,
     });

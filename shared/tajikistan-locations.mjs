@@ -628,12 +628,21 @@ export function getRegionNames(extraRows = []) {
   return [...out];
 }
 
+function stripDistrictPrefix(dist) {
+  return String(dist || '')
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i, '')
+    .replace(/\s+/g, ' ');
+}
+
 function findRegionDistrictMap(reg, dist) {
   const regMap = reg ? TAJIKISTAN_TERRITORY_TREE[reg] : null;
   if (!regMap || !dist) return null;
   if (regMap[dist]) return regMap[dist];
-  const low = dist.toLocaleLowerCase();
-  const key = Object.keys(regMap).find(k => k.toLocaleLowerCase() === low);
+  const low = String(dist).trim().toLocaleLowerCase();
+  const stripped = stripDistrictPrefix(dist);
+  const key = Object.keys(regMap).find(k => k.toLocaleLowerCase() === low || stripDistrictPrefix(k) === stripped);
   return key ? regMap[key] : null;
 }
 
@@ -654,14 +663,16 @@ export function listDistrictsForRegion(regionRaw, extraRows = []) {
 export function listJamoatsForDistrict(regionRaw, districtRaw, extraRows = []) {
   const reg = canonicalRegionName(regionRaw);
   const dist = String(districtRaw || '').trim();
+  const distStripped = stripDistrictPrefix(dist);
   const out = new Set();
   const distMap = findRegionDistrictMap(reg, dist);
   if (distMap) {
     for (const j of Object.keys(distMap)) out.add(j);
   }
   for (const row of extraRows || []) {
-    if ((!reg || canonicalRegionName(row.region_name) === reg) &&
-        (!dist || String(row.district_name || '').trim().toLocaleLowerCase() === dist.toLocaleLowerCase())) {
+    const rowDist = String(row.district_name || '').trim();
+    const dOk = !dist || rowDist.toLocaleLowerCase() === dist.toLocaleLowerCase() || (distStripped && stripDistrictPrefix(rowDist) === distStripped);
+    if ((!reg || canonicalRegionName(row.region_name) === reg) && dOk) {
       if (row.jamoat_name) out.add(String(row.jamoat_name).trim());
     }
   }
@@ -671,6 +682,7 @@ export function listJamoatsForDistrict(regionRaw, districtRaw, extraRows = []) {
 export function listVillagesForJamoat(regionRaw, districtRaw, jamoatRaw, extraRows = []) {
   const reg = canonicalRegionName(regionRaw);
   const dist = String(districtRaw || '').trim();
+  const distStripped = stripDistrictPrefix(dist);
   const jam = String(jamoatRaw || '').trim();
   const out = new Set();
   const jamMap = findRegionDistrictMap(reg, dist);
@@ -688,7 +700,8 @@ export function listVillagesForJamoat(regionRaw, districtRaw, jamoatRaw, extraRo
   }
   for (const row of extraRows || []) {
     const rOk = !reg || canonicalRegionName(row.region_name) === reg;
-    const dOk = !dist || String(row.district_name || '').trim().toLocaleLowerCase() === dist.toLocaleLowerCase();
+    const rowDist = String(row.district_name || '').trim();
+    const dOk = !dist || rowDist.toLocaleLowerCase() === dist.toLocaleLowerCase() || (distStripped && stripDistrictPrefix(rowDist) === distStripped);
     const jOk = !jam || String(row.jamoat_name || '').trim().toLocaleLowerCase() === jam.toLocaleLowerCase();
     if (rOk && dOk && jOk && row.village_name) {
       out.add(String(row.village_name).trim());
