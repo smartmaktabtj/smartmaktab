@@ -168,8 +168,12 @@ function createProfileManager(cabinetId,tg,label,onOpenCloud){
  }
 
  function syncLabels(){
+  const ws=readJsonStore(workspaceKey);
+  const isPrimary=!ws?.primary||ws.primary===cabinetId;
   title.textContent=label('Личные данные и профиль','Маълумоти шахсӣ ва профил');
-  cloudBtn.textContent=label('Подписка и оплата','Обуна ва пардохт');
+  cloudBtn.textContent=isPrimary
+   ? label('Подписка, оплата и верификация','Обуна, пардохт ва верификатсия')
+   : label('Статус подписки и верификация','Ҳолати обуна ва верификатсия');
   posSelectLbl.textContent=label('Должность для редактирования','Вазифа барои таҳрир');
   inheritTxt.textContent=label('Использовать данные основной должности','Истифодаи маълумоти вазифаи асосӣ');
   fFirst.sp.textContent=label('Имя','Ном');

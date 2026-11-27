@@ -101,10 +101,15 @@ Deno.serve(async (req: Request) => {
       : (typeof body.action === 'string' ? body.action.trim() : 'register');
 
     if (action === 'bootstrap' || action === 'list_schools') {
-      const [{ data: schools, error: schErr }, { data: authorities, error: authErr }, { data: tariffs, error: tarErr }] = await Promise.all([
+      const [
+        { data: schools, error: schErr },
+        { data: authorities, error: authErr },
+        { data: tariffs, error: tarErr },
+        { data: locations, error: locErr },
+      ] = await Promise.all([
         adminClient
           .from('organizations')
-          .select('id,name,region_name,district_name,school_code,parent_id')
+          .select('id,name,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status')
           .eq('kind', 'school')
           .order('name'),
         adminClient
@@ -119,14 +124,22 @@ Deno.serve(async (req: Request) => {
           .eq('group_code', 'school')
           .eq('is_active', true)
           .order('sort_order'),
+        adminClient
+          .from('tajikistan_locations')
+          .select('id,region_name,district_name,jamoat_name,village_name')
+          .order('region_name')
+          .order('district_name')
+          .range(0, 4999),
       ]);
       if (schErr) return json(500, { error: schErr.message });
       if (authErr) return json(500, { error: authErr.message });
       if (tarErr) return json(500, { error: tarErr.message });
+      if (locErr) return json(500, { error: locErr.message });
       return json(200, {
         schools: schools ?? [],
         authorities: authorities ?? [],
         tariffs: tariffs ?? [],
+        locations: locations ?? [],
         aliya_price_tjs: 30,
       });
     }
@@ -174,6 +187,8 @@ Deno.serve(async (req: Request) => {
       const schoolName = typeof newSchoolRaw.name === 'string' ? newSchoolRaw.name.trim().slice(0, 160) : '';
       let regionName = typeof newSchoolRaw.region_name === 'string' ? newSchoolRaw.region_name.trim().slice(0, 120) : '';
       let districtName = typeof newSchoolRaw.district_name === 'string' ? newSchoolRaw.district_name.trim().slice(0, 120) : '';
+      const jamoatName = typeof newSchoolRaw.jamoat_name === 'string' ? newSchoolRaw.jamoat_name.trim().slice(0, 120) : '';
+      const villageName = typeof newSchoolRaw.village_name === 'string' ? newSchoolRaw.village_name.trim().slice(0, 120) : '';
       const schoolCode = typeof newSchoolRaw.school_code === 'string' ? newSchoolRaw.school_code.trim().slice(0, 40) : '';
       let parentId = typeof newSchoolRaw.parent_id === 'string' && /^[0-9a-f-]{36}$/i.test(newSchoolRaw.parent_id.trim())
         ? newSchoolRaw.parent_id.trim()
@@ -221,14 +236,14 @@ Deno.serve(async (req: Request) => {
         return json(400, { error: 'region_and_district_required' });
       }
 
-      const { data: existingMatch } = await adminClient
+      let matchQuery = adminClient
         .from('organizations')
-        .select('id,name,region_name,district_name,school_code,parent_id')
+        .select('id,name,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status')
         .eq('kind', 'school')
         .eq('district_name', districtName)
-        .ilike('name', schoolName)
-        .limit(1)
-        .maybeSingle();
+        .ilike('name', schoolName);
+      if (villageName) matchQuery = matchQuery.eq('village_name', villageName);
+      const { data: existingMatch } = await matchQuery.limit(1).maybeSingle();
 
       if (existingMatch) {
         orgId = existingMatch.id;
@@ -241,11 +256,13 @@ Deno.serve(async (req: Request) => {
             name: schoolName,
             region_name: regionName,
             district_name: districtName,
+            jamoat_name: jamoatName || null,
+            village_name: villageName || null,
             school_code: schoolCode || null,
             parent_id: parentId || null,
-            parent_kind: parentId ? 'education_authority' : null,
+            verification_status: 'pending',
           })
-          .select('id,name,region_name,district_name,school_code,parent_id')
+          .select('id,name,region_name,district_name,jamoat_name,village_name,school_code,parent_id,verification_status')
           .single();
         if (insErr || !insertedSchool) {
           return json(400, { error: insErr?.message || 'school_create_failed' });
@@ -326,10 +343,10 @@ Deno.serve(async (req: Request) => {
       return json(500, { error: profErr.message });
     }
 
+    const trialExpiresAt = new Date(Date.now() + 30 * 86400 * 1000).toISOString();
     const { error: memErr } = await adminClient.from('school_memberships').insert({
       user_id: userId,
       organization_id: orgId,
-      organization_kind: 'school',
       role: posRow.access_role,
       primary_position: primaryPosition,
       extra_positions: extraPositions,
@@ -339,6 +356,10 @@ Deno.serve(async (req: Request) => {
       aliya_enabled: false,
       custom_method_name: customMethodName,
       position_profiles: positionProfiles,
+      verification_status: 'unverified',
+      subscription_status: 'trial',
+      subscription_months: 1,
+      subscription_expires_at: trialExpiresAt,
     });
     if (memErr) {
       await rollbackCreated(userId);
@@ -358,6 +379,8 @@ Deno.serve(async (req: Request) => {
         email: loginParsed.email,
         login_name: loginParsed.display,
         school: resolvedSchool,
+        verification_status: 'unverified',
+        subscription_expires_at: trialExpiresAt,
         session: null,
       });
     }
@@ -367,6 +390,8 @@ Deno.serve(async (req: Request) => {
       email: loginParsed.email,
       login_name: loginParsed.display,
       school: resolvedSchool,
+      verification_status: 'unverified',
+      subscription_expires_at: trialExpiresAt,
       session: signData.session,
       user: signData.user,
     });

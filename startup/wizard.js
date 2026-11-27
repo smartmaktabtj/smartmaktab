@@ -66,9 +66,10 @@ const empty=()=>({
  school:'',
  schools:Object.create(null),
  creatingNewSchool:false,
- newSchool:{region_name:'',district_name:'',name:'',school_code:''},
+ newSchool:{region_name:'',district_name:'',jamoat_name:'',village_name:'',name:'',school_code:''},
  cloudSchools:null,
  cloudAuthorities:null,
+ cloudLocations:null,
  cloudTariffs:null,
  bootstrapStatus:'idle',
 });
@@ -382,7 +383,7 @@ async function loadRegistrationBootstrap(opts={}){
  const force=Boolean(opts?.force);
  if(useFileViewer){state.bootstrapStatus='offline';return false;}
  if(navigator.onLine===false){state.bootstrapStatus='error';if(step===4)fillSchoolChoices();return false;}
- if(!force&&state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools)&&state.cloudSchools.length)return true;
+ if(!force&&state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools))return true;
  if(bootstrapPromise)return bootstrapPromise;
  state.bootstrapStatus='loading';
  if(step===4)fillSchoolChoices();
@@ -398,11 +399,12 @@ async function loadRegistrationBootstrap(opts={}){
    if(!res.ok){state.bootstrapStatus='error';return false;}
    const data=await res.json().catch(()=>null);
    if(!data||!Array.isArray(data.schools)){state.bootstrapStatus='error';return false;}
-   if(data.schools.length)state.cloudSchools=data.schools;
+   state.cloudSchools=data.schools;
    if(Array.isArray(data?.authorities)&&data.authorities.length)state.cloudAuthorities=data.authorities;
+   if(Array.isArray(data?.locations)&&data.locations.length)state.cloudLocations=data.locations;
    if(Array.isArray(data?.tariffs)&&data.tariffs.length)state.cloudTariffs=data.tariffs;
-   state.bootstrapStatus=data.schools.length?'ready':'error';
-   return state.bootstrapStatus==='ready';
+   state.bootstrapStatus='ready';
+   return true;
   }catch{
    state.bootstrapStatus='error';
    return false;
@@ -468,7 +470,7 @@ $('loginForm')?.addEventListener('submit',async ev=>{
   const memberships=Array.isArray(ctx?.memberships)?ctx.memberships:[];
   const primaryMem=memberships[0]||null;
   if(authorityLoginMode){
-   const isAuth=Boolean(ctx?.is_super_admin)||memberships.some(m=>['office-head','raesat-head'].includes(m.primary_position)||['maorif','authority_viewer'].includes(m.role));
+   const isAuth=Boolean(ctx?.is_super_admin)||memberships.some(m=>m.kind==='education_authority'||['office-head','raesat-head'].includes(m.primary_position)||['maorif','district_observer'].includes(m.role));
    if(!isAuth){
     $('loginError').textContent=t('authorityDenied');
     return;
@@ -509,6 +511,8 @@ $('loginForm')?.addEventListener('submit',async ev=>{
     positions:primaryMem.position_profiles||{},
     organizationId:primaryMem.organization_id,
     organizationName:primaryMem.organization_name,
+    verificationStatus:ctx?.is_super_admin?'verified':(primaryMem.verification_status||'unverified'),
+    primaryPosition:primaryMem.primary_position||'',
    };
    writeStoreItem(profileStorageKey,JSON.stringify(savedProf));
 
@@ -661,12 +665,50 @@ $('toggleNewSchoolBtn')?.addEventListener('click',()=>{
 });
 $('newSchoolRegion')?.addEventListener('change',ev=>{
  state.newSchool.region_name=clean(ev.target.value);
+ state.newSchool.jamoat_name='';
+ state.newSchool.village_name='';
+ if($('newSchoolJamoatSelect'))$('newSchoolJamoatSelect').value='';
+ if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
  populateNewSchoolTerritory();
  $('begin').disabled=!canSubmitStep4();
 });
 $('newSchoolDistrict')?.addEventListener('input',ev=>{
  state.newSchool.district_name=clean(ev.target.value);
+ state.newSchool.jamoat_name='';
+ state.newSchool.village_name='';
+ if($('newSchoolJamoatSelect'))$('newSchoolJamoatSelect').value='';
+ if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
+ populateNewSchoolTerritory();
  $('begin').disabled=!canSubmitStep4();
+});
+$('newSchoolJamoatSelect')?.addEventListener('change',ev=>{
+ const v=ev.target.value;
+ if(v==='__custom__'){
+  if($('newSchoolJamoatCustomWrap'))$('newSchoolJamoatCustomWrap').hidden=false;
+  state.newSchool.jamoat_name=clean($('newSchoolJamoatCustom')?.value);
+ }else{
+  if($('newSchoolJamoatCustomWrap'))$('newSchoolJamoatCustomWrap').hidden=true;
+  state.newSchool.jamoat_name=clean(v);
+ }
+ state.newSchool.village_name='';
+ if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
+ populateNewSchoolTerritory();
+});
+$('newSchoolJamoatCustom')?.addEventListener('input',ev=>{
+ state.newSchool.jamoat_name=clean(ev.target.value);
+});
+$('newSchoolVillageSelect')?.addEventListener('change',ev=>{
+ const v=ev.target.value;
+ if(v==='__custom__'){
+  if($('newSchoolVillageCustomWrap'))$('newSchoolVillageCustomWrap').hidden=false;
+  state.newSchool.village_name=clean($('newSchoolVillageCustom')?.value);
+ }else{
+  if($('newSchoolVillageCustomWrap'))$('newSchoolVillageCustomWrap').hidden=true;
+  state.newSchool.village_name=clean(v);
+ }
+});
+$('newSchoolVillageCustom')?.addEventListener('input',ev=>{
+ state.newSchool.village_name=clean(ev.target.value);
 });
 $('newSchoolName')?.addEventListener('input',ev=>{
  state.newSchool.name=clean(ev.target.value);
@@ -695,20 +737,28 @@ $('begin').addEventListener('click',async()=>{
   let newSchoolPayload=null;
   if(state.creatingNewSchool){
    const distLower=clean(state.newSchool.district_name).toLocaleLowerCase();
-   const regLower=clean(state.newSchool.region_name).toLocaleLowerCase();
+   const canonReg=canonicalRegionName(state.newSchool.region_name).toLocaleLowerCase();
    const matchedAuth=Array.isArray(state.cloudAuthorities)
     ? state.cloudAuthorities.find(a=>{
        if(a.authority_tier!=='maorif')return false;
        const aDist=clean(a.district_name).toLocaleLowerCase();
-       const aReg=clean(a.region_name).toLocaleLowerCase();
+       const aReg=canonicalRegionName(a.region_name).toLocaleLowerCase();
        const distHit=aDist===distLower||(distLower.length>=3&&(aDist.includes(distLower)||distLower.includes(aDist)));
-       return distHit&&(!regLower||aReg===regLower);
+       return distHit&&(!canonReg||aReg===canonReg);
       })
     : null;
+   const jamVal=$('newSchoolJamoatSelect')?.value==='__custom__'
+    ? clean($('newSchoolJamoatCustom')?.value)
+    : clean($('newSchoolJamoatSelect')?.value||state.newSchool.jamoat_name);
+   const vilVal=$('newSchoolVillageSelect')?.value==='__custom__'
+    ? clean($('newSchoolVillageCustom')?.value)
+    : clean($('newSchoolVillageSelect')?.value||state.newSchool.village_name);
    newSchoolPayload={
     name:clean(state.newSchool.name),
     region_name:clean(state.newSchool.region_name),
     district_name:clean(state.newSchool.district_name),
+    jamoat_name:jamVal,
+    village_name:vilVal,
     school_code:clean(state.newSchool.school_code),
     parent_id:matchedAuth?.id||'',
    };
@@ -833,7 +883,7 @@ $('begin').addEventListener('click',async()=>{
   };
   const schools=Object.fromEntries(roles.map(role=>[role.id,resolveExtraSchool(role.id)]));
   const workspace={primary:state.primary,schools,roles};
-  const unifiedProfile={
+   const unifiedProfile={
    fullName,
    loginName:loginVal,
    person:{...state.person},
@@ -842,6 +892,8 @@ $('begin').addEventListener('click',async()=>{
    positions:positionProfiles,
    organizationId:targetSchoolId,
    organizationName:resolveSchoolTitle(targetSchoolId),
+   verificationStatus:wantsCloudAccount?'unverified':'offline',
+   primaryPosition:state.primary,
   };
 
   const payload={

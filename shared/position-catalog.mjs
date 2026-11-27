@@ -34,6 +34,25 @@ export const POSITION_COMPAT_GROUPS = Object.freeze({
 
 export const AUTHORITY_LOGIN_POSITIONS = Object.freeze(['office-head', 'raesat-head']);
 
+export const SCHOOL_ACCOUNT_VERIFIER_POSITIONS = Object.freeze([
+  'school-director',
+  'school-academic-deputy',
+  'school-upbringing-deputy',
+  'school-records-clerk',
+]);
+
+export const SUBSCRIPTION_PERIOD_PACKAGES = Object.freeze([
+  { months: 1, days: 30, discountPct: 0, labelTg: '1 моҳ (бе тахфиф)', labelRu: '1 месяц (без скидки)' },
+  { months: 3, days: 90, discountPct: 3, labelTg: '3 моҳ (тахфифи 3%)', labelRu: '3 месяца (скидка 3%)' },
+  { months: 6, days: 180, discountPct: 5, labelTg: '6 моҳ (тахфифи 5%)', labelRu: '6 месяцев (скидка 5%)' },
+  { months: 9, days: 270, discountPct: 10, labelTg: '9 моҳ (тахфифи 10%)', labelRu: '9 месяцев (скидка 10%)' },
+  { months: 12, days: 365, discountPct: 15, labelTg: '1 сол / 12 моҳ (тахфифи 15%)', labelRu: '1 год / 12 мес. (скидка 15%)' },
+]);
+
+export function canPositionVerifySchoolStaff(positionCode) {
+  return SCHOOL_ACCOUNT_VERIFIER_POSITIONS.includes(String(positionCode || '').trim());
+}
+
 export const POSITION_CATALOG = Object.freeze([
   // 20 school positions (Group A/B/C/D compatibility & exact full prices)
   { id: 'school-director', group: 'school', compatGroup: 'A', accessRole: 'school_admin', titleTg: 'Директор', titleRu: 'Директор', defaultBasePrice: 50, defaultExtraPrice: 50, sortOrder: 1 },
@@ -300,5 +319,54 @@ export function computePositionTariffTotal(arg1 = {}, arg2 = [], arg3 = []) {
     includeAliya: Boolean(includeAliya),
     durationDays: primaryPosition ? getDays(primaryPosition) : 30,
     extraPositions: cleanExtras,
+  };
+}
+
+export function getSubscriptionPackage(months = 1) {
+  const m = Number(months) || 1;
+  return SUBSCRIPTION_PERIOD_PACKAGES.find(p => p.months === m) || SUBSCRIPTION_PERIOD_PACKAGES[0];
+}
+
+export function computeSubscriptionPackagePrice(opts = {}, monthsArg = 1) {
+  if (typeof opts === 'number') {
+    const monthlyTjs = Math.round(Math.max(0, opts) * 100) / 100;
+    const pkg = getSubscriptionPackage(monthsArg);
+    const grossTjs = Math.round(monthlyTjs * pkg.months * 100) / 100;
+    const discountTjs = Math.round(grossTjs * (pkg.discountPct / 100) * 100) / 100;
+    const totalTjs = Math.round((grossTjs - discountTjs) * 100) / 100;
+    return {
+      basePrice: monthlyTjs,
+      extrasPrice: 0,
+      aliyaPrice: 0,
+      baseTjs: monthlyTjs,
+      extraTjs: 0,
+      monthlyTjs,
+      months: pkg.months,
+      days: pkg.days,
+      discountPct: pkg.discountPct,
+      grossTjs,
+      discountTjs,
+      savedTjs: discountTjs,
+      totalTjs,
+      includeAliya: false,
+      durationDays: pkg.days,
+      extraPositions: [],
+    };
+  }
+  const monthly = computePositionTariffTotal(opts);
+  const pkg = getSubscriptionPackage(opts.months);
+  const grossTjs = Math.round(monthly.totalTjs * pkg.months * 100) / 100;
+  const discountTjs = Math.round(grossTjs * (pkg.discountPct / 100) * 100) / 100;
+  const totalTjs = Math.round((grossTjs - discountTjs) * 100) / 100;
+  return {
+    ...monthly,
+    monthlyTjs: monthly.totalTjs,
+    months: pkg.months,
+    days: pkg.days,
+    discountPct: pkg.discountPct,
+    grossTjs,
+    discountTjs,
+    savedTjs: discountTjs,
+    totalTjs,
   };
 }

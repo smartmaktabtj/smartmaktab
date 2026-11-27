@@ -3,10 +3,18 @@ import { getCloudConfig } from '../shared/cloud-config.mjs';
 import { evaluateLicenseState } from '../shared/license-guard.mjs';
 import {
   POSITION_CATALOG,
+  SUBSCRIPTION_PERIOD_PACKAGES,
   formatPositionTitle,
   getPositionsForOrg,
   getRoleForPosition,
+  getSubscriptionPackage,
 } from '../shared/position-catalog.mjs';
+import {
+  getDistrictNames,
+  getJamoatsForDistrict,
+  getRegionNames,
+  getVillagesForJamoat,
+} from '../shared/tajikistan-locations.mjs';
 
 const LANG_STORAGE_KEY = 'smartmaktab.admin.lang.v1';
 
@@ -32,8 +40,16 @@ const copy = {
     statMaorif: 'Шуъбаҳои маориф',
     statSchools: 'Мактабҳо / муассисаҳо',
     statAccounts: 'Ҳисобҳои фаъол',
+    statPendingVerif: 'Тасдиқи ҳисобҳо',
     statPendingPay: 'Чекҳои интизор',
     tabOrgs: 'Муассисаҳо ва мактабҳо',
+    tabVerifications: 'Верификатсияи ҳисобҳо',
+    verificationsHint: 'Тасдиқи дархостҳои директорон ва кормандони мактабҳо (ФИО, санаи таваллуд, телефон, шиноснома). Дар сурати рад дархост нест карда мешавад.',
+    colIdentity: 'Маълумоти шахсӣ',
+    approveVerif: 'Тасдиқ кардан',
+    rejectDeleteVerif: 'Рад ва нест кардан',
+    jamoat: 'Ҷамоат / Шаҳрак',
+    village: 'Деҳа / Маҳалла',
     tabRoles: 'Корбарон, вазифаҳо ва дастгоҳҳо',
     tabLicenses: 'Иҷозатномаҳо ва квотаҳо',
     tabPlans: 'Тарифҳои вазифаҳо ва реквизитҳо',
@@ -201,8 +217,16 @@ const copy = {
     statMaorif: 'Отделов (Маориф)',
     statSchools: 'Школ / учреждений',
     statAccounts: 'Выданных аккаунтов',
+    statPendingVerif: 'Верификация аккаунтов',
     statPendingPay: 'Чеков на проверке',
     tabOrgs: 'Организации и школы',
+    tabVerifications: 'Верификация аккаунтов',
+    verificationsHint: 'Подтверждение заявок директоров и сотрудников (ФИО, дата рождения, телефон, паспорт). При отклонении заявка удаляется безвозвратно.',
+    colIdentity: 'Персональные данные',
+    approveVerif: 'Подтвердить',
+    rejectDeleteVerif: 'Отклонить и удалить',
+    jamoat: 'Джамоат / Посёлок',
+    village: 'Село / Город',
     tabRoles: 'Пользователи, должности и устройства',
     tabLicenses: 'Лицензии и квоты',
     tabPlans: 'Тарифы должностей и реквизиты',
@@ -374,6 +398,8 @@ let licenses = [];
 let plans = [];
 let roleTariffs = [...POSITION_CATALOG];
 let payments = [];
+let pendingVerifications = [];
+let locations = [];
 let authUsers = [];
 let deviceSessions = [];
 let selectedExtraSet = new Set();
@@ -451,6 +477,7 @@ function renderSummaryBar() {
   const raesatCnt = orgs.filter(o => orgTypeKey(o) === 'raesat').length;
   const maorifCnt = orgs.filter(o => orgTypeKey(o) === 'maorif').length;
   const schoolCnt = orgs.filter(o => orgTypeKey(o) === 'school').length;
+  const pendingVerifCnt = pendingVerifications.length;
   const pendingPayCnt = payments.filter(p => p.status === 'pending').length;
 
   const items = [
@@ -458,6 +485,7 @@ function renderSummaryBar() {
     [maorifCnt, t('statMaorif')],
     [schoolCnt, t('statSchools')],
     [memberships.length, t('statAccounts')],
+    [pendingVerifCnt, t('statPendingVerif')],
     [pendingPayCnt, t('statPendingPay')],
   ];
   bar.replaceChildren(...items.map(([num, label]) => {
@@ -471,6 +499,10 @@ function renderSummaryBar() {
     return card;
   }));
 
+  const verifTabBtn = document.querySelector('.adm-tabs button[data-tab="verifications"]');
+  if (verifTabBtn) {
+    verifTabBtn.textContent = pendingVerifCnt > 0 ? `${t('tabVerifications')} (${pendingVerifCnt})` : t('tabVerifications');
+  }
   const payTabBtn = document.querySelector('.adm-tabs button[data-tab="payments"]');
   if (payTabBtn) {
     payTabBtn.textContent = pendingPayCnt > 0 ? `${t('tabPayments')} (${pendingPayCnt})` : t('tabPayments');
@@ -539,8 +571,11 @@ function startEditingOrg(org) {
   $('orgTypePreset').value = orgTypeKey(org);
   $('orgRegion').value = org.region_name || '';
   $('orgDistrict').value = org.district_name || '';
+  if ($('orgJamoat')) $('orgJamoat').value = org.jamoat_name || '';
+  if ($('orgVillage')) $('orgVillage').value = org.village_name || '';
   $('orgCode').value = org.school_code || '';
   renderOrgParentOptions(org.parent_id || '');
+  renderDatalists();
   renderEditBanner();
   $('orgName').focus();
 }
@@ -550,6 +585,7 @@ function resetOrgEditor() {
   $('orgForm').reset();
   $('orgTypePreset').value = 'school';
   renderOrgParentOptions();
+  renderDatalists();
   renderEditBanner();
 }
 
@@ -559,15 +595,21 @@ function renderOrgParentOptions(explicitValue) {
   const district = normalizeDistrictInput($('orgDistrict').value);
   const parentSel = $('orgParent');
   const distInput = $('orgDistrict');
+  const jamInput = $('orgJamoat');
+  const vilInput = $('orgVillage');
 
   if (preset === 'raesat') {
     distInput.disabled = true;
+    if (jamInput) jamInput.disabled = true;
+    if (vilInput) vilInput.disabled = true;
     parentSel.disabled = true;
     parentSel.replaceChildren(new Option('—', ''));
     return;
   }
 
   distInput.disabled = false;
+  if (jamInput) jamInput.disabled = preset !== 'school';
+  if (vilInput) vilInput.disabled = preset !== 'school';
   parentSel.disabled = false;
 
   const candidates = orgs.filter(o => {
@@ -632,14 +674,16 @@ function showIssuedCredentials(data) {
 async function refreshAll() {
   if (!client.session?.access_token) return;
   try {
-    const [o, m, l, pl, rt, p, ds, uRes] = await Promise.all([
-      client.select('organizations', 'select=id,name,kind,parent_id,authority_tier,region_name,district_name,school_code&order=name.asc'),
-      client.select('school_memberships', 'select=id,user_id,organization_id,role,primary_position,extra_positions,max_extra_positions,max_devices,account_active,aliya_enabled,custom_method_name,created_at&order=created_at.desc'),
+    const [o, m, l, pl, rt, p, ds, pv, locRows, uRes] = await Promise.all([
+      client.select('organizations', 'select=id,name,kind,parent_id,authority_tier,region_name,district_name,jamoat_name,village_name,verification_status,school_code&order=name.asc'),
+      client.select('school_memberships', 'select=id,user_id,organization_id,role,primary_position,extra_positions,max_extra_positions,max_devices,account_active,aliya_enabled,custom_method_name,verification_status,subscription_status,subscription_expires_at,created_at&order=created_at.desc'),
       client.select('school_licenses', 'select=id,organization_id,status,plan_code,starts_at,expires_at,grace_days,max_accounts,max_positions_per_account,default_max_devices,notes,updated_at&order=updated_at.desc'),
       client.getPaymentPlans(),
       client.getRoleTariffs().catch(() => POSITION_CATALOG),
       client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,ocr_payload,status,review_note,created_at&order=created_at.desc'),
       client.select('user_device_sessions', 'select=id,user_id,organization_id,device_id,device_label,is_active,first_seen_at,last_seen_at&order=last_seen_at.desc').catch(() => []),
+      client.getPendingAccountVerifications(null).catch(() => []),
+      client.getTajikistanLocations().catch(() => []),
       client.adminUsers({ action: 'list_users' }).catch(() => ({ users: [] })),
     ]);
     orgs = o || [];
@@ -649,6 +693,8 @@ async function refreshAll() {
     roleTariffs = rt?.length ? rt : [...POSITION_CATALOG];
     payments = p || [];
     deviceSessions = ds || [];
+    pendingVerifications = Array.isArray(pv) ? pv : [];
+    locations = Array.isArray(locRows) ? locRows : [];
     authUsers = Array.isArray(uRes?.users) ? uRes.users : [];
     renderSummaryBar();
     renderFilterSelects();
@@ -665,10 +711,21 @@ async function refreshAll() {
 }
 
 function renderDatalists() {
-  const regions = uniqueSorted(orgs.map(o => o.region_name));
-  const districts = uniqueSorted(orgs.map(o => o.district_name));
+  const locArg = locations.length ? locations : undefined;
+  const curReg = $('orgRegion')?.value?.trim() || '';
+  const curDist = normalizeDistrictInput($('orgDistrict')?.value || '');
+  const curJam = $('orgJamoat')?.value?.trim() || '';
+  const regions = uniqueSorted([...orgs.map(o => o.region_name), ...getRegionNames(locArg)]);
+  const districts = uniqueSorted([
+    ...orgs.map(o => o.district_name),
+    ...(curReg ? getDistrictNames(curReg, locArg) : getRegionNames(locArg).flatMap(r => getDistrictNames(r, locArg))),
+  ]);
+  const jamoats = (curReg && curDist) ? getJamoatsForDistrict(curReg, curDist, locArg) : [];
+  const villages = (curReg && curDist && curJam) ? getVillagesForJamoat(curReg, curDist, curJam, locArg) : [];
   $('regionDatalist').replaceChildren(...regions.map(r => Object.assign(document.createElement('option'), { value: r })));
   $('districtDatalist').replaceChildren(...districts.map(d => Object.assign(document.createElement('option'), { value: d })));
+  $('jamoatDatalist')?.replaceChildren(...jamoats.map(j => Object.assign(document.createElement('option'), { value: j })));
+  $('villageDatalist')?.replaceChildren(...villages.map(v => Object.assign(document.createElement('option'), { value: v })));
 }
 
 function renderFilterSelects() {
@@ -985,7 +1042,13 @@ function renderTables() {
     td2.textContent = orgTypeLabel(o);
 
     const td3 = document.createElement('td');
-    td3.textContent = [o.region_name, o.district_name].filter(Boolean).join(' · ') || '—';
+    td3.textContent = [o.region_name, o.district_name, o.jamoat_name, o.village_name].filter(Boolean).join(' · ') || '—';
+    if (o.kind === 'school' && o.verification_status === 'pending') {
+      const pendBadge = document.createElement('span');
+      pendBadge.className = 'pill warn';
+      pendBadge.textContent = lang === 'ru' ? 'На проверке' : 'Дар баррасӣ';
+      td3.append(document.createElement('br'), pendBadge);
+    }
 
     const tdParent = document.createElement('td');
     tdParent.textContent = o.parent_id ? orgShortName(o.parent_id) : '—';
@@ -1069,6 +1132,67 @@ function renderTables() {
     return tr;
   }) : [emptyRow(5)]));
 
+  // 1б. Верификация аккаунтов
+  const verifBody = $('verificationsTbody');
+  if (verifBody) {
+    verifBody.replaceChildren(...(pendingVerifications.length ? pendingVerifications.map(req => {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td');
+      const strong = document.createElement('strong');
+      strong.textContent = req.full_name || '—';
+      td1.append(strong);
+      const td2 = document.createElement('td');
+      td2.textContent = `${req.organization_name || '—'} · ${formatPositionTitle(req.primary_position, lang)}`;
+      const place = [req.district_name, req.jamoat_name, req.village_name].filter(Boolean).join(', ');
+      if (place) {
+        const sub = document.createElement('div');
+        sub.className = 'adm-meta';
+        sub.textContent = place;
+        td2.append(sub);
+      }
+      const td3 = document.createElement('td');
+      td3.textContent = `${lang === 'ru' ? 'Дата рожд.' : 'Тав.'}: ${req.birth_date} · ${req.phone} · ${lang === 'ru' ? 'Паспорт' : 'Шиноснома'}: ${req.passport_number}`;
+      const td4 = document.createElement('td');
+      const row = document.createElement('div');
+      row.className = 'adm-row';
+      row.style.marginTop = '0';
+      const appBtn = document.createElement('button');
+      appBtn.type = 'button';
+      appBtn.className = 'btn sm';
+      appBtn.textContent = t('approveVerif');
+      appBtn.addEventListener('click', async () => {
+        appBtn.disabled = true;
+        try {
+          await client.reviewAccountVerification({ p_membership_id: req.membership_id || req.id, p_decision: 'verified', p_note: '' });
+          setStatus(t('saved'));
+          await refreshAll();
+        } catch (err) {
+          setStatus(err.message, 'error');
+          appBtn.disabled = false;
+        }
+      });
+      const rejBtn = document.createElement('button');
+      rejBtn.type = 'button';
+      rejBtn.className = 'btn danger sm';
+      rejBtn.textContent = t('rejectDeleteVerif');
+      rejBtn.addEventListener('click', async () => {
+        rejBtn.disabled = true;
+        try {
+          await client.reviewAccountVerification({ p_membership_id: req.membership_id || req.id, p_decision: 'rejected', p_note: '' });
+          setStatus(t('saved'));
+          await refreshAll();
+        } catch (err) {
+          setStatus(err.message, 'error');
+          rejBtn.disabled = false;
+        }
+      });
+      row.append(appBtn, rejBtn);
+      td4.append(row);
+      tr.append(td1, td2, td3, td4);
+      return tr;
+    }) : [emptyRow(4)]));
+  }
+
   // 2. Пользователи и должности
   const memBody = $('rolesTbody');
   memBody.replaceChildren(...(memberships.length ? memberships.map(m => {
@@ -1099,9 +1223,17 @@ function renderTables() {
     statusPill.className = `pill${m.account_active === false ? ' danger' : ''}`;
     statusPill.textContent = m.account_active === false ? t('disabledBadge') : t('activeBadge');
     const quotaText = document.createElement('div');
+    const verifBadgeMap = {
+      verified: lang === 'ru' ? 'Вериф. ✓' : 'Тасдиқ ✓',
+      pending: lang === 'ru' ? 'Ожидает вериф.' : 'Интизор',
+      rejected: lang === 'ru' ? 'Отклонён' : 'Радшуда',
+      unverified: lang === 'ru' ? 'Не вериф.' : 'Бе тасдиқ',
+    };
+    const verifLabel = verifBadgeMap[m.verification_status || 'unverified'] || '';
+    const subExp = m.subscription_expires_at ? ` · ${m.subscription_status || 'trial'}→${String(m.subscription_expires_at).slice(0, 10)}` : '';
     quotaText.textContent = lang === 'ru'
-      ? `Устройства: ${activeDevCount}/${m.max_devices ?? 1} · Доп. роли: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''}`
-      : `Дастгоҳҳо: ${activeDevCount}/${m.max_devices ?? 1} · Иловагӣ: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''}`;
+      ? `Устройства: ${activeDevCount}/${m.max_devices ?? 1} · Доп. роли: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''} · ${verifLabel}${subExp}`
+      : `Дастгоҳҳо: ${activeDevCount}/${m.max_devices ?? 1} · Иловагӣ: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''} · ${verifLabel}${subExp}`;
     td3.append(statusPill, quotaText);
 
     const td4 = document.createElement('td');
@@ -1341,8 +1473,12 @@ function renderTables() {
     const td1 = document.createElement('td');
     const mainPos = p.ocr_payload?.primary_position ? formatPositionTitle(p.ocr_payload.primary_position, lang) : '';
     const extraCnt = Array.isArray(p.ocr_payload?.extra_positions) ? p.ocr_payload.extra_positions.length : 0;
+    const reqMonths = Number(p.ocr_payload?.months || 1);
+    const reqPkg = getSubscriptionPackage(reqMonths);
+    const discInfo = reqPkg.discountPct > 0 ? ` (-${reqPkg.discountPct}%)` : '';
+    const pkgInfo = ` · ${reqPkg.months} ${lang === 'ru' ? 'мес.' : 'моҳ'}${discInfo}`;
     const posStr = mainPos ? ` · ${mainPos}${extraCnt ? ` (+${extraCnt})` : ''}` : '';
-    td1.textContent = `${orgShortName(p.organization_id)} · ${p.provider_code} · ${p.amount_declared ?? '—'} ${p.currency}${posStr}`;
+    td1.textContent = `${orgShortName(p.organization_id)} · ${p.provider_code} · ${p.amount_declared ?? '—'} ${p.currency}${posStr}${pkgInfo}`;
 
     const td2 = document.createElement('td');
     const hashEl = document.createElement('small');
@@ -1364,20 +1500,29 @@ function renderTables() {
       const wrap = document.createElement('div');
       wrap.className = 'adm-row';
       wrap.style.marginTop = '0';
-      for (const [days, labelKey, cls] of [[30, 'approve30', 'btn sm'], [365, 'approve365', 'btn alt sm'], [0, 'reject', 'btn danger sm']]) {
+      const btnSpecs = SUBSCRIPTION_PERIOD_PACKAGES.map(pkg => ({
+        months: pkg.months,
+        days: pkg.days,
+        label: pkg.months === 1
+          ? `+1 ${lang === 'ru' ? 'мес' : 'моҳ'} (${pkg.days}д)`
+          : `+${pkg.months} ${lang === 'ru' ? 'мес' : 'моҳ'} (-${pkg.discountPct}%)`,
+        cls: pkg.months === reqPkg.months ? 'btn sm' : 'btn alt sm',
+      }));
+      btnSpecs.push({ months: 0, days: 0, label: t('reject'), cls: 'btn danger sm' });
+      for (const spec of btnSpecs) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = cls;
-        b.textContent = t(labelKey);
+        b.className = spec.cls;
+        b.textContent = spec.label;
         b.addEventListener('click', async () => {
           b.disabled = true;
           try {
             await client.adminReviewPayment({
               p_payment_id: p.id,
-              p_decision: days > 0 ? 'verified' : 'rejected',
-              p_review_note: days > 0 ? `Verified +${days}d` : 'Rejected by admin',
-              p_extend_days: days,
-              p_plan_code: days >= 365 ? 'annual' : 'monthly',
+              p_decision: spec.days > 0 ? 'verified' : 'rejected',
+              p_review_note: spec.days > 0 ? `Verified +${spec.days}d (${spec.months}m)` : 'Rejected by admin',
+              p_extend_days: spec.days,
+              p_plan_code: spec.months >= 12 ? 'annual' : 'monthly',
             });
             setStatus(t('saved'));
             await refreshAll();
@@ -1416,9 +1561,10 @@ for (const btn of document.querySelectorAll('.adm-tabs button')) {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 }
 
-$('orgTypePreset').addEventListener('change', () => renderOrgParentOptions());
-$('orgRegion').addEventListener('input', () => renderOrgParentOptions());
-$('orgDistrict').addEventListener('input', () => renderOrgParentOptions());
+$('orgTypePreset').addEventListener('change', () => { renderOrgParentOptions(); renderDatalists(); });
+$('orgRegion').addEventListener('input', () => { renderOrgParentOptions(); renderDatalists(); });
+$('orgDistrict').addEventListener('input', () => { renderOrgParentOptions(); renderDatalists(); });
+$('orgJamoat')?.addEventListener('input', renderDatalists);
 
 $('filterRegion').addEventListener('change', () => {
   renderFilterSelects();
@@ -1519,6 +1665,8 @@ $('orgForm').addEventListener('submit', async e => {
   const preset = $('orgTypePreset').value;
   const { kind, authority_tier } = presetToKindTier(preset);
   const district = preset === 'raesat' ? null : (normalizeDistrictInput($('orgDistrict').value) || null);
+  const jamoat = preset === 'school' ? ($('orgJamoat')?.value?.trim() || null) : null;
+  const village = preset === 'school' ? ($('orgVillage')?.value?.trim() || null) : null;
   try {
     await client.adminUpsertOrganization({
       p_name: $('orgName').value.trim(),
@@ -1529,6 +1677,8 @@ $('orgForm').addEventListener('submit', async e => {
       p_district_name: district,
       p_school_code: $('orgCode').value.trim() || null,
       p_org_id: editingOrgId || null,
+      p_jamoat_name: jamoat,
+      p_village_name: village,
     });
     resetOrgEditor();
     setStatus(t('saved'));
