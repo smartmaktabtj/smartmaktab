@@ -28,7 +28,7 @@ test('weekly print and summary matrix show selected scope and retain a genuine z
   async function row(i,code,start,end){const g=ops.locator('fieldset.school-fields').nth(i);await classCode(g,code);for(const [k,v] of Object.entries({subject:'Математика',start,end,teacher:'Устод 1',room:String(10+i)}))await g.locator(`[data-operation-field=${k}]`).fill(v);}
   await row(0,'5','08:00','08:45');await pick(p,'Иловаи дарс').last().click();await row(1,'6Б','08:20','09:00');await ops.getByRole('button',{name:'Пешнамоиш',exact:true}).click();assert.match(await ops.locator('[role=status]').innerText(),/Омӯзгор/);
   await ops.locator('[data-operation-field=start]').nth(1).fill('08:45');await ops.getByRole('button',{name:'Пешнамоиш',exact:true}).click();assert.equal(await ops.locator('tbody tr').count(),2);
-  await backView(p);await pick(p,'Ҳисоботи сифат аз рӯи давраҳо').click();await classCode(ops,'5');
+  await homeView(p);await pick(p,'Ҳисоботи сифат аз рӯи давраҳо').click();await classCode(ops,'5');
   for(const [k,v] of Object.entries({year:'2026–2027',subject:'Информатика','q1-total':'25','q1-assessed':'20','q1-quality':'0','q1-passed':'17'}))await ops.locator(`[data-operation-field=${k}]`).fill(v);
   await ops.getByRole('button',{name:'Пешнамоиш',exact:true}).click();
   const quality=ops.locator('tr').filter({hasText:'Сифат, %'});assert.deepEqual(await quality.locator('td').allTextContents(),['0','—','—','—','—','—','—']);assert.deepEqual(errors,[]);
@@ -50,7 +50,7 @@ test('paper inventory and real local DOCX download',async()=>{
 test('PDF reader is loaded only on request, renders pages and handles an unreachable static source',async()=>{
  const browser=await chromium.launch();
  function pdf(){
-  const stream='0.2 0.5 0.2 rg\n10 10 100 100 re f\n',objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 2 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R >>',`<< /Length ${stream.length} >>\nstream\n${stream}endstream`];
+  const stream='0.2 0.5 0.2 rg\n10 10 100 100 re f\n',objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R >>',`<< /Length ${stream.length} >>\nstream\n${stream}endstream`];
   let text='%PDF-1.4\n';const offsets=[0];for(const [i,item] of objects.entries()){offsets.push(text.length);text+=`${i+1} 0 obj\n${item}\nendobj\n`;}
   const pos=text.length;text+=`xref\n0 ${offsets.length}\n0000000000 65535 f \n`+offsets.slice(1).map(x=>`${String(x).padStart(10,'0')} 00000 n \n`).join('')+`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${pos}\n%%EOF\n`;return Buffer.from(text);
  }
