@@ -28,20 +28,6 @@ jobs:
           done
       - run: npm test
       - run: python3 scripts/build_startup.py
-      - run: |
-          node -e '
-            const key = "sb_publishable_zhMg9NltEYFlGV84PR8sag_pmiaDkIb";
-            const base = "https://waorfkkavzzpbrsvjjln.supabase.co";
-            (async () => {
-              const r1 = await fetch(base + "/rest/v1/rpc/get_registration_bootstrap", { method: "POST", headers: { apikey: key, "content-type": "application/json" }, body: "{}" }).catch(e => ({ status: "ERR:" + e.message, text: async () => "" }));
-              const t1 = await r1.text();
-              const r2 = await fetch(base + "/functions/v1/register-user?action=bootstrap", { headers: { apikey: key } }).catch(e => ({ status: "ERR:" + e.message, text: async () => "" }));
-              const t2 = await r2.text();
-              const r3 = await fetch(base + "/functions/v1/register-user", { method: "POST", headers: { apikey: key, "content-type": "application/json" }, body: "{}" }).catch(e => ({ status: "ERR:" + e.message, text: async () => "" }));
-              const t3 = await r3.text();
-              console.log("::notice title=Live probe::RPC=" + r1.status + " len=" + t1.length + " | FN_GET=" + r2.status + " len=" + t2.length + " body=" + t2.slice(0,120).replace(/\n/g," ") + " | FN_POST=" + r3.status + " body=" + t3.slice(0,120).replace(/\n/g," "));
-            })();
-          '
 
   browser-tests:
     runs-on: ubuntu-24.04
