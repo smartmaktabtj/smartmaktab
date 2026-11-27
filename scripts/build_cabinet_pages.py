@@ -12,7 +12,7 @@ def layout(prefix, title, current, body):
     header_left = (
         f'<div class="teacher-context">'
         f'<a class="brand top-brand" href="{prefix}index.html">'
-        f'<span class="logo" aria-hidden="true">S</span><span class="brand-name">SmartMaktab</span></a>'
+        f'<img class="brand-logo" src="{prefix}shared/brand-icon.png" alt="" width="30" height="30"><span class="brand-name">SmartMaktab</span></a>'
         f'<h1 class="crumb">{escape(title)}</h1>'
         f'<span class="tag" id="workspaceSchool">—</span></div>'
     )

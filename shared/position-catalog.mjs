@@ -41,6 +41,17 @@ export const SCHOOL_ACCOUNT_VERIFIER_POSITIONS = Object.freeze([
   'school-records-clerk',
 ]);
 
+export const USER_MANAGER_POSITIONS = Object.freeze([
+  'school-director',
+  'school-academic-deputy',
+  'school-upbringing-deputy',
+  'school-records-clerk',
+  'office-head',
+  'office-clerk',
+  'raesat-head',
+  'raesat-clerk',
+]);
+
 export const SUBSCRIPTION_PERIOD_PACKAGES = Object.freeze([
   { months: 1, days: 30, discountPct: 0, labelTg: '1 моҳ (бе тахфиф)', labelRu: '1 месяц (без скидки)' },
   { months: 3, days: 90, discountPct: 3, labelTg: '3 моҳ (тахфифи 3%)', labelRu: '3 месяца (скидка 3%)' },
@@ -51,6 +62,15 @@ export const SUBSCRIPTION_PERIOD_PACKAGES = Object.freeze([
 
 export function canPositionVerifySchoolStaff(positionCode) {
   return SCHOOL_ACCOUNT_VERIFIER_POSITIONS.includes(String(positionCode || '').trim());
+}
+
+export function canPositionManageUsers(positionCode) {
+  return USER_MANAGER_POSITIONS.includes(String(positionCode || '').trim());
+}
+
+export function computeAllowedDeviceQuota(extraPositionsCount = 0) {
+  const extras = Math.max(0, Number(extraPositionsCount) || 0);
+  return Math.min(40, (1 + extras) * 2);
 }
 
 export const POSITION_CATALOG = Object.freeze([
@@ -70,8 +90,8 @@ export const POSITION_CATALOG = Object.freeze([
   { id: 'school-accountant', group: 'school', compatGroup: 'D', accessRole: 'staff', titleTg: 'Бухгалтер', titleRu: 'Бухгалтер', defaultBasePrice: 50, defaultExtraPrice: 50, sortOrder: 13 },
   { id: 'school-class-teacher', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Роҳбари синф', titleRu: 'Классный руководитель', defaultBasePrice: 10, defaultExtraPrice: 10, sortOrder: 14 },
   { id: 'school-girls-council-chair', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Раиси Шӯрои духтарон', titleRu: 'Председатель Совета девушек', defaultBasePrice: 30, defaultExtraPrice: 30, sortOrder: 15 },
-  { id: 'school-upper-class-method-group', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Иттиҳодияи методии роҳбарони синфҳои боло', titleRu: 'МО классных руководителей старших классов', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 16 },
-  { id: 'school-lower-class-method-group', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Иттиҳодияи методии роҳбарони синфҳои поён', titleRu: 'МО классных руководителей младших классов', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 17 },
+  { id: 'school-upper-class-method-group', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Иттиҳодияи методии роҳбарони синфҳои 5-11', titleRu: 'МО классных руководителей 5-11 классов', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 16 },
+  { id: 'school-lower-class-method-group', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Иттиҳодияи методии роҳбарони синфҳои 1-4', titleRu: 'МО классных руководителей 1-4 классов', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 17 },
   { id: 'school-five-method-groups', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Иттиҳодияи методӣ', titleRu: 'Методическое объединение', defaultBasePrice: 20, defaultExtraPrice: 20, sortOrder: 18 },
   { id: 'school-subject-room-head', group: 'school', compatGroup: 'C', accessRole: 'staff', titleTg: 'Мудири кабинети фаннӣ', titleRu: 'Заведующий предметным кабинетом', defaultBasePrice: 15, defaultExtraPrice: 15, sortOrder: 19 },
   { id: 'school-teacher', group: 'school', compatGroup: 'C', accessRole: 'teacher', titleTg: 'Омӯзгор', titleRu: 'Учитель', defaultBasePrice: 10, defaultExtraPrice: 10, sortOrder: 20 },
@@ -185,7 +205,7 @@ export function getPositionsForOrg(org, tariffs = null, { includeHidden = true }
     const basePrice = Number(t?.base_price_tjs ?? t?.basePrice ?? item.defaultBasePrice);
     const extraPrice = Number(t?.extra_price_tjs ?? t?.extraPrice ?? item.defaultExtraPrice);
     const durationDays = Number(t?.duration_days ?? t?.durationDays ?? 30);
-    const defaultMaxDevices = Number(t?.default_max_devices ?? t?.defaultMaxDevices ?? 1);
+    const defaultMaxDevices = Number(t?.default_max_devices ?? t?.defaultMaxDevices ?? 2);
     const canReceiveLogin = item.hiddenFromLogin
       ? false
       : (t ? t.can_receive_login !== false && t.canReceiveLogin !== false : true);

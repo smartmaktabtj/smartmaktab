@@ -170,7 +170,7 @@ const copy = {
     maxExtraPos: 'Макс. вазифаҳои иловагӣ',
     maxExtraHint: '0 = танҳо вазифаи асосӣ; 1..19 = бо вазифаҳои иловагӣ',
     maxDevices: 'Макс. дастгоҳ барои 1 логин',
-    maxDevicesHint: '1 = танҳо дар 1 телефон/компютер кор мекунад (зидди тақсими парол)',
+    maxDevicesHint: '2 = 1 телефон + 1 компютер (бо вазифаҳои иловагӣ то 40 меафзояд)',
     tempPassword: 'Рамз (ихтиёрӣ)',
     tempPassHint: 'Агар холӣ монед (барои корбари нав) рамзи нав сохта мешавад',
     issueTempPassword: 'Сохтан / навсозии рамзи муваққатӣ',
@@ -296,7 +296,7 @@ const copy = {
     unlinkedOrgs: 'Организации без привязки',
     rolesHint: 'Контроль доступа и защита от передачи одного пароля 20 учителям: задайте кому выдаётся логин, какую должность и сколько доп. кабинетов он открывает, и на скольких устройствах (обычно 1) работает логин.',
     licensesHint: 'Лицензия задаёт срок доступа организации, льготный офлайн-период (30 дней) и квоту — сколько всего отдельных логинов и должностей разрешено этой школе.',
-    plansHint: 'Настройте индивидуальную цену (основную и как дополнительная должность), срок действия, лимит устройств и право получения отдельного логина для каждой из 54 должностей.',
+    plansHint: 'Настройте индивидуальную цену (основную и как дополнительная должность), срок действия, лимит устройств и право получения отдельного логина для каждой из 24 должностей.',
     orgName: 'Название организации',
     orgNameHint: 'Например: МТМУ № 45 или Отдел образования Дангары',
     orgTypeLabel: 'Тип организации',
@@ -345,7 +345,7 @@ const copy = {
     maxExtraPos: 'Лимит доп. должностей',
     maxExtraHint: '0 = только основная должность; 1..19 = сколько доп. кабинетов разрешено',
     maxDevices: 'Макс. устройств на 1 логин',
-    maxDevicesHint: '1 = работает только на 1 устройстве (защита от раздачи логина 20 сотрудникам)',
+    maxDevicesHint: '2 = 1 телефон + 1 компьютер (с доп. должностями до 40)',
     tempPassword: 'Пароль (необязательно)',
     tempPassHint: 'Оставьте пустым для автогенерации пароля новому пользователю',
     issueTempPassword: 'Создать / сбросить временный пароль',
@@ -385,15 +385,13 @@ const copy = {
     planPrice: 'Базовая цена (TJS)',
     planDays: 'Срок (дней)',
     recipientPhone: 'Номер получателя (Амонатбонк / DCity)',
-    roleTariffsTitle: 'Индивидуальные тарифы для каждой должности (54 должности)',
+    roleTariffsTitle: 'Индивидуальные тарифы для каждой должности (24 должности)',
     tariffGroupFilter: 'Группа должностей',
     tariffSearch: 'Поиск должности',
-    groupAll: 'Все должности (54)',
+    groupAll: 'Все должности (24)',
     groupSchool: 'Школа (20 должностей)',
-    groupMaorif: 'Отдел образования — советники (20)',
-    groupSubject: 'Отдел образования — предметники (11)',
-    groupOffice: 'Отдел образования — аппарат (2)',
-    groupRaesat: 'Управление образования — Раёсат (1)',
+    groupOffice: 'Отдел образования (2)',
+    groupRaesat: 'Управление образования — Раёсат (2)',
     approve30: 'Подтвердить + 30 дн.',
     approve365: 'Подтвердить + 365 дн.',
     reject: 'Отклонить',
@@ -734,7 +732,7 @@ async function refreshAll() {
       client.getPaymentPlans(),
       client.getRoleTariffs().catch(() => POSITION_CATALOG),
       client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,ocr_payload,status,review_note,created_at&order=created_at.desc'),
-      client.select('user_device_sessions', 'select=id,user_id,organization_id,device_id,device_label,is_active,first_seen_at,last_seen_at&order=last_seen_at.desc').catch(() => []),
+      client.select('user_device_sessions', 'select=id,user_id,organization_id,device_id,device_kind,device_label,is_active,first_seen_at,last_seen_at&order=last_seen_at.desc').catch(() => []),
       client.getPendingAccountVerifications(null).catch(() => []),
       client.getTajikistanLocations().catch(() => []),
       client.adminUsers({ action: 'list_users' }).catch(() => ({ users: [] })),
@@ -850,7 +848,7 @@ function renderOrgQuotaBanner() {
   const used = memberships.filter(m => m.organization_id === orgId && m.account_active !== false).length;
   const maxAcc = lic?.max_accounts ?? 1;
   const maxPos = lic?.max_positions_per_account ?? 1;
-  const defDev = lic?.default_max_devices ?? 1;
+  const defDev = lic?.default_max_devices ?? 2;
   noteEl.textContent = t('orgQuotaLine')
     .replace('{used}', String(used))
     .replace('{max}', String(maxAcc))
@@ -929,7 +927,7 @@ function loadMembershipIntoForm(m) {
   renderPositionControls();
   $('roleName').value = m.role || 'school_admin';
   $('roleMaxExtra').value = String(m.max_extra_positions ?? selectedExtraSet.size ?? 0);
-  $('roleMaxDevices').value = String(m.max_devices ?? 1);
+  $('roleMaxDevices').value = String(m.max_devices ?? 2);
   $('roleAccountActive').checked = m.account_active !== false;
   $('roleForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -944,7 +942,7 @@ function loadLicenseIntoForm(l) {
   $('licGraceDays').value = String(l.grace_days ?? 30);
   $('licMaxAccounts').value = String(l.max_accounts ?? 1);
   $('licMaxPos').value = String(l.max_positions_per_account ?? 1);
-  $('licDefaultDev').value = String(l.default_max_devices ?? 1);
+  $('licDefaultDev').value = String(l.default_max_devices ?? 2);
   $('licNotes').value = l.notes || '';
 }
 
@@ -1285,8 +1283,8 @@ function renderTables() {
     const verifLabel = verifBadgeMap[m.verification_status || 'unverified'] || '';
     const subExp = m.subscription_expires_at ? ` · ${m.subscription_status || 'trial'}→${String(m.subscription_expires_at).slice(0, 10)}` : '';
     quotaText.textContent = lang === 'ru'
-      ? `Устройства: ${activeDevCount}/${m.max_devices ?? 1} · Доп. роли: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''} · ${verifLabel}${subExp}`
-      : `Дастгоҳҳо: ${activeDevCount}/${m.max_devices ?? 1} · Иловагӣ: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''} · ${verifLabel}${subExp}`;
+      ? `Устройства: ${activeDevCount}/${m.max_devices ?? 2} · Доп. роли: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''} · ${verifLabel}${subExp}`
+      : `Дастгоҳҳо: ${activeDevCount}/${m.max_devices ?? 2} · Иловагӣ: ${(m.extra_positions || []).length}/${m.max_extra_positions ?? 0}${m.aliya_enabled ? ' · Алия ✓' : ''} · ${verifLabel}${subExp}`;
     td3.append(statusPill, quotaText);
 
     const td4 = document.createElement('td');
@@ -1371,7 +1369,8 @@ function renderTables() {
     td1.textContent = `${u?.email || '—'} · ${orgShortName(d.organization_id)}`;
     const td2 = document.createElement('td');
     const pos = m?.primary_position ? formatPositionTitle(m.primary_position, lang) : roleDisplayLabel(m?.role);
-    td2.textContent = `${d.device_label || 'Web'} · ${pos}`;
+    const kindBadge = d.device_kind === 'mobile' ? '📱 Моб.' : '🖥 Комп.';
+    td2.textContent = `${kindBadge} · ${d.device_label || 'Web'} · ${pos}`;
     const td3 = document.createElement('td');
     td3.textContent = (d.last_seen_at || '').replace('T', ' ').slice(0, 16);
     const td4 = document.createElement('td');
@@ -1411,8 +1410,8 @@ function renderTables() {
     td2.append(pill);
     const td3 = document.createElement('td');
     td3.textContent = lang === 'ru'
-      ? `Логины: ${usedAcc}/${l.max_accounts ?? 1} · Роли: ${l.max_positions_per_account ?? 1} · Устр.: ${l.default_max_devices ?? 1}`
-      : `Логинҳо: ${usedAcc}/${l.max_accounts ?? 1} · Вазифа: ${l.max_positions_per_account ?? 1} · Дастгоҳ: ${l.default_max_devices ?? 1}`;
+      ? `Логины: ${usedAcc}/${l.max_accounts ?? 1} · Роли: ${l.max_positions_per_account ?? 1} · Устр.: ${l.default_max_devices ?? 2}`
+      : `Логинҳо: ${usedAcc}/${l.max_accounts ?? 1} · Вазифа: ${l.max_positions_per_account ?? 1} · Дастгоҳ: ${l.default_max_devices ?? 2}`;
     const td4 = document.createElement('td');
     td4.textContent = l.expires_at?.slice(0, 10) || '—';
     const td5 = document.createElement('td');
@@ -1479,7 +1478,7 @@ function renderTables() {
     const baseInp = makeNum(Number(rt.base_price_tjs ?? 10).toFixed(2), '0.01', '0', '10000');
     const extraInp = makeNum(Number(rt.extra_price_tjs ?? 5).toFixed(2), '0.01', '0', '10000');
     const daysInp = makeNum(rt.duration_days ?? 30, '1', '1', '3650');
-    const devInp = makeNum(rt.default_max_devices ?? 1, '1', '1', '10');
+    const devInp = makeNum(rt.default_max_devices ?? 2, '1', '1', '40');
     const canLoginCb = makeCb(rt.can_receive_login !== false);
     const activeCb = makeCb(rt.is_active !== false);
 
@@ -1743,7 +1742,7 @@ $('roleForm').addEventListener('submit', async e => {
   const role = $('roleName').value;
   const extraPositions = [...selectedExtraSet].filter(c => c !== primaryPos);
   const maxExtra = Math.max(extraPositions.length, Number($('roleMaxExtra').value || 0));
-  const maxDevices = Math.max(1, Number($('roleMaxDevices').value || 1));
+  const maxDevices = Math.max(1, Number($('roleMaxDevices').value || 2));
   const accountActive = $('roleAccountActive').checked;
   const aliyaEnabled = $('roleAliyaEnabled')?.checked === true;
   const fullName = $('roleFullName').value.trim();
@@ -1789,7 +1788,7 @@ $('licForm').addEventListener('submit', async e => {
       p_notes: $('licNotes').value.trim(),
       p_max_accounts: Math.max(1, Number($('licMaxAccounts').value || 1)),
       p_max_positions_per_account: Math.max(1, Number($('licMaxPos').value || 1)),
-      p_default_max_devices: Math.max(1, Number($('licDefaultDev').value || 1)),
+      p_default_max_devices: Math.max(1, Number($('licDefaultDev').value || 2)),
     });
     setStatus(t('saved'));
     await refreshAll();

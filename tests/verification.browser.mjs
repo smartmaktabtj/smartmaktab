@@ -142,8 +142,8 @@ test('Verification & Territory browser: empty schools bootstrap, Region->Distric
 
     // With empty schools: [], user adds their real school via Region -> District -> Jamoat -> Village cascade
     await page.locator('#toggleNewSchoolBtn').click();
-    await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
-    await page.locator('#newSchoolDistrict').fill('Исфара');
+    await page.locator('#newSchoolRegion').selectOption('Суғд');
+    await page.locator('#newSchoolDistrictSelect').selectOption('Исфара');
     await page.locator('#newSchoolJamoatSelect option[value="Ворух"]').waitFor({ state: 'attached' });
     await page.locator('#newSchoolJamoatSelect').selectOption('Ворух');
     await page.locator('#newSchoolVillageSelect option[value="Ворух"]').waitFor({ state: 'attached' });
@@ -480,7 +480,8 @@ test('Step 4 bootstrap falls back/uses Data API RPC when Edge Function bootstrap
     assert.equal(await page.locator('#retryBootstrapBtn').isHidden(), true);
 
     await page.locator('#toggleNewSchoolBtn').click();
-    await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
+    await page.locator('#newSchoolRegion').selectOption('Суғд');
+    await page.locator('#newSchoolDistrictSelect').selectOption('__custom__');
     await page.locator('#newSchoolDistrict').fill('ш. Исфара');
     await page.locator('#newSchoolJamoatSelect option[value="Ворух"]').waitFor({ state: 'attached' });
     await page.locator('#newSchoolJamoatSelect').selectOption('Ворух');

@@ -100,11 +100,8 @@ Deno.serve(async (req) => {
     });
 
     const { data: ctx, error: ctxError } = await userClient.rpc('get_my_workspace_context');
-    if (ctxError) {
-      return json(401, { error: ctxError.message || 'unauthorized' });
-    }
-    if (!ctx?.is_super_admin) {
-      return json(403, { error: 'super_admin_required' });
+    if (ctxError || !ctx?.user_id) {
+      return json(401, { error: ctxError?.message || 'unauthorized' });
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -113,6 +110,94 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = typeof body?.action === 'string' ? body.action.trim() : '';
+
+    // -----------------------------------------------------------------------
+    // Leadership 'Корбарон' actions (verified hierarchy checked in SQL RPC)
+    // -----------------------------------------------------------------------
+    if (action === 'manager_reset_password') {
+      const targetUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
+      const orgId = typeof body?.org_id === 'string' ? body.org_id.trim() : '';
+      if (!/^[0-9a-f-]{36}$/i.test(targetUserId) || !/^[0-9a-f-]{36}$/i.test(orgId)) {
+        return json(400, { error: 'invalid_user_or_org' });
+      }
+
+      const { data: perm, error: permErr } = await adminClient.rpc('service_check_manage_permission', {
+        p_actor_id: ctx.user_id,
+        p_target_user_id: targetUserId,
+        p_org_id: orgId,
+      });
+      if (permErr) {
+        return json(400, { error: permErr.message || 'permission_check_failed' });
+      }
+      if (!perm?.allowed) {
+        return json(403, { error: 'user_management_denied' });
+      }
+
+      const tempPassword = generateReadablePassword();
+      const { error: updErr } = await adminClient.auth.admin.updateUserById(targetUserId, {
+        password: tempPassword,
+        email_confirm: true,
+      });
+      if (updErr) {
+        return json(400, { error: updErr.message || 'reset_password_failed' });
+      }
+
+      return json(200, {
+        user_id: targetUserId,
+        organization_id: orgId,
+        temporary_password: tempPassword,
+      });
+    }
+
+    if (action === 'manager_delete_user') {
+      const targetUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
+      const orgId = typeof body?.org_id === 'string' ? body.org_id.trim() : '';
+      if (!/^[0-9a-f-]{36}$/i.test(targetUserId) || !/^[0-9a-f-]{36}$/i.test(orgId)) {
+        return json(400, { error: 'invalid_user_or_org' });
+      }
+
+      const { data: perm, error: permErr } = await adminClient.rpc('service_check_manage_permission', {
+        p_actor_id: ctx.user_id,
+        p_target_user_id: targetUserId,
+        p_org_id: orgId,
+      });
+      if (permErr) {
+        return json(400, { error: permErr.message || 'permission_check_failed' });
+      }
+      if (!perm?.allowed) {
+        return json(403, { error: 'user_management_denied' });
+      }
+
+      const { data: delRes, error: delErr } = await adminClient.rpc('service_delete_managed_membership', {
+        p_target_user_id: targetUserId,
+        p_org_id: orgId,
+      });
+      if (delErr) {
+        return json(400, { error: delErr.message || 'delete_membership_failed' });
+      }
+
+      let deletedAuth = false;
+      if (delRes?.should_delete_auth_user) {
+        const { error: authDelErr } = await adminClient.auth.admin.deleteUser(targetUserId);
+        if (!authDelErr) {
+          deletedAuth = true;
+        }
+      }
+
+      return json(200, {
+        deleted: true,
+        user_id: targetUserId,
+        organization_id: orgId,
+        deleted_auth_user: deletedAuth,
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // Super-admin only actions
+    // -----------------------------------------------------------------------
+    if (!ctx?.is_super_admin) {
+      return json(403, { error: 'super_admin_required' });
+    }
 
     if (action === 'list_users') {
       const authUsers = await listAllAuthUsers(adminClient);
@@ -161,7 +246,8 @@ Deno.serve(async (req) => {
         ? body.extra_positions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
         : [];
       const maxExtraPositions = Number.isInteger(body?.max_extra_positions) ? Number(body.max_extra_positions) : extraPositions.length;
-      const maxDevices = Number.isInteger(body?.max_devices) ? Number(body.max_devices) : 1;
+      const defaultDevices = Math.min(40, Math.max(2, (1 + extraPositions.length) * 2));
+      const maxDevices = Number.isInteger(body?.max_devices) ? Number(body.max_devices) : defaultDevices;
       const accountActive = body?.account_active !== false;
       const aliyaEnabled = body?.aliya_enabled === true;
       const customMethodName = typeof body?.custom_method_name === 'string' ? body.custom_method_name.trim().slice(0, 120) : '';
@@ -180,7 +266,7 @@ Deno.serve(async (req) => {
       if (!/^[0-9a-f-]{36}$/i.test(orgId) || !VALID_ROLES.has(role)) {
         return json(400, { error: 'invalid_org_or_role' });
       }
-      if (maxExtraPositions < 0 || maxExtraPositions > 19 || maxDevices < 1 || maxDevices > 10) {
+      if (maxExtraPositions < 0 || maxExtraPositions > 19 || maxDevices < 1 || maxDevices > 40) {
         return json(400, { error: 'invalid_quotas' });
       }
       if (!rawEmail && !/^[0-9a-f-]{36}$/i.test(rawUserId)) {

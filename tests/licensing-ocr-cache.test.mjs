@@ -21,11 +21,16 @@ import { createCloudClient } from '../shared/cloud-client.mjs';
 import { getCloudConfig } from '../shared/cloud-config.mjs';
 import {
   POSITION_CATALOG,
+  USER_MANAGER_POSITIONS,
+  canPositionManageUsers,
+  computeAllowedDeviceQuota,
   computePositionTariffTotal,
   getPositionsForOrg,
   getRoleForPosition,
   isCabinetPermitted,
 } from '../shared/position-catalog.mjs';
+import { subjectLabels } from '../shared/subjects.mjs';
+import { detectDeviceKind } from '../shared/license-guard.mjs';
 
 function makeMemoryStorage() {
   const map = new Map();
@@ -328,4 +333,17 @@ test('position catalog covers all 24 positions, tariff calculation, and anti-sha
   });
   assert.equal(lastPayload.primary_position, 'school-director');
   assert.deepEqual(lastPayload.extra_positions, ['school-deputy-academic']);
+
+  // Stage 2 additions: device quotas, manager roles, 33 Tajik subjects, device kind detection
+  assert.equal(computeAllowedDeviceQuota(0), 2);
+  assert.equal(computeAllowedDeviceQuota(2), 6);
+  assert.equal(USER_MANAGER_POSITIONS.includes('school-director'), true);
+  assert.equal(canPositionManageUsers('school-director'), true);
+  assert.equal(canPositionManageUsers('office-head'), true);
+  assert.equal(canPositionManageUsers('raesat-clerk'), true);
+  assert.equal(canPositionManageUsers('school-teacher'), false);
+  assert.equal(Object.keys(subjectLabels).length, 33);
+  assert.ok(Boolean(subjectLabels.informatics?.[0]));
+  assert.equal(detectDeviceKind('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)'), 'mobile');
+  assert.equal(detectDeviceKind('Mozilla/5.0 (Windows NT 10.0; Win64; x64)'), 'desktop');
 });

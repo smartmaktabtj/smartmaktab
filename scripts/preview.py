@@ -19,6 +19,7 @@ ROUTES = {
     "/pwa-192.png": "pwa-192.png",
     "/pwa-512.png": "pwa-512.png",
     "/manifest.webmanifest": "manifest.webmanifest",
+    "/shared/brand-icon.png": "shared/brand-icon.png",
 }
 
 for pdf_asset in ('pdf.min.mjs','pdf.worker.min.mjs'):

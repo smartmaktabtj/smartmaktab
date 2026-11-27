@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="tg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content"><meta name="theme-color" content="#123d30"><meta name="author" content="Парвиз Шарипов"><title>SmartMaktab</title><link rel="manifest" href="./manifest.webmanifest">
+<html lang="tg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content"><meta name="theme-color" content="#123d30"><meta name="author" content="Парвиз Шарипов"><title>SmartMaktab</title><link rel="icon" type="image/png" href="./shared/brand-icon.png"><link rel="manifest" href="./manifest.webmanifest">
 <style>
 :root{font:16px/1.5 system-ui,sans-serif;color:#18372c;background:#eef5f0;--green:#135940;--line:#c9ded1;--muted:#4a6358;--paper:#fff;--page:#eef5f0;color-scheme:light}
 *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}h1,h2,h3,p{margin:0}button,input,select{font:inherit;color:inherit}button,select{cursor:pointer}a{color:var(--green)}:focus-visible{outline:3px solid #257b5a;outline-offset:3px}
 .top,.foot,.statusbar,.role-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
 .brand{display:flex;gap:10px;align-items:center;color:#123d30;font-weight:800;text-decoration:none;font-size:1.2rem}
 .logo{background:#164a38;color:#e1f9e9;display:grid;place-items:center;width:34px;height:34px;border-radius:9px}
+.brand-logo{width:34px;height:34px;border-radius:9px;object-fit:cover;flex-shrink:0;display:block}
 .startup-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .theme-toggle,.language{font:inherit;font-size:.85rem;font-weight:650;border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:var(--paper);color:inherit}
 .theme-toggle:hover{border-color:#54a781}
@@ -86,7 +87,7 @@
 @media(max-height:360px){#startupShell:not([hidden]){height:auto;min-height:100dvh;overflow:visible}#wizard,#wizard>section,.setup-step-body{overflow:visible;height:auto;min-height:auto}}
 @@SPLASH_CSS@@
 </style></head><body><div class="shell" id="startupShell" data-screen="0">
-<header class="top"><a href="./index.html" class="brand"><span class="logo" aria-hidden="true">S</span>SmartMaktab</a>
+<header class="top"><a href="./index.html" class="brand"><img src="./shared/brand-icon.png" alt="" class="brand-logo" width="34" height="34">SmartMaktab</a>
 <div class="startup-actions">
 <details id="startupUpdateMenu" class="sm-upd-menu"><summary class="theme-toggle" id="startupUpdateBtn" title="Навсозӣ"><span aria-hidden="true">↻</span> <span data-tg="Навсозӣ">Навсозӣ</span><span id="startupUpdateDot" class="sm-upd-badge" hidden></span></summary><div>
 <button type="button" id="updAppBtn" class="button alt" data-tg="Навсозии барнома">Навсозии барнома</button>
@@ -236,8 +237,8 @@
 <p class="small" data-tg="Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:">Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:</p>
 <div class="inputs">
 <label class="field"><span data-tg="Вилоят / Шаҳр">Вилоят / Шаҳр</span><select id="newSchoolRegion"></select></label>
-<label class="field"><span data-tg="Шаҳр / Ноҳия (Маориф)">Шаҳр / Ноҳия (Маориф)</span><input id="newSchoolDistrict" list="newSchoolDistrictList" maxlength="120" placeholder="Хуҷанд / Данғара"></label>
-<datalist id="newSchoolDistrictList"></datalist>
+<label class="field"><span data-tg="Шаҳр / Ноҳия (Маориф)">Шаҳр / Ноҳия (Маориф)</span><select id="newSchoolDistrictSelect"></select></label>
+<label class="field" id="newSchoolDistrictCustomWrap" hidden><span data-tg="Номи шаҳр / ноҳия (дастӣ)">Номи шаҳр / ноҳия (дастӣ)</span><input id="newSchoolDistrict" maxlength="120" placeholder="Хуҷанд / Данғара"></label>
 <label class="field"><span data-tg="Ҷамоат / Шаҳрак">Ҷамоат / Шаҳрак</span><select id="newSchoolJamoatSelect"></select></label>
 <label class="field" id="newSchoolJamoatCustomWrap" hidden><span data-tg="Номи ҷамоат (дастӣ)">Номи ҷамоат (дастӣ)</span><input id="newSchoolJamoatCustom" maxlength="120" placeholder="Ҷамоати ..."></label>
 <label class="field"><span data-tg="Деҳа / Маҳалла / Шаҳр">Деҳа / Маҳалла / Шаҳр</span><select id="newSchoolVillageSelect"></select></label>

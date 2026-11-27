@@ -154,20 +154,20 @@
     "group": "school",
     "number": 16,
     "path": "cabinets/school/upper-class-method-group.html",
-    "title": "Иттиҳодияи методии роҳбарони синфҳои боло",
-    "description": "Методическое объединение старших классов",
+    "title": "Иттиҳодияи методии роҳбарони синфҳои 5-11",
+    "description": "МО классных руководителей 5-11 классов",
     "mode": "shell",
-    "descriptionTg": "Иттиҳодияи методии синфҳои болоӣ"
+    "descriptionTg": "Иттиҳодияи методии синфҳои 5-11"
   },
   {
     "id": "school-lower-class-method-group",
     "group": "school",
     "number": 17,
     "path": "cabinets/school/lower-class-method-group.html",
-    "title": "Иттиҳодияи методии роҳбарони синфҳои поён",
-    "description": "Методическое объединение младших классов",
+    "title": "Иттиҳодияи методии роҳбарони синфҳои 1-4",
+    "description": "МО классных руководителей 1-4 классов",
     "mode": "shell",
-    "descriptionTg": "Иттиҳодияи методии синфҳои поёнӣ"
+    "descriptionTg": "Иттиҳодияи методии синфҳои 1-4"
   },
   {
     "id": "school-five-method-groups",

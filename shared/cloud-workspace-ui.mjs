@@ -1,12 +1,13 @@
 import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
-import { cacheVerifiedLicense, clearCachedLicense, getOrCreateDeviceId, mountLicenseGate } from './license-guard.mjs';
+import { cacheVerifiedLicense, clearCachedLicense, detectDeviceKind, getOrCreateDeviceId, mountLicenseGate } from './license-guard.mjs';
 import { DEFAULT_PAYMENT_TARIFF, parseReceiptText, runClientOcr, submitReceiptForVerification } from './ocr-receipt.mjs';
 import {
   ALIYA_ADDON_PRICE_TJS,
   POSITION_CATALOG,
   SUBSCRIPTION_PERIOD_PACKAGES,
+  canPositionManageUsers,
   canPositionVerifySchoolStaff,
   computePositionTariffTotal,
   computeSubscriptionPackagePrice,
@@ -121,13 +122,20 @@ const copy = {
   recordsEmpty: ['Сабтҳои абрӣ ёфт нашуданд.', 'Облачные записи не найдены.'],
   authError: ['Хатои воридшавӣ ё шабака.', 'Ошибка входа или сети.'],
   deviceBlockedMsg: [
-    'Огоҳӣ: Ин логин дар дастгоҳи дигар фаъол аст. Ҳамоҳангсозӣ манъ шуд.',
-    'Внимание: превышен лимит устройств для этого аккаунта. Синхронизация заблокирована.',
+    'Огоҳӣ: Лимити дастгоҳҳои ин намуд пур шудааст. Дастгоҳи кӯҳнаро дар зер ҷудо кунед ё ба роҳбари муассиса муроҷиат намоед.',
+    'Внимание: достигнут лимит устройств данного типа. Отвяжите старое устройство ниже или обратитесь к руководителю.',
   ],
   posBlockedMsg: [
     'Огоҳӣ: Ин утоқ ба вазифаи пардохтшудаи шумо дохил намешавад.',
     'Внимание: этот кабинет не входит в ваш оплаченный тариф.',
   ],
+  myDevicesHeading: ['Дастгоҳҳои ман (телефон ва компютер)', 'Мои устройства (телефон и компьютер)'],
+  myDevicesEmpty: ['Ягон дастгоҳи фаъол сабт нашудааст.', 'Активных устройств не найдено.'],
+  unlinkDeviceBtn: ['Ҷудо кардан', 'Отвязать'],
+  currentDeviceTag: ['Ин дастгоҳ', 'Это устройство'],
+  deviceUnlinked: ['Дастгоҳ ҷудо карда шуд.', 'Устройство отвязано.'],
+  mobileKind: ['Мобайл', 'Мобильное'],
+  desktopKind: ['Компютер', 'Компьютер'],
 };
 
 function detectDeviceLabel() {
@@ -311,6 +319,14 @@ export function setupCloudWorkspace(article, group, school) {
   const reviewQueueList = make('div');
   reviewQueueBox.append(reviewQueueTitle, reviewQueueList);
 
+  const devicesBox = make('section', 'section');
+  devicesBox.id = 'cloudDevicesBox';
+  devicesBox.hidden = true;
+  const devicesTitle = make('h3');
+  const devicesSummary = make('p', 'small');
+  const devicesList = make('ul', 'sm-device-list');
+  devicesBox.append(devicesTitle, devicesSummary, devicesList);
+
   const cloudList = make('ul');
 
   const payNoticeBox = make('p', 'notice');
@@ -403,6 +419,7 @@ export function setupCloudWorkspace(article, group, school) {
     scopeLine,
     verifStatusLine,
     actionRow,
+    devicesBox,
     verifBox,
     reviewQueueBox,
     cloudList,
@@ -434,6 +451,8 @@ export function setupCloudWorkspace(article, group, school) {
   let receiptConfidence = null;
   let manualAmountOverride = false;
   let pendingVerifQueue = [];
+  let myDeviceSessions = [];
+  let lastDeviceStats = { maxTotal: 2, maxPerKind: 1, activeTotal: 1, activeMobile: 0, activeDesktop: 0 };
 
   function activeOrg() {
     return (ctx?.memberships || []).find(m => m.organization_id === selectedOrgId) || null;
@@ -460,6 +479,15 @@ export function setupCloudWorkspace(article, group, school) {
     return m.verification_status === 'verified' && canPositionVerifySchoolStaff(m.primary_position);
   }
 
+  function canManageUsers() {
+    if (ctx?.is_super_admin) return true;
+    const m = activeOrg();
+    if (!m || m.verification_status !== 'verified') return false;
+    return canPositionManageUsers(m.primary_position)
+      || (Array.isArray(m.extra_positions) && m.extra_positions.some(canPositionManageUsers))
+      || m.role === 'school_admin' || m.role === 'director' || m.role === 'maorif' || m.role === 'authority_viewer';
+  }
+
   function syncLocalProfileCloudState() {
     try {
       const m = activeOrg();
@@ -471,10 +499,12 @@ export function setupCloudWorkspace(article, group, school) {
         prof.verificationStatus = ctx?.is_super_admin ? 'verified' : (m.verification_status || 'unverified');
         prof.primaryPosition = m.primary_position || prof.primaryPosition || '';
         prof.canReviewVerifications = canReviewVerifications();
+        prof.canManageUsers = canManageUsers();
         if (ctx?.profile?.full_name && !prof.fullName) prof.fullName = ctx.profile.full_name;
       } else {
         delete prof.verificationStatus;
         delete prof.canReviewVerifications;
+        delete prof.canManageUsers;
       }
       safeWriteKey(persistentStore, 'smartmaktab.profile.v1', JSON.stringify(prof));
     } catch {}
@@ -492,6 +522,7 @@ export function setupCloudWorkspace(article, group, school) {
           verified: isAccountVerified(),
           isPrimaryPosition: isCurrentCabinetPrimary(),
           canReviewVerifications: canReviewVerifications(),
+          canManageUsers: canManageUsers(),
           primaryPosition: m?.primary_position || null,
           pendingQueueCount: pendingVerifQueue.length,
         },
@@ -516,6 +547,16 @@ export function setupCloudWorkspace(article, group, school) {
       isPrimaryPosition: isPrimary,
       primaryPosition: m?.primary_position || null,
       onVerifyOnline: checkLicenseOnline,
+      onLoadDevices: client.session?.access_token && selectedOrgId
+        ? () => client.getMyDeviceSessions(selectedOrgId)
+        : undefined,
+      onRevokeDevice: client.session?.access_token && selectedOrgId
+        ? async (deviceId, orgId) => {
+          await client.revokeMyDeviceSession({ p_org_id: orgId || selectedOrgId, p_device_id: deviceId });
+          statusMessage = t('deviceUnlinked');
+          await loadMyDevices();
+        }
+        : undefined,
       onOpenPayment: isPrimary ? () => {
         panel.hidden = false;
         openWorkspaceView(panel.id, trigger);
@@ -773,18 +814,89 @@ export function setupCloudWorkspace(article, group, school) {
     }
   }
 
+  function renderMyDevices() {
+    if (!client.session?.access_token || !selectedOrgId) {
+      devicesBox.hidden = true;
+      return;
+    }
+    devicesBox.hidden = false;
+    devicesTitle.textContent = t('myDevicesHeading');
+    devicesSummary.textContent = tg()
+      ? `📱 ${lastDeviceStats.activeMobile}/${lastDeviceStats.maxPerKind} мобайл · 🖥 ${lastDeviceStats.activeDesktop}/${lastDeviceStats.maxPerKind} компютер (Ҳамагӣ: ${lastDeviceStats.activeTotal}/${lastDeviceStats.maxTotal})`
+      : `📱 ${lastDeviceStats.activeMobile}/${lastDeviceStats.maxPerKind} моб. · 🖥 ${lastDeviceStats.activeDesktop}/${lastDeviceStats.maxPerKind} комп. (Всего: ${lastDeviceStats.activeTotal}/${lastDeviceStats.maxTotal})`;
+    if (!myDeviceSessions.length) {
+      const empty = make('li', 'small');
+      empty.textContent = t('myDevicesEmpty');
+      devicesList.replaceChildren(empty);
+      return;
+    }
+    const thisDevId = getOrCreateDeviceId(persistentStore);
+    const rows = myDeviceSessions.map(d => {
+      const li = make('li', 'sm-device-row');
+      const icon = d.device_kind === 'mobile' ? '📱' : '🖥';
+      const kindTxt = d.device_kind === 'mobile' ? t('mobileKind') : t('desktopKind');
+      const seen = (d.last_seen_at || '').replace('T', ' ').slice(0, 16);
+      const lbl = make('span');
+      lbl.textContent = `${icon} ${d.device_label || 'Web'} (${kindTxt})${d.device_id === thisDevId ? ` · ${t('currentDeviceTag')}` : ''}${seen ? ` · ${seen}` : ''}`;
+      const btn = make('button', 'button alt');
+      btn.type = 'button';
+      btn.textContent = t('unlinkDeviceBtn');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await client.revokeMyDeviceSession({ p_org_id: d.organization_id || selectedOrgId, p_device_id: d.device_id });
+          statusMessage = t('deviceUnlinked');
+          await checkLicenseOnline();
+        } catch (err) {
+          statusMessage = err?.message || t('authError');
+          btn.disabled = false;
+          renderLabels();
+        }
+      });
+      li.append(lbl, btn);
+      return li;
+    });
+    devicesList.replaceChildren(...rows);
+  }
+
+  async function loadMyDevices() {
+    if (!client.session?.access_token || !selectedOrgId) {
+      myDeviceSessions = [];
+      renderMyDevices();
+      return;
+    }
+    try {
+      const rows = await client.getMyDeviceSessions(selectedOrgId);
+      myDeviceSessions = Array.isArray(rows) ? rows : [];
+    } catch {
+      myDeviceSessions = [];
+    }
+    renderMyDevices();
+  }
+
   async function checkLicenseOnline() {
     if (!client.session?.access_token || !selectedOrgId) return;
     try {
       const m = activeOrg();
-      let devRes = { allowed: true, max_devices: m?.max_devices ?? 1, active_devices: 1 };
+      const myKind = detectDeviceKind();
+      let devRes = {
+        allowed: true,
+        device_kind: myKind,
+        max_devices: m?.max_devices ?? 2,
+        max_per_kind: Math.max(1, Math.ceil((m?.max_devices ?? 2) / 2)),
+        active_devices: 1,
+        active_mobile: myKind === 'mobile' ? 1 : 0,
+        active_desktop: myKind === 'desktop' ? 1 : 0,
+      };
       try {
-        devRes = await client.claimDeviceSession({
+        const claimed = await client.claimDeviceSession({
           p_org_id: selectedOrgId,
           p_device_id: getOrCreateDeviceId(persistentStore),
           p_device_label: detectDeviceLabel(),
           p_cabinet_id: cabinetId || null,
+          p_device_kind: myKind,
         });
+        if (claimed && typeof claimed === 'object' && !Array.isArray(claimed)) devRes = claimed;
       } catch {}
 
       const res = await client.getLicenseStatus(selectedOrgId);
@@ -792,12 +904,24 @@ export function setupCloudWorkspace(article, group, school) {
       const isDisabledAccount = devRes?.allowed === false && devRes?.reason === 'account_disabled';
       const isDisallowedPos = devRes?.allowed === false && devRes?.reason === 'position_not_allowed';
 
+      const maxTotal = devRes?.max_devices ?? m?.max_devices ?? 2;
+      const maxPerKind = devRes?.max_per_kind ?? Math.max(1, Math.ceil(maxTotal / 2));
+      const activeTotal = devRes?.active_devices ?? 1;
+      const activeMob = devRes?.active_mobile ?? (m?.active_mobile_count ?? 0);
+      const activeDesk = devRes?.active_desktop ?? (m?.active_desktop_count ?? 0);
+      lastDeviceStats = { maxTotal, maxPerKind, activeTotal, activeMobile: activeMob, activeDesktop: activeDesk };
+
       cacheVerifiedLicense(selectedOrgId, {
         ...res,
         primary_position: m?.primary_position ?? null,
         extra_positions: m?.extra_positions ?? [],
         role: m?.role ?? '',
-        max_devices: devRes?.max_devices ?? m?.max_devices ?? 1,
+        max_devices: maxTotal,
+        max_per_kind: maxPerKind,
+        active_devices: activeTotal,
+        active_mobile: activeMob,
+        active_desktop: activeDesk,
+        blocked_device_kind: devRes?.device_kind || myKind,
         aliya_enabled: Boolean(m?.aliya_enabled),
         aliya_expires_at: m?.aliya_expires_at ?? null,
         is_super_admin: Boolean(ctx?.is_super_admin),
@@ -810,8 +934,8 @@ export function setupCloudWorkspace(article, group, school) {
         ? (tg() ? 'Давраи ройгон (1 моҳ)' : 'Бесплатный период (1 мес.)')
         : res.effective_status;
       licLine.textContent = tg()
-        ? `${t('licenseLine')}: ${statusTxt} (${durVal} рӯз) · Дастгоҳҳо: ${devRes?.active_devices ?? 1}/${devRes?.max_devices ?? m?.max_devices ?? 1}`
-        : `${t('licenseLine')}: ${statusTxt} (${durVal} дн.) · Устройства: ${devRes?.active_devices ?? 1}/${devRes?.max_devices ?? m?.max_devices ?? 1}`;
+        ? `${t('licenseLine')}: ${statusTxt} (${durVal} рӯз) · Дастгоҳҳо: ${activeTotal}/${maxTotal} (${activeMob}/${maxPerKind} тел. · ${activeDesk}/${maxPerKind} комп.)`
+        : `${t('licenseLine')}: ${statusTxt} (${durVal} дн.) · Устройства: ${activeTotal}/${maxTotal} (${activeMob}/${maxPerKind} тел. · ${activeDesk}/${maxPerKind} комп.)`;
 
       const lang = langCode();
       const posName = m?.primary_position ? formatPositionTitle(m.primary_position, lang) : (roleLabels[m?.role]?.[tg() ? 0 : 1] || m?.role || '');
@@ -824,6 +948,7 @@ export function setupCloudWorkspace(article, group, school) {
 
       if (isBlockedDevice) statusMessage = t('deviceBlockedMsg');
       else if (isDisallowedPos) statusMessage = t('posBlockedMsg');
+      await loadMyDevices();
       renderLabels();
     } catch (err) {
       statusMessage = err.message;
@@ -965,6 +1090,7 @@ export function setupCloudWorkspace(article, group, school) {
     ocrLbl.textContent = t('ocrText');
     sendReceiptBtn.textContent = t('sendReceipt');
     status.textContent = statusMessage;
+    renderMyDevices();
     renderVerificationSection();
     updatePaymentVisibility();
     renderReviewQueue();
@@ -1060,6 +1186,7 @@ export function setupCloudWorkspace(article, group, school) {
 
   orgSelect.addEventListener('change', async () => {
     selectedOrgId = orgSelect.value;
+    myDeviceSessions = [];
     safeWriteKey(persistentStore, LAST_ORG_KEY, selectedOrgId);
     rebuildPositionSelectors();
     renderVerificationSection();
@@ -1171,6 +1298,7 @@ export function setupCloudWorkspace(article, group, school) {
     ctx = null;
     selectedOrgId = '';
     pendingVerifQueue = [];
+    myDeviceSessions = [];
     loginForm.hidden = false;
     sessionBox.hidden = true;
     cloudList.replaceChildren();

@@ -218,6 +218,12 @@ function updateTotalBar(){
  });
  const bar=$('totalPriceAmount');
  if(bar)bar.textContent=`${t('totalPrefix')} ${calc.totalTjs} ${t('somoni')} ${t('perMonth')}`;
+ const warn=$('priceWarning');
+ if(warn){
+  const devQuota=computeAllowedDeviceQuota(state.extras.length);
+  const perKind=Math.max(1,Math.ceil(devQuota/2));
+  warn.textContent=`Дастрасӣ ба то ${devQuota} дастгоҳ (${perKind} мобайл + ${perKind} компютер) · Моҳи 1-ум ройгон (30 рӯз) · Баъд барои 3, 6, 9, 12 моҳ тахфиф то 15%.`;
+ }
 }
 
 function setStep(n){
@@ -543,6 +549,8 @@ $('loginForm')?.addEventListener('submit',async ev=>{
     organizationName:primaryMem.organization_name,
     verificationStatus:ctx?.is_super_admin?'verified':(primaryMem.verification_status||'unverified'),
     primaryPosition:primaryMem.primary_position||'',
+    canManageUsers:Boolean(ctx?.is_super_admin)||(primaryMem.verification_status==='verified'&&(canPositionManageUsers(primaryMem.primary_position)||(primaryMem.extra_positions||[]).some(canPositionManageUsers))),
+    canReviewVerifications:Boolean(ctx?.is_super_admin)||(primaryMem.kind==='education_authority'?primaryMem.verification_status==='verified':(primaryMem.verification_status==='verified'&&canPositionVerifySchoolStaff(primaryMem.primary_position))),
    };
    writeStoreItem(profileStorageKey,JSON.stringify(savedProf));
 
@@ -684,7 +692,26 @@ $('toggleNewSchoolBtn')?.addEventListener('click',()=>{
  $('begin').disabled=!canSubmitStep4();
 });
 $('newSchoolRegion')?.addEventListener('change',ev=>{
- state.newSchool.region_name=clean(ev.target.value);
+ state.newSchool.region_name=canonicalRegionName(clean(ev.target.value));
+ state.newSchool.district_name='';
+ state.newSchool.jamoat_name='';
+ state.newSchool.village_name='';
+ if($('newSchoolDistrictSelect'))$('newSchoolDistrictSelect').value='';
+ if($('newSchoolDistrict'))$('newSchoolDistrict').value='';
+ if($('newSchoolJamoatSelect'))$('newSchoolJamoatSelect').value='';
+ if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
+ populateNewSchoolTerritory();
+ $('begin').disabled=!canSubmitStep4();
+});
+$('newSchoolDistrictSelect')?.addEventListener('change',ev=>{
+ const v=ev.target.value;
+ if(v==='__custom__'){
+  if($('newSchoolDistrictCustomWrap'))$('newSchoolDistrictCustomWrap').hidden=false;
+  state.newSchool.district_name=clean($('newSchoolDistrict')?.value);
+ }else{
+  if($('newSchoolDistrictCustomWrap'))$('newSchoolDistrictCustomWrap').hidden=true;
+  state.newSchool.district_name=clean(v);
+ }
  state.newSchool.jamoat_name='';
  state.newSchool.village_name='';
  if($('newSchoolJamoatSelect'))$('newSchoolJamoatSelect').value='';
@@ -756,9 +783,13 @@ $('begin').addEventListener('click',async()=>{
   let targetSchoolId=state.creatingNewSchool?'':state.school;
   let newSchoolPayload=null;
   if(state.creatingNewSchool){
+   const distVal=$('newSchoolDistrictSelect')?.value==='__custom__'
+    ? clean($('newSchoolDistrict')?.value)
+    : clean($('newSchoolDistrictSelect')?.value||state.newSchool.district_name);
+   const regVal=canonicalRegionName(state.newSchool.region_name);
    const normDist=s=>clean(s).toLocaleLowerCase().replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i,'').replace(/\s+/g,' ');
-   const distLower=normDist(state.newSchool.district_name);
-   const canonReg=canonicalRegionName(state.newSchool.region_name).toLocaleLowerCase();
+   const distLower=normDist(distVal);
+   const canonReg=regVal.toLocaleLowerCase();
    const matchedAuth=Array.isArray(state.cloudAuthorities)
     ? state.cloudAuthorities.find(a=>{
        if(a.authority_tier!=='maorif')return false;
@@ -776,8 +807,8 @@ $('begin').addEventListener('click',async()=>{
     : clean($('newSchoolVillageSelect')?.value||state.newSchool.village_name);
    newSchoolPayload={
     name:clean(state.newSchool.name),
-    region_name:clean(state.newSchool.region_name),
-    district_name:clean(state.newSchool.district_name),
+    region_name:regVal,
+    district_name:distVal,
     jamoat_name:jamVal,
     village_name:vilVal,
     school_code:clean(state.newSchool.school_code),

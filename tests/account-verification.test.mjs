@@ -53,6 +53,10 @@ before(async () => {
     '../supabase/migrations/20261126000500_account_verification.sql',
     '../supabase/migrations/20261127000100_public_bootstrap_rpc.sql',
     '../supabase/migrations/20261128000100_stage0_cleanup.sql',
+    '../supabase/migrations/20261128000200_stage1_locations_tariffs_devices.sql',
+    '../supabase/migrations/20261128000300_stage1_registration_payments_quotas.sql',
+    '../supabase/migrations/20261128000400_stage1_self_devices_and_users.sql',
+    '../supabase/migrations/20261128000500_stage1_fix_assign_membership_and_ctx.sql',
   ]) {
     await db.exec(await read(m));
   }
