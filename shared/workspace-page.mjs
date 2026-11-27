@@ -1,13 +1,12 @@
 import {mountWindowsContent} from './windows-content-ui.mjs';
-import {setupNativeFiles,setupUnifiedUpdateMenu} from './native-shell.mjs';
+import {setupUnifiedUpdateMenu} from './native-shell.mjs';
 import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
-import {setupDocxTemplates} from './docx-templates-ui.mjs';
 import {setupCloudWorkspace} from './cloud-workspace-ui.mjs';
 import {setupPhase2Panels} from './phase2-panels.mjs';
 import {createCloudClient} from './cloud-client.mjs';
 import {getCloudConfig} from './cloud-config.mjs';
-import {cabinetFormAction,printCabinetSheet,clearActiveResume,appRoot,openCabinetView,persistentStore,tabStorage} from './cabinet-runtime.mjs';
+import {cabinetFormAction,clearActiveResume,appRoot,openCabinetView,persistentStore,tabStorage} from './cabinet-runtime.mjs';
 
 const $=id=>document.getElementById(id);
 const profileKey='smartmaktab.profile.v1';
@@ -26,7 +25,7 @@ function writeJsonStore(key,obj){
  tabStorage.setItem(key,str);
 }
 
-function createProfileManager(cabinetId,tg,label,onOpenCloud){
+function createProfileManager(cabinetId,tg,label){
  const card=document.createElement('section');
  card.className='section no-print';
  card.id='smUnifiedProfileCard';
@@ -35,11 +34,10 @@ function createProfileManager(cabinetId,tg,label,onOpenCloud){
  head.className='pill-row';
  head.style.justifyContent='space-between';
  const title=document.createElement('h3');
- const cloudBtn=document.createElement('button');
- cloudBtn.type='button';
- cloudBtn.className='button alt';
- cloudBtn.id='openCloudSubBtn';
- head.append(title,cloudBtn);
+ const cloudHost=document.createElement('div');
+ cloudHost.className='control';
+ cloudHost.style.margin='0';
+ head.append(title,cloudHost);
 
  const posRow=document.createElement('div');
  posRow.className='steps';
@@ -168,12 +166,7 @@ function createProfileManager(cabinetId,tg,label,onOpenCloud){
  }
 
  function syncLabels(){
-  const ws=readJsonStore(workspaceKey);
-  const isPrimary=!ws?.primary||ws.primary===cabinetId;
   title.textContent=label('Личные данные и профиль','Маълумоти шахсӣ ва профил');
-  cloudBtn.textContent=isPrimary
-   ? label('Подписка, оплата и верификация','Обуна, пардохт ва верификатсия')
-   : label('Статус подписки и верификация','Ҳолати обуна ва верификатсия');
   posSelectLbl.textContent=label('Должность для редактирования','Вазифа барои таҳрир');
   inheritTxt.textContent=label('Использовать данные основной должности','Истифодаи маълумоти вазифаи асосӣ');
   fFirst.sp.textContent=label('Имя','Ном');
@@ -199,7 +192,6 @@ function createProfileManager(cabinetId,tg,label,onOpenCloud){
   writeJsonStore(profileKey,prof);
   loadData();
  });
- cloudBtn.addEventListener('click',onOpenCloud);
 
  saveBtn.addEventListener('click',async()=>{
   const prof=readJsonStore(profileKey)||{person:{},positions:{}};
@@ -248,12 +240,11 @@ function createProfileManager(cabinetId,tg,label,onOpenCloud){
   statusEl.textContent=label('Профиль сохранён.','Профил сабт шуд.');
  });
 
- return {card,syncLabels,loadData};
+ return {card,cloudHost,syncLabels,loadData};
 }
 
 export function setupWorkspace({configured,school}){
- const overview=$('workspaceOverview');if(!overview)return;
- const article=overview.closest('article'),docs=$('workspaceDocs'),editor=$('workspaceDraft'),materials=$('workspaceMaterials');
+ const article=document.querySelector('article[data-cabinet-id]');if(!article)return;
  const cabinetId=article.dataset.cabinetId;
  const toggle=document.createElement('button');toggle.type='button';toggle.id='workspaceSettingsToggle';toggle.className='theme-toggle';
  toggle.setAttribute('aria-controls','workspaceSettings');
@@ -270,19 +261,20 @@ export function setupWorkspace({configured,school}){
  const tg=()=>document.documentElement.lang==='tg';
  const label=(ru,tj)=>tg()?tj:ru;
 
- const profCard=createProfileManager(cabinetId,tg,label,()=>{views.open('cloudWorkspacePanel',profCard.card);});
+ const profCard=createProfileManager(cabinetId,tg,label);
  drawer.append(profCard.card);
 
  const ids=['roleIntake','directorPersonnel','institutionPicker','directorInstitution','directorCourses','directorProfilePanel','teacherWorkplaceScope','teacherWorkplaces','teacherProfilePanel','libraryWorkplaceScope','libraryProfilePanel'];
  for(const id of ids){const element=$(id);if(element)drawer.append(element);}
- const hero=article.querySelector('.hero');hero.after(overview,drawer,docs,editor);
- const teacher=!!$('teacherSubjects');if(teacher){drawer.append($('teacherSubjects'));if(materials)docs.append(materials);for(const a of $('cabinetRailNav').querySelectorAll('a[href="#teacherSubjects"],a[href="#workspaceMaterials"]'))a.hidden=true;}
- if($('teacherBookPanel'))editor.after($('teacherBookPanel'));
+ const mainModules=document.createElement('section');mainModules.id='smMainModules';mainModules.className='sm-module-grid no-print';
+ const formsBar=document.createElement('section');formsBar.id='roleFormsBar';formsBar.className='role-forms-bar no-print';
+ article.prepend(drawer,mainModules,formsBar);
+ const teacher=!!$('teacherSubjects');if(teacher)drawer.append($('teacherSubjects'));
+ if($('teacherBookPanel'))article.append($('teacherBookPanel'));
 
  $('cabinetLang').before(toggle);
- setupNativeFiles($('cabinetLang'));
 
- setupSchoolForms(article,docs,school);setupDocxTemplates(article,docs,school);setupCloudWorkspace(article,docs,school);
+ setupSchoolForms(article,formsBar,school);setupCloudWorkspace(article,profCard.cloudHost,school);
  const views=initWorkspaceViews(article);mountWindowsContent(article,views);
 
  setupUnifiedUpdateMenu($('cabinetLang'),()=>{
@@ -293,122 +285,59 @@ export function setupWorkspace({configured,school}){
   return false;
  });
 
- for(const id of ['workspaceSettings','workspaceDraft','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate','docxTemplatesPanel','cloudWorkspacePanel'])$(id)?.classList.add('sm-screen');
- const entries={workspaceDocs:['Документы','Ҳуҷҷатҳо','▤'],workspaceMaterials:['Материалы','Мавод','◇'],teacherSubjects:['Классы и предметы','Синфҳо ва фанҳо','⊞'],teacherDocumentPanel:['План урока','Нақшаи дарс','▤'],directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],adviserSchools:['Школы','Мактабҳо','▦'],adviserDocuments:['Документы направления','Ҳуҷҷатҳои самт','▤']};
- if(teacher){delete entries.teacherSubjects;delete entries.workspaceMaterials;}
+ for(const id of ['workspaceSettings','teacherBookPanel','schoolOperations','schoolForms','pilotCertificate','cloudWorkspacePanel'])$(id)?.classList.add('sm-screen');
+ const entries={directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],adviserSchools:['Школы','Мактабҳо','▦'],adviserDocuments:['Документы направления','Ҳуҷҷатҳои самт','▤'],raesatCoverage:['Полнота сведений','Пуррагии маълумот','▤']};
  for(const [id,values] of Object.entries(entries))views.shortcut(id,...values);
- for(const anchor of $('cabinetRailNav').querySelectorAll('a[href^="#"]')){
-  const id=anchor.hash.slice(1);if(anchor.hidden||id==='cabinetHome'||Object.hasOwn(entries,id))continue;const panel=$(id);if(!panel)continue;
-  const entry=anchor.querySelector('[data-tg]')??anchor;views.shortcut(id,entry.textContent.trim(),entry.dataset.tg??entry.textContent.trim(),'◇');
- }
- setupPhase2Panels(article,docs,school,views);
+ setupPhase2Panels(article,mainModules,school,views);
 
- // Dynamic Left Sidebar population: user multi-roles + Admin-added custom roles & categories from .smupdate
- function syncDynamicSidebar(payload){
-  const rail=$('cabinetRailNav');
-  if(!rail)return;
-  rail.querySelectorAll('[data-sm-dynamic]').forEach(el=>el.remove());
-
-  // 1) Multi-role links from user's selected primary + extra positions
-  const ws=readJsonStore(workspaceKey);
-  if(ws&&Array.isArray(ws.roles)&&ws.roles.length>1){
-   const divider=document.createElement('div');
-   divider.dataset.smDynamic='sep';
-   divider.className='sm-rail-group';
-   divider.textContent=label('Мои должности','Вазифаҳои ман');
-   rail.append(divider);
-   for(const role of ws.roles){
-    const a=document.createElement('a');
-    a.dataset.smDynamic='role';
-    a.href='#';
-    if(role.id===cabinetId){a.className='active';a.setAttribute('aria-current','page');}
-    a.textContent=(role.id===ws.primary?'★ ':'• ')+role.title;
-    a.addEventListener('click',ev=>{
-     ev.preventDefault();
-     if(role.id===cabinetId)return;
-     const dest=new URL(role.path,appRoot);
-     const sch=ws.schools?.[role.id];
-     if(sch)dest.searchParams.set('school',sch);
-     dest.searchParams.set('lang',tg()?'tg':'ru');
-     openCabinetView(dest);
-    });
-    rail.append(a);
+ function syncCustomUpdateSections(payload){
+  if(!payload)return;
+  const curLang=tg()?'tg':'ru';
+  const customRoles=Array.isArray(payload.customRoles)?payload.customRoles:[];
+  for(const cr of customRoles){
+   const crCats=Array.isArray(payload.cabinets?.[cr.id])?payload.cabinets[cr.id]:[];
+   const secId=`smCustomRole-${cr.id}`;
+   let sec=$(secId);
+   const created=!sec;
+   if(!sec){
+    sec=document.createElement('section');
+    sec.id=secId;
+    sec.className='section sm-screen no-print';
+    article.append(sec);
    }
-  }
-
-  // 2) Admin-added custom roles / categories from .smupdate
-  if(payload){
-   const curLang=tg()?'tg':'ru';
-   const cats=Array.isArray(payload.cabinets?.[cabinetId])?payload.cabinets[cabinetId]:[];
-   const customRoles=Array.isArray(payload.customRoles)?payload.customRoles:[];
-   if(cats.length||customRoles.length){
-    const divider=document.createElement('div');
-    divider.dataset.smDynamic='admin-sep';
-    divider.className='sm-rail-group';
-    divider.textContent=label('Разделы обновления','Бахшҳои навсозӣ');
-    rail.append(divider);
-
-    for(const cat of cats){
-     const a=document.createElement('a');
-     a.dataset.smDynamic='cat';
-     a.href='#windowsContent';
-     a.textContent=`▤ ${cat.title?.[curLang]||cat.id}`;
-     a.addEventListener('click',ev=>{ev.preventDefault();views.open('windowsContent',a,{replace:true});});
-     rail.append(a);
-    }
-
-    for(const cr of customRoles){
-     const crCats=Array.isArray(payload.cabinets?.[cr.id])?payload.cabinets[cr.id]:[];
-     const secId=`smCustomRole-${cr.id}`;
-     let sec=$(secId);
-     if(!sec){
-      sec=document.createElement('section');
-      sec.id=secId;
-      sec.className='section sm-screen no-print';
-      article.append(sec);
+   const h2=document.createElement('h2');
+   h2.textContent=cr.title?.[curLang]||cr.id;
+   sec.replaceChildren(h2);
+   if(!crCats.length){
+    const p=document.createElement('p');
+    p.className='small';
+    p.textContent=label('Материалы для этой должности пока пусты.','Барои ин вазифа мавод ҳанӯз холӣ аст.');
+    sec.append(p);
+   }else{
+    for(const cat of crCats){
+     const det=document.createElement('details');det.open=true;
+     const sum=document.createElement('summary');sum.textContent=cat.title?.[curLang]||cat.id;
+     det.append(sum);
+     for(const s of cat.sections||[]){
+      const blk=document.createElement('section');
+      const h=document.createElement('h4');h.textContent=s.title?.[curLang]||'';
+      const p=document.createElement('p');p.textContent=s.text?.[curLang]||'';p.style.whiteSpace='pre-wrap';
+      blk.append(h,p);det.append(blk);
      }
-     const h2=document.createElement('h2');
-     h2.textContent=cr.title?.[curLang]||cr.id;
-     sec.replaceChildren(h2);
-     if(!crCats.length){
-      const p=document.createElement('p');
-      p.className='small';
-      p.textContent=label('Материалы для этой должности пока пусты.','Барои ин вазифа мавод ҳанӯз холӣ аст.');
-      sec.append(p);
-     }else{
-      for(const cat of crCats){
-       const det=document.createElement('details');det.open=true;
-       const sum=document.createElement('summary');sum.textContent=cat.title?.[curLang]||cat.id;
-       det.append(sum);
-       for(const s of cat.sections||[]){
-        const blk=document.createElement('section');
-        const h=document.createElement('h4');h.textContent=s.title?.[curLang]||'';
-        const p=document.createElement('p');p.textContent=s.text?.[curLang]||'';p.style.whiteSpace='pre-wrap';
-        blk.append(h,p);det.append(blk);
-       }
-       sec.append(det);
-      }
-     }
-     const a=document.createElement('a');
-     a.dataset.smDynamic='custom-role';
-     a.href=`#${secId}`;
-     a.textContent=`◇ ${cr.title?.[curLang]||cr.id}`;
-     a.addEventListener('click',ev=>{ev.preventDefault();views.open(secId,a,{replace:true});});
-     rail.append(a);
+     sec.append(det);
     }
    }
+   if(created)views.shortcut(secId,cr.title?.ru||cr.id,cr.title?.tg||cr.id,'◇');
   }
  }
 
  let lastContentPayload=null;
  document.addEventListener('sm:content-updated',ev=>{
   if(ev.detail)lastContentPayload=ev.detail;
-  syncDynamicSidebar(lastContentPayload);
+  syncCustomUpdateSections(lastContentPayload);
  });
 
- let chosen=null,snapshot=null;
  function sync(){
-  const templateTitle=docs.querySelector('[data-template-heading]');if(templateTitle)templateTitle.textContent=label('Образцы · не утверждены','Намунаҳо · тасдиқ нашудаанд');
   const title=label('Профиль','Профил');
   toggle.textContent=`👤 ${title}`;toggle.setAttribute('aria-label',title);
   toggle.setAttribute('aria-expanded',String(views.current()==='workspaceSettings'));
@@ -416,11 +345,10 @@ export function setupWorkspace({configured,school}){
   switchRole.textContent=label('Сменить должность','Иваз кардани вазифа');
   signOutApp.textContent=label('Выйти','Баромадан');
   close.textContent=label('Закрыть','Пӯшидан');
-  $('workspaceSchool').textContent=school()?.name??label('Не выбрано','Интихоб нашудааст');
+  const badge=$('workspaceSchool');
+  if(badge)badge.textContent=school()?.name??label('Не выбрано','Интихоб нашудааст');
   profCard.syncLabels();
-  if(chosen)$('workspaceDraftTitle').textContent=chosen.querySelector('strong').textContent;
-  if(snapshot){$('workspaceSheetTitle').textContent=chosen.querySelector('strong').textContent;$('workspaceSheetSchool').textContent=snapshot.school;}
-  syncDynamicSidebar(lastContentPayload);
+  syncCustomUpdateSections(lastContentPayload);
   views.refresh();
  }
  function setSettings(open){if(open)views.open('workspaceSettings',toggle);else views.close('workspaceSettings');sync();}
@@ -441,27 +369,8 @@ export function setupWorkspace({configured,school}){
   openCabinetView(dest);
  });
  const navState=new MutationObserver(sync);navState.observe(article,{attributes:true,attributeFilter:['data-sm-screen']});
- const form=$('workspaceDraftForm');form.inert=false;
- const cards=[...docs.querySelectorAll('[data-doc-template]')];
- const tiles=docs.querySelector('.workspace-tiles');if(tiles){const title=document.createElement('h3');title.dataset.templateHeading='';tiles.before(title);}
- const specialized={'school-teacher':'teacherDocumentPanel','school-director':'directorPlanPanel','school-library-head':'libraryPlanPanel'}[cabinetId];
- for(const card of cards)card.addEventListener('click',()=>{
-  if(card===cards[0]&&specialized){views.open(specialized,card);return;}
-  if(chosen!==card){form.reset();snapshot=null;$('workspaceSheet').hidden=true;$('workspaceDraftStatus').textContent='';}
-  chosen=card;editor.hidden=false;sync();views.open('workspaceDraft',card);
- });
- $('workspaceCloseDraft').addEventListener('click',()=>{views.close('workspaceDraft');editor.hidden=true;});
- cabinetFormAction(form,$('workspacePreview'),()=>{
-  const period=$('workspaceDraftPeriod').value.trim(),topic=$('workspaceDraftTopic').value.trim(),details=$('workspaceDraftBody').value.trim();
-  if(!period||!topic||!chosen)return;
-  if(!school()){$('workspaceDraftStatus').textContent=label('Сначала выберите школу в настройках.','Аввал дар танзимот мактабро интихоб кунед.');return;}
-  snapshot={school:school().name,period,topic,details};
-  $('workspaceSheetPeriod').textContent=period;$('workspaceSheetTopic').textContent=topic;$('workspaceSheetBody').textContent=details||'—';
-  $('workspaceDraftStatus').textContent=label('Печатный черновик готов.','Пешнавис барои чоп омода аст.');$('workspaceSheet').hidden=false;sync();views.open('workspaceSheet',$('workspacePreview'));
- });
- $('workspacePrint').addEventListener('click',event=>{if(snapshot)printCabinetSheet(event.currentTarget);});
  document.addEventListener('cabinet:language',sync);
- document.addEventListener('cabinet:school',()=>{if(snapshot){snapshot=null;$('workspaceSheet').hidden=true;}$('workspaceDraftStatus').textContent='';profCard.loadData();sync();});
+ document.addEventListener('cabinet:school',()=>{profCard.loadData();sync();});
  sync();
  if(!configured)views.open('workspaceSettings',toggle,{focus:false});
 }

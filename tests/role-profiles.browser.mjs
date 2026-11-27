@@ -47,45 +47,40 @@ test('all 54 cabinets unlock a picker with the complete roster after their own p
   }));
  }finally{await browser.close();}
 });
-test('sidebar stays at the top when scrolling, can be collapsed, and closes itself after 15 seconds',async()=>{
+test('clean single-column header stays pinned at top without sidebar rail across desktop and mobile',async()=>{
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({viewport:{width:1150,height:640},serviceWorkers:'block'});
-  await page.clock.install();
   await page.goto(`${base}/cabinets/school/director.html?school=demo-a&lang=ru`);
-  const toggle=page.locator('#cabinetRailToggle'),rail=page.locator('.rail');
+  assert.equal(await page.locator('.rail').count(),0);
+  assert.equal(await page.locator('#cabinetRailToggle').count(),0);
+  assert.equal(await page.locator('#cabinetRailNav').count(),0);
+  const top=page.locator('header.top');
+  assert.equal(Math.round((await top.boundingBox()).y),0);
+  assert.equal(await page.locator('header.top h1.crumb').textContent(),'Директор');
+  assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 1');
   await page.evaluate(()=>document.getElementById('cabinetHome').scrollTo(0,500));
-  assert.ok(await page.evaluate(()=>scrollY===0&&document.getElementById('cabinetHome').scrollTop>100));
-  assert.equal(Math.round((await rail.boundingBox()).y),0);
-  await page.clock.fastForward(15_100);
-  assert.equal(await toggle.getAttribute('aria-expanded'),'false');
-  assert.equal(await page.locator('#cabinetRailNav').isVisible(),false);
-  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'true');
-  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
-  assert.equal(Math.round((await rail.boundingBox()).y),0);
+  assert.equal(Math.round((await top.boundingBox()).y),0);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  }finally{await browser.close();}
 });
 
-test('role templates, materials and settings are separate and printable drafts retain their school',async()=>{
+test('role home exposes unified profile drawer, Phase 2 cards, and role forms without template clutter',async()=>{
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(`${base}/cabinets/school/class-teacher.html?school=demo-88&lang=ru`);
   await page.getByRole('button',{name:/Профиль/}).waitFor();
-  assert.equal(await page.locator('#cabinetRailNav a[href="#roleIntake"]').count(),0);
-  assert.equal(await page.locator('#cabinetRailNav a[href="#institutionPicker"]').count(),0);
-  assert.equal(await page.locator('#cabinetRailNav a[href="#workspaceMaterials"]').count(),1);
+  assert.equal(await page.locator('#workspaceDocs').count(),0);
+  assert.equal(await page.locator('#workspaceMaterials').count(),0);
+  assert.equal(await page.locator('.hero').count(),0);
   await page.locator('#closeWorkspaceSettings').click();
-  await openView(page,'workspaceDocs');await page.getByRole('button',{name:/План классного руководителя/}).click();
-  await page.locator('#workspaceDraftPeriod').fill('2026/27');
-  await page.locator('#workspaceDraftTopic').fill('Общая встреча');
-  await page.locator('#workspaceDraftBody').fill('<strong>Демо</strong>');
-  await page.locator('#workspacePreview').click();
-  assert.equal(await page.locator('#workspaceSheetSchool').textContent(),'МТМУ № 88');
-  assert.equal(await page.locator('#workspaceSheetBody').textContent(),'<strong>Демо</strong>');
-  assert.equal(await page.locator('#workspaceSheetBody strong').count(),0);
-  assert.equal(await page.locator('#workspaceDraft').evaluate(node=>getComputedStyle(node).animationName),'none');
+  await page.locator('#smMainModules').waitFor();
+  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),4);
+  await page.locator('#roleFormsBar').getByRole('button',{name:/Характеристика/}).click();
+  await page.locator('#schoolForms').waitFor();
+  await backView(page);
   await page.getByRole('button',{name:/Профиль/}).click();
   const picker=page.locator('#roleIntake [data-role-class]');
   await picker.locator('[data-class-grade]').selectOption('5');

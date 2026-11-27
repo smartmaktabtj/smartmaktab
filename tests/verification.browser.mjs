@@ -305,7 +305,7 @@ test('Verification & Territory browser: verification form submission, primary-on
 
     // Extra position cabinet (five-method-groups) HIDES payment form & shows primary-only notice!
     await page.goto(`${base}/cabinets/school/five-method-groups.html?school=${orgId}&lang=ru`);
-    await page.locator('[data-open-view="workspaceDocs"]').first().click();
+    await page.locator('#workspaceSettingsToggle').click();
     await page.locator('[data-cloud-panel-trigger]').click();
     await page.locator('#cloudPayPrimaryOnlyNotice:not([hidden])').waitFor();
     assert.equal(await page.locator('#cloudReceiptForm').isHidden(), true);

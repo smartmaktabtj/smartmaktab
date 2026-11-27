@@ -25,9 +25,7 @@ test('standalone director buttons work with external assets and native form subm
   await frame.locator('#institutionSearch').fill('88');
   await frame.locator('#confirmInstitution').click();
   assert.equal(await frame.locator('#selectedSchool').textContent(),'МТМУ № 88');
-  const toggle=frame.locator('#cabinetRailToggle');
-  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
-  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+  assert.equal(await frame.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   await frame.locator('#directorType').selectOption('school');
   await frame.locator('#directorShifts').selectOption('one');
   await frame.locator('#directorProfile').getByRole('button',{name:'Сохранить профиль'}).click();

@@ -57,7 +57,7 @@ test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll,
     await page.locator('#begin').click();
 
     await page.waitForURL(/\/cabinets\/school\/teacher\.html/);
-    await page.locator('#workspaceOverview').waitFor();
+    await page.locator('#smMainModules').waitFor();
     assert.match(await page.locator('#workspaceSchool').innerText(), /МТМУ № 99/);
 
     // Verify 1280x720 teacher home has zero vertical overflow
@@ -65,8 +65,8 @@ test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll,
     assert.ok(dims[0] <= dims[1] + 1, `teacher #cabinetHome overflows 1280x720: ${dims}`);
     assert.equal(dims[2], dims[3]);
 
-    // Open Student Registry via left sidebar and upload a real .docx
-    await page.locator('#cabinetRailNav [data-phase2-nav="smStudentsPanel"]').click();
+    // Open Student Registry via main module card and upload a real .docx
+    await page.locator('#smMainModules [data-open-phase2="smStudentsPanel"]').click();
     await page.locator('#smStuFile').waitFor();
     const docxBytes = buildSimpleDocxBytes('5А', ['№', 'ФИО', 'Класс', 'Пол'], [
       ['1', 'Алиев Беҳрӯз', '5А', 'М'],
@@ -81,8 +81,9 @@ test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll,
     assert.match(await page.locator('#smStudentsPanel').innerText(), /Алиев Беҳрӯз/);
     assert.match(await page.locator('#smStudentsPanel').innerText(), /Саидова Мадина/);
 
-    // Open Teacher Workload panel & save 27h Higher category
-    await page.locator('#cabinetRailNav [data-phase2-nav="smTeacherWorkloadPanel"]').click();
+    // Return home & open Teacher Workload panel -> save 27h Higher category
+    await homeView(page);
+    await page.locator('#smMainModules [data-open-phase2="smTeacherWorkloadPanel"]').click();
     await page.locator('#smWkName').waitFor();
     await page.locator('#smWkName').fill('Нигина Маҳмудова');
     await page.locator('#smWkCat').selectOption('higher');
@@ -108,9 +109,8 @@ test('Phase 2 browser: Accountant tariffs & Tajik holiday calendar exclusions', 
 
     await page.goto(`${base}/cabinets/school/accountant.html?school=demo-88&lang=tg`);
     await homeView(page);
-    await openView(page, 'workspaceDocs');
 
-    // Add teacher workload first
+    // Add teacher workload first directly from main modules
     await page.locator('[data-open-phase2="smTeacherWorkloadPanel"]').click();
     await page.locator('#smWkName').waitFor();
     await page.locator('#smWkName').fill('Раҳимов Далер');
@@ -119,8 +119,9 @@ test('Phase 2 browser: Accountant tariffs & Tajik holiday calendar exclusions', 
     await page.locator('#smWkSaveBtn').click();
     await page.waitForFunction(() => (document.getElementById('smTeacherWorkloadPanel')?.textContent || '').includes('Раҳимов Далер'));
 
-    // Open Payroll & switch to March 2026 + Tajik official holidays (8 March + Navruz)
-    await page.locator('#cabinetRailNav [data-phase2-nav="smPayrollPanel"]').click();
+    // Return home -> Open Payroll & switch to March 2026 + Tajik official holidays (8 March + Navruz)
+    await homeView(page);
+    await page.locator('#smMainModules [data-open-phase2="smPayrollPanel"]').click();
     await page.locator('#smPayMonth').waitFor();
     await page.locator('#smPayMonth').fill('2026-03');
     await page.locator('#smPayMonth').dispatchEvent('change');
@@ -149,7 +150,6 @@ test('Phase 2 browser: Staff grades & animated charts -> Director -> Maorif veri
     pTeacher.on('pageerror', e => errors.push(e.message));
     await pTeacher.goto(`${base}/cabinets/school/class-teacher.html?school=demo-88&lang=tg`);
     await homeView(pTeacher);
-    await openView(pTeacher, 'workspaceDocs');
     await pTeacher.locator('[data-open-phase2="smGradesPanel"]').click();
     await pTeacher.locator('#smGrAddStudent').waitFor();
     await pTeacher.locator('#smGrAddStudent').click();
@@ -170,7 +170,7 @@ test('Phase 2 browser: Staff grades & animated charts -> Director -> Maorif veri
     pDir.on('pageerror', e => errors.push(e.message));
     await pDir.goto(`${base}/cabinets/school/director.html?school=demo-88&lang=tg`);
     await homeView(pDir);
-    await pDir.locator('#cabinetRailNav [data-phase2-nav="smVerificationPanel"]').click();
+    await pDir.locator('#smMainModules [data-open-phase2="smVerificationPanel"]').click();
     await pDir.locator('[data-dir-act="approve-forward"]').first().waitFor();
     await pDir.locator('[data-dir-act="approve-forward"]').first().click();
     await pDir.waitForFunction(() => (document.getElementById('smVfStatus')?.textContent || '').includes('Маориф'));
@@ -180,12 +180,13 @@ test('Phase 2 browser: Staff grades & animated charts -> Director -> Maorif veri
     pMaorif.on('pageerror', e => errors.push(e.message));
     await pMaorif.goto(`${base}/cabinets/maorif/head.html?school=demo-88&lang=tg`);
     await homeView(pMaorif);
-    await pMaorif.locator('#cabinetRailNav [data-phase2-nav="smVerificationPanel"]').click();
+    await pMaorif.locator('#smMainModules [data-open-phase2="smVerificationPanel"]').click();
     await pMaorif.locator('[data-mao-act="approved"]').first().waitFor();
     await pMaorif.locator('[data-mao-act="approved"]').first().click();
     await pMaorif.waitForFunction(() => (document.getElementById('smVfStatus')?.textContent || '').includes('Маориф тасдиқ кард'));
 
-    await pMaorif.locator('#cabinetRailNav [data-phase2-nav="smAnalyticsPanel"]').click();
+    await homeView(pMaorif);
+    await pMaorif.locator('#smMainModules [data-open-phase2="smAnalyticsPanel"]').click();
     await pMaorif.locator('#smAnalyticsPanel .sm-ring-svg').waitFor();
     assert.match(await pMaorif.locator('#smAnalyticsPanel').innerText(), /1 \/ 1/);
     assert.deepEqual(errors, []);

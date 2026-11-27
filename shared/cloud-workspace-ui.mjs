@@ -190,7 +190,9 @@ export function setupCloudWorkspace(article, group, school) {
   const panel = make('section', 'section no-print');
   panel.id = 'cloudWorkspacePanel';
   panel.hidden = true;
-  document.getElementById('workspaceDocs').after(panel);
+  const docsAnchor = document.getElementById('workspaceDocs');
+  if (docsAnchor?.after) docsAnchor.after(panel);
+  else article.append(panel);
 
   const head = make('h2');
   head.tabIndex = -1;

@@ -23,7 +23,7 @@ test('Tajik default, saved optional Russian, copyright, and no demo UI across al
 test('certificate and characteristic use typed fields, variants and printing, never interpreting markup',async()=>{
  const browser=await chromium.launch();try{
   const page=await browser.newPage({reducedMotion:'reduce',serviceWorkers:'block'});await page.goto(route('records-clerk'));
-  await homeView(page);await openView(page,'workspaceDocs');await page.getByRole('button',{name:'Маълумотнома',exact:true}).click();await selectClass(page);
+  await homeView(page);await page.getByRole('button',{name:'Маълумотнома',exact:true}).click();await selectClass(page);
   await input(page,'person').fill('<b>Намунаи шартӣ</b>');await input(page,'certificateType').selectOption('competition');
   await preview(page).click();assert.equal(await page.locator('.school-form-sheet').isVisible(),false);
   await input(page,'event').fill('Озмуни китобхонӣ');await input(page,'number').fill('11');await preview(page).click();
@@ -32,7 +32,7 @@ test('certificate and characteristic use typed fields, variants and printing, ne
   await sheet.getByRole('button',{name:'Чоп',exact:true}).click();assert.match(await page.evaluate(()=>window.printTarget),/Озмуни китобхонӣ/);
   await page.locator('#cabinetLang').selectOption('ru');await sheet.getByRole('heading',{name:'Справка для конкурса'}).waitFor();
   await page.goto(route('class-teacher','?school=demo-88&lang=tg'));
-  await homeView(page);await openView(page,'workspaceDocs');await page.getByRole('button',{name:'Тавсифнома',exact:true}).click();await selectClass(page);
+  await homeView(page);await page.getByRole('button',{name:'Тавсифнома',exact:true}).click();await selectClass(page);
   await input(page,'person').fill('Шахси шартӣ');await input(page,'behavior').fill('Хуб');await input(page,'details').fill('Дар машғулиятҳо фаъол аст.');await input(page,'achievement').fill('Хониши китоб');await preview(page).click();
   assert.match(await sheet.innerText(),/Дар машғулиятҳо фаъол аст/);assert.match(await sheet.innerText(),/Хониши китоб/);
   await backView(page);await input(page,'details').fill('Маълумоти нав');assert.equal(await sheet.isVisible(),false);
@@ -47,7 +47,7 @@ test('quarter report validates totals, computes percentages, and opens in the op
   const p=page.frameLocator('iframe');
   for(const field of await p.locator('#roleIntakeForm input[required]').all())await field.fill('Намуна');
   await p.locator('#saveRoleIntake').click();await p.locator('#institutionSearch').fill('88');await p.locator('#confirmInstitution').click();
-  await homeView(p);await openView(p,'workspaceDocs');await p.getByRole('button',{name:'Сифати таҳсилот',exact:true}).click();await selectClass(p);
+  await homeView(p);await p.getByRole('button',{name:'Сифати таҳсилот',exact:true}).click();await selectClass(p);
   for(const [name,value] of Object.entries({year:'2026–2027',subject:'Математика',total:'25',assessed:'22',quality:'23',passed:'20',q1:'6',q2:'8,5',q3:'9',q4:'7'}))await input(p,name).fill(value);
   await input(p,'period').selectOption('h1');await preview(p).click();await p.locator('#schoolForms [role=status]').getByText(/Шумораҳо/).waitFor();
   await input(p,'quality').fill('14');await preview(p).click();
@@ -58,7 +58,7 @@ test('quarter report validates totals, computes percentages, and opens in the op
 test('class schedule adds lessons, rejects overlap, and prints in chronological order',async()=>{
  const browser=await chromium.launch();try{
   const page=await browser.newPage({reducedMotion:'reduce',serviceWorkers:'block'});await page.goto(route('academic-deputy'));
-  await homeView(page);await openView(page,'workspaceDocs');await page.getByRole('button',{name:'Ҷадвали дарсҳо',exact:true}).click();await selectClass(page);
+  await homeView(page);await page.getByRole('button',{name:'Ҷадвали дарсҳо',exact:true}).click();await selectClass(page);
   await page.locator('#schoolForms').getByRole('button',{name:'Иловаи дарс'}).click();
   const row=(index,key)=>page.locator(`#schoolForms [data-lesson-field=${key}]`).nth(index);
   for(const [index,subject,start,end] of [[0,'Математика','09:00','09:45'],[1,'Забони тоҷикӣ','08:00','09:20']]){await row(index,'subject').fill(subject);await row(index,'start').fill(start);await row(index,'end').fill(end);}

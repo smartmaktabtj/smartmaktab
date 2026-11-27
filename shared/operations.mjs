@@ -19,7 +19,8 @@ export function setupOperations(article,panel,school){
  const permanent=new Map(),transient=new Map(),pickers=[];
  function label(tag,key,cls,map=transient){const n=el(tag,cls);map.set(n,key);n.textContent=words(key);return n;}
  const actions=el('div','control');panel.append(actions);
- const holder=el('section','section operations-panel');holder.id='schoolOperations';holder.hidden=true;by('workspaceDocs').after(holder);
+ const holder=el('section','section operations-panel');holder.id='schoolOperations';holder.hidden=true;
+ const anchor=by('workspaceDocs');if(anchor?.after)anchor.after(holder);else article.append(holder);
  let current=null,snapshot=null,output=null,status=null,statusMessage=null,trigger=null;
  const draftKey=k=>school()?.id?`smartmaktab.demo.ops-draft.v1.${school().id}.${id}.${k}`:null;
  function close(focus=false){holder.hidden=true;holder.replaceChildren();snapshot=null;statusMessage=null;holder.onlanguage=null;transient.clear();pickers.length=0;if(focus)closeWorkspaceView(holder.id);}

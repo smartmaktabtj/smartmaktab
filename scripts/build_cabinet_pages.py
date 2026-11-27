@@ -22,20 +22,18 @@ def txt(ru, tg):
 
 def layout(prefix, title, current, body, fallback=False):
     ownership = txt("© Парвиз Шарипов. Все права защищены.", "© Парвиз Шарипов. Ҳамаи ҳуқуқҳо ҳифз шудаанд.")
-    sidebar = ''.join(f'<a href="{prefix}onboarding/index.html#{key}" class="{"active" if current == key else ""}">{txt(ru,tg)}</a>'
-                      for key, (ru,tg,_) in GROUPS.items())
     if current:
-        sidebar = '<a href="#cabinetHome" class="active">' + txt('Рабочий кабинет', 'Утоқи корӣ') + '</a>'
-    crumb = f'<span class="crumb">{escape(title)}</span>' if current else f'<a class="crumb" href="{prefix}onboarding/index.html">{txt("Кабинеты", "Утоқҳои корӣ")}</a>'
+        header_left = f'<div class="teacher-context"><a class="brand top-brand" href="{prefix}index.html"><span class="logo" aria-hidden="true">S</span><span class="brand-name">SmartMaktab</span></a><h1 class="crumb">{escape(title)}</h1><span class="tag" id="workspaceSchool">—</span></div>'
+    else:
+        header_left = f'<div class="teacher-context"><a class="brand top-brand" href="{prefix}index.html"><span class="logo" aria-hidden="true">S</span><span class="brand-name">SmartMaktab</span></a><a class="crumb" href="{prefix}onboarding/index.html">{txt("Кабинеты", "Утоқҳои корӣ")}</a></div>'
     css = ''
     if fallback:
-        css = '<style>body{margin:0;font:16px/1.5 system-ui;color:#18332a;background:#f2f7f4}.rail{background:#102f26;color:white;padding:14px}.rail a{color:inherit;margin-inline-end:12px}.frame{max-width:960px;margin:auto;padding:20px}.top{background:white;padding:9px 20px}.hero{background:#164938;color:white;padding:20px;border-radius:16px}.section{background:white;padding:18px;border-radius:13px;margin-top:14px}.list a{color:#174f39}.desc{margin-inline:8px}.tag{font-size:.8em}.notice{padding:10px;background:#e5f6e9}[hidden]{display:none!important}</style>'
+        css = '<style>body{margin:0;font:16px/1.5 system-ui;color:#18332a;background:#f2f7f4}.frame{max-width:960px;margin:auto;padding:20px}.top{background:white;padding:9px 20px}.section{background:white;padding:18px;border-radius:13px;margin-top:14px}.list a{color:#174f39}.desc{margin-inline:8px}.tag{font-size:.8em}.notice{padding:10px;background:#e5f6e9}[hidden]{display:none!important}</style>'
     return f'''<!doctype html>
 <html lang="tg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content"><title>{escape(title)} · SmartMaktab</title>
 {css}<link rel="stylesheet" href="{prefix}shared/cabinets.css"><script type="module" src="{prefix}shared/cabinets.mjs"></script></head>
-<body><div class="layout"><aside class="rail"><a class="brand" href="{prefix}index.html"><span class="logo" aria-hidden="true">S</span>SmartMaktab</a>
-<nav aria-label="Разделы">{sidebar}</nav><p class="caption">{txt('Отдельные кабинеты · прототип','Утоқҳои алоҳида · намуна')}</p></aside>
-<div class="page"><header class="top">{crumb}<div class="actions">
+<body><div class="layout">
+<div class="page"><header class="top">{header_left}<div class="actions">
 <select id="cabinetLang" class="lang-select" aria-label="Язык / Забон"><option value="tg">Тоҷикӣ</option><option value="ru">Русский</option></select></div></header>
 <main class="frame" id="cabinetHome">{body}<footer class="ownership-notice no-print">{ownership}</footer></main></div></div></body></html>
 '''
@@ -46,8 +44,7 @@ def stub(entry):
     prefix = '../' * (len(path.parts)-1)
     group = entry['group']
     specialist = entry['title']
-    body = f'''<article data-cabinet-id="{escape(entry['id'])}"><div class="hero"><span class="eyebrow">{txt(*GROUPS[group][:2])} / {entry['number']:02}</span><h1>{escape(specialist)}</h1><p>{txt(entry['description'],entry['descriptionTg'])}</p></div>
-<div class="notice">{txt(*NOTICE)}</div></article>'''
+    body = f'''<article data-cabinet-id="{escape(entry['id'])}"></article>'''
     return layout(prefix,specialist,group,body)
 
 

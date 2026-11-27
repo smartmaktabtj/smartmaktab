@@ -27,10 +27,12 @@ export function setupSchoolForms(article,docs,school){
  const text=key=>content[key][document.documentElement.lang==='ru'?1:0];
  const draftKey=k=>school()?.id?`smartmaktab.demo.form-draft.v1.${school().id}.${article.dataset.cabinetId}.${k}`:null;
  const group=el('div','school-forms-tools no-print'),heading=el('h3'),intro=el('p','small'),actions=el('div','control');
- group.append(heading,intro,actions);docs.querySelector('.workspace-tiles')?.before(group);if(!group.isConnected)docs.append(group);
+ group.append(heading,intro,actions);
+ const tiles=docs.querySelector('.workspace-tiles');
+ if(tiles)tiles.before(group);else docs.append(group);
  setupOperations(article,group,school);
  setupPilotCertificate(article,group,school);
- const panel=el('section','section school-forms');panel.id='schoolForms';panel.hidden=true;docs.after(panel);
+ const panel=el('section','section school-forms');panel.id='schoolForms';panel.hidden=true;article.append(panel);
  let kind,editor,picker,inputs,status,statusKey,sheet,report,headingForm;
  const bindings=new Map();
  const bind=(tag,key,cls)=>{const node=el(tag,cls);node.textContent=text(key);bindings.set(node,key);return node;};

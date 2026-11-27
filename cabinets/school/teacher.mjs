@@ -1,30 +1,24 @@
 import {openWorkspaceView,closeWorkspaceView} from '../../shared/workspace-view.mjs';
 import {readableSize} from '../../shared/book-transfer.mjs';
-import {setupLessonAssistant} from '../../shared/lesson-assistant.mjs';
 import {makePdfReader} from '../../shared/pdf-reader.mjs';
 import {mountTeachingEditor} from '../../shared/teaching-editor.mjs';
 import {subjectName} from '../../shared/subjects.mjs';
 import {booksFor,teacherShelf} from '../../shared/teacher-books.mjs';
-import {mountClassPicker} from '../../shared/class-picker.mjs';
-import {tabStorage,cabinetFormAction,printCabinetSheet,cabinetPageURL,offlineViewer} from '../../shared/cabinet-runtime.mjs';
+import {tabStorage,cabinetFormAction,cabinetPageURL,offlineViewer} from '../../shared/cabinet-runtime.mjs';
 import {selectedDemoSchool as school,demoSchoolNames,readTeacherWorkplaces,teacherWorkplacesKey,findDemoSchools,chooseInstitution} from '../../shared/cabinets.mjs';
-import {validateTeacherProfile,makeLessonSnapshot} from './teacher-data.mjs';
+import {validateTeacherProfile} from './teacher-data.mjs';
 const $=id=>document.getElementById(id);
 let storageKey=school ? `smartmaktab.demo.teacher.v1.${school.id}` : null;
-const locales={ru:{tg:'Таджикский',ru:'Русский',choose:'Выберите класс',classes:'Выберите хотя бы один класс и язык обучения.',
-  saved:'Профиль сохранён для этой школы в текущей вкладке.',memory:'Профиль сохранён до перезагрузки: браузер запретил хранение данных вкладки.',
-  invalid:'Проверьте класс, дату, тему и цель урока.',ready:'Черновик готов. Для изменения создайте новый предпросмотр.',
-  outdated:'В черновике остались прежние данные. Чтобы подставить новые, нажмите «Показать черновик».'},
-  tg:{tg:'Тоҷикӣ',ru:'Русӣ',choose:'Синфро интихоб кунед',classes:'Камаш як синф ва забони таълимро интихоб кунед.',
-  saved:'Профил барои ҳамин мактаб дар равзанаи ҷорӣ сабт шуд.',memory:'Профил то бозборкунӣ сабт шуд: браузер нигоҳдории равзанаро иҷозат надод.',
-  invalid:'Синф, сана, мавзӯъ ва ҳадафи дарсро санҷед.',ready:'Пешнавис омода аст. Барои тағйир додан пешнамоиши нав созед.',
-  outdated:'Дар пешнавис маълумоти пешина монд. Барои навсозӣ «Дидани пешнавис»-ро пахш кунед.'}};
+const locales={ru:{tg:'Таджикский',ru:'Русский',classes:'Выберите хотя бы один класс и язык обучения.',
+  saved:'Профиль сохранён для этой школы в текущей вкладке.',memory:'Профиль сохранён до перезагрузки: браузер запретил хранение данных вкладки.'},
+  tg:{tg:'Тоҷикӣ',ru:'Русӣ',classes:'Камаш як синф ва забони таълимро интихоб кунед.',
+  saved:'Профил барои ҳамин мактаб дар равзанаи ҷорӣ сабт шуд.',memory:'Профил то бозборкунӣ сабт шуд: браузер нигоҳдории равзанаро иҷозат надод.'}};
 const t=key=>locales[document.documentElement.lang==='tg'?'tg':'ru'][key]??'';
 const text=(tg,ru)=>document.documentElement.lang==='ru'?ru:tg;
 $('teacherProfile').inert=false;
 const editor=mountTeachingEditor($('teacherProfileClasses'));
 const pdfReader=makePdfReader($('teacherBookPanel'));
-let profile=null,editing=true,snapshot=null,profileNote='',documentNote='',activeBook=null;
+let profile=null,editing=true,profileNote='',activeBook=null;
 const shelf=document.createElement('section');shelf.className='teacher-shelf no-print';shelf.id='teacherShelf';
 const shelfHeader=document.createElement('header'),shelfTitle=document.createElement('h2'),shelfAll=document.createElement('button'),shelfList=document.createElement('ul'),shelfEmpty=document.createElement('p');
 shelfAll.type='button';shelfAll.className='button alt';shelfAll.dataset.teacherLibrary='';shelfEmpty.className='small';
@@ -32,21 +26,7 @@ shelfHeader.append(shelfTitle,shelfAll);shelf.append(shelfHeader,shelfEmpty,shel
 shelfAll.addEventListener('click',()=>showBooks(null,shelfAll));
 function loadProfile(){try{return storageKey?validateTeacherProfile(JSON.parse(tabStorage.getItem(storageKey))):null;}catch{return null;}}
 profile=loadProfile();editing=!profile?.teaching;
-const refreshAssistant=setupLessonAssistant($('teacherDraft'),()=>({classCode:$('teacherClass').value,subject:$('teacherLessonSubject').value}));
-const lessonClass=mountClassPicker($('teacherLessonClass'),{available:[],onChange:list=>{
- $('teacherClass').value=list[0]??'';refreshSubjects();clearDraft();
-}});
 function fillInputs(){editor.set(profile?.teaching??[],profile?.classes??[]);$('instructionLanguage').value=profile?.language??'';}
-function clearDraft(){if(!snapshot&&!documentNote)return;snapshot=null;documentNote='';$('teacherSheet').hidden=true;$('teacherStatus').textContent='';}
-function refreshSubjects(prefer=$('teacherLessonSubject').value){
- const field=$('teacherLessonSubject'),items=(profile?.teaching??[]).filter(row=>row.classCode===$('teacherClass').value);
- field.replaceChildren(new Option(text('Фанро интихоб кунед','Выберите предмет'),''),...items.map(row=>new Option(subjectName(row.subject),row.subject)));
- field.value=items.some(row=>row.subject===prefer)?prefer:items.length===1?items[0].subject:'';field.disabled=!items.length;refreshAssistant();
-}
-function showLesson(row){
- if(editing||!school)return;lessonClass.set([row.classCode]);$('teacherClass').value=row.classCode;refreshSubjects(row.subject);clearDraft();
- openWorkspaceView('teacherDocumentPanel');
-}
 function showBooks(row,trigger){pdfReader?.close();activeBook=row;renderBooks();openWorkspaceView('teacherBookPanel',trigger);}
 function bookControls(li,book,home=false){
  if(!pdfReader)return;
@@ -87,53 +67,37 @@ function renderShelf(){
  }));
 }
 $('teacherCloseBooks').addEventListener('click',()=>{closeWorkspaceView('teacherBookPanel');activeBook=null;pdfReader?.close();renderBooks();});
-function render(renewClasses=false){
+function render(){
  const rows=profile?.teaching??[];
- $('teacherHeaderSchool').textContent=school?.name??text('Мактаб интихоб нашудааст','Школа не выбрана');
+ const schoolTag=$('teacherHeaderSchool')||$('workspaceSchool');
+ if(schoolTag)schoolTag.textContent=school?.name??text('Мактаб интихоб нашудааст','Школа не выбрана');
  $('teacherNoSchool').hidden=!!school;$('teacherProfilePanel').hidden=!school;$('teacherProfile').hidden=!editing;
  $('teacherProfileSummary').hidden=editing;$('teacherCancelProfile').hidden=!profile?.teaching;
  $('profileClasses').textContent=rows.map(row=>`${row.classCode} · ${subjectName(row.subject)}`).join(', ');
  $('profileInstruction').textContent=t(profile?.language);$('teacherProfileStatus').textContent=profileNote==='classes'?text('Камаш як синф ва фан ва забони таълимро интихоб кунед.','Добавьте хотя бы одну пару «класс — предмет» и укажите язык обучения.'):t(profileNote);
- $('teacherDocumentPanel').hidden=!rows.length;$('teacherDocumentFields').disabled=editing;
- $('teacherStatus').textContent=t(documentNote);editor.refresh();
- if(renewClasses){const old=$('teacherClass').value;lessonClass.set(old?[old]:[],[...new Set(rows.map(row=>row.classCode))]);$('teacherClass').value=lessonClass.read()[0]??'';}else lessonClass.refresh();
- refreshSubjects();
+ editor.refresh();
  $('teacherSubjectsHeading').tabIndex=-1;
  $('teacherSubjectsEmpty').textContent=!school?text('Аввал мактабро интихоб кунед.','Сначала выберите школу.'):rows.length?'':text('Синф ва фанро дар «Танзимот» ба профили корӣ илова кунед.','Добавьте класс и предмет в рабочем профиле в «Настройках».');
  $('teacherSubjectRows').replaceChildren(...rows.map(row=>{
-  const li=document.createElement('li'),name=document.createElement('strong'),lesson=document.createElement('button'),book=document.createElement('button');
-  name.textContent=`${row.classCode} · ${subjectName(row.subject)}`;lesson.type=book.type='button';lesson.className=book.className='button alt';
-  lesson.dataset.lessonShortcut='';book.dataset.bookShortcut='';lesson.disabled=editing;
-  lesson.textContent=text('Нақшаи дарс','План урока');book.textContent=text('Китоби дарсӣ','Учебник');
-  lesson.addEventListener('click',()=>showLesson(row));book.addEventListener('click',()=>showBooks(row,book));li.append(name,lesson,book);return li;
+  const li=document.createElement('li'),name=document.createElement('strong'),book=document.createElement('button');
+  name.textContent=`${row.classCode} · ${subjectName(row.subject)}`;book.type='button';book.className='button alt';
+  book.dataset.bookShortcut='';
+  book.textContent=text('Китоби дарсӣ','Учебник');
+  book.addEventListener('click',()=>showBooks(row,book));li.append(name,book);return li;
  }));renderBooks();renderShelf();
- if(snapshot){const [y,m,d]=snapshot.date.split('-');
-  for(const [id,value] of Object.entries({sheetSchool:snapshot.school,sheetSubject:subjectName(snapshot.subject),sheetInstruction:t(snapshot.language),sheetClass:snapshot.classCode,
-   sheetDate:`${d}.${m}.${y}`,sheetTopic:snapshot.topic,sheetGoal:snapshot.goal})) $(id).textContent=value;
-  $('teacherSheet').hidden=false;
- }
 }
 cabinetFormAction($('teacherProfile'),$('teacherProfile').querySelector('button[type=submit]'),()=>{
  if(!school||!editing)return;
  const next=validateTeacherProfile({teaching:editor.read(),language:$('instructionLanguage').value});
  if(!next?.teaching||editor.missing().length){profileNote='classes';render();return;}
- profile=next;editing=false;profileNote='saved';activeBook=null;pdfReader?.close();clearDraft();
+ profile=next;editing=false;profileNote='saved';activeBook=null;pdfReader?.close();
  try{tabStorage.setItem(storageKey,JSON.stringify(next));}catch{profileNote='memory';}
- render(true);$('teacherEditProfile').focus();
+ render();$('teacherEditProfile').focus();
 });
 $('teacherEditProfile').addEventListener('click',()=>{editing=true;profileNote='';fillInputs();render();editor.focus();});
 $('teacherCancelProfile').addEventListener('click',()=>{editing=false;fillInputs();render();$('teacherEditProfile').focus();});
-cabinetFormAction($('teacherDraft'),$('teacherDraft').querySelector('button[type=submit]'),()=>{
- if(editing||!school||!profile)return;
- const next=makeLessonSnapshot({school,profile,classCode:$('teacherClass').value,subject:$('teacherLessonSubject').value,date:$('teacherDate').value,
-  topic:$('teacherTopic').value,goal:$('teacherGoal').value});
- snapshot=next;$('teacherSheet').hidden=!snapshot;documentNote=next?'ready':'invalid';render();if(snapshot)openWorkspaceView('teacherSheet');
-});
-$('teacherDraft').addEventListener('input',event=>{if(!event.target.matches('[data-class-grade],[data-class-letter]'))clearDraft();});
-$('teacherDraft').addEventListener('change',event=>{if(event.target===$('teacherLessonSubject'))clearDraft();});
-$('teacherPrint').addEventListener('click',event=>{if(snapshot)printCabinetSheet(event.currentTarget);});
 document.addEventListener('cabinet:language',()=>render());
-fillInputs();render(true);
+fillInputs();render();
 
 const workplaceForm=$('teacherWorkplaceForm');workplaceForm.inert=false;
 let workplaces=readTeacherWorkplaces(),workNote='';
@@ -179,9 +143,9 @@ workplaceForm.addEventListener('submit',event=>{event.preventDefault();$('teache
 document.addEventListener('cabinet:language',renderWorkplaces);
 document.addEventListener('cabinet:school',()=>{
  storageKey=`smartmaktab.demo.teacher.v1.${school.id}`;profile=loadProfile();
- editing=!profile?.teaching;activeBook=null;pdfReader?.close();bookTrigger=null;snapshot=null;profileNote='';documentNote='';$('teacherSheet').hidden=true;$('teacherDraft').reset();$('teacherClass').value='';
+ editing=!profile?.teaching;activeBook=null;pdfReader?.close();profileNote='';
  if(!workplaces.includes(school.id))workplaces.push(school.id);
  for(const input of $('teacherSchoolChecks').querySelectorAll('input'))input.checked=workplaces.includes(input.value);
- fillInputs();render(true);renderWorkplaces();
+ fillInputs();render();renderWorkplaces();
 });
 renderWorkplaces();

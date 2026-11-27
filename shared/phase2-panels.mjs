@@ -131,44 +131,30 @@ export function setupPhase2Panels(article, docs, school, views) {
     }
   });
 
-  // Entry group in #workspaceDocs + #cabinetRailNav (never bloating #cabinetHome on teacher.html)
-  const docsWrap = document.createElement('div');
-  docsWrap.className = 'school-forms-tools';
-  const docsTitle = document.createElement('h3');
-  const docsGrid = document.createElement('div');
-  docsGrid.className = 'workspace-tiles';
-  docsWrap.append(docsTitle, docsGrid);
-  docs.append(docsWrap);
-
-  const rail = document.getElementById('cabinetRailNav');
+  // Mount core module cards directly on the main home grid (#smMainModules)
   const navEntries = [];
 
   function registerModule(panelId, icon, labelTg, labelRu, descTg, descRu) {
     const tile = document.createElement('button');
     tile.type = 'button';
-    tile.className = 'document-tile';
+    tile.className = 'sm-module-card';
     tile.dataset.openPhase2 = panelId;
     const spIcon = document.createElement('span');
+    spIcon.className = 'sm-mod-icon';
     spIcon.setAttribute('aria-hidden', 'true');
     spIcon.textContent = icon;
+    const body = document.createElement('span');
+    body.className = 'sm-mod-body';
     const st = document.createElement('strong');
     const sm = document.createElement('small');
-    tile.append(spIcon, st, sm);
+    body.append(st, sm);
+    tile.append(spIcon, body);
     tile.addEventListener('click', () => {
       views.open(panelId, tile);
       refreshPanelById(panelId);
     });
-    docsGrid.append(tile);
-
-    let railLink = null;
-    if (rail) {
-      railLink = document.createElement('a');
-      railLink.href = `#${panelId}`;
-      railLink.dataset.phase2Nav = panelId;
-      railLink.addEventListener('click', () => refreshPanelById(panelId));
-      rail.append(railLink);
-    }
-    navEntries.push({ panelId, icon, labelTg, labelRu, descTg, descRu, st, sm, railLink });
+    docs.append(tile);
+    navEntries.push({ panelId, icon, labelTg, labelRu, descTg, descRu, st, sm });
   }
 
   // ============================================================================
@@ -1059,12 +1045,10 @@ export function setupPhase2Panels(article, docs, school, views) {
   }
 
   function syncLabels() {
-    docsTitle.textContent = txt('Модулҳои корӣ ва таҳлил', 'Рабочие модули и аналитика');
     for (const item of navEntries) {
       const label = txt(item.labelTg, item.labelRu);
       item.st.textContent = label;
       item.sm.textContent = txt(item.descTg, item.descRu);
-      if (item.railLink) item.railLink.textContent = `${item.icon} ${label}`;
     }
     refreshAll(false);
   }
@@ -1073,12 +1057,10 @@ export function setupPhase2Panels(article, docs, school, views) {
   document.addEventListener('cabinet:school', () => refreshAll(true));
   document.addEventListener('sm:cloud-context-changed', () => refreshAll(true));
 
-  docsTitle.textContent = txt('Модулҳои корӣ ва таҳлил', 'Рабочие модули и аналитика');
   for (const item of navEntries) {
     const label = txt(item.labelTg, item.labelRu);
     item.st.textContent = label;
     item.sm.textContent = txt(item.descTg, item.descRu);
-    if (item.railLink) item.railLink.textContent = `${item.icon} ${label}`;
   }
   refreshAll(true);
 }

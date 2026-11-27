@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 const base=process.env.SM_BASE_URL??'http://localhost:4180';
 
-test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on, unified profile and dynamic sidebar',async()=>{
+test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on, unified profile and clean module grid',async()=>{
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
@@ -81,14 +81,14 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
   await page.locator('#begin').click();
 
-  // Cabinet view: unified Profile drawer + Update icon + dynamic multi-role sidebar
+  // Cabinet view: unified Profile drawer + Update icon + clean header workspace switcher
   await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=ru');
   await page.locator('#workspaceSwitch').waitFor();
   assert.deepEqual(await page.locator('#workspaceSwitch option').evaluateAll(nodes=>nodes.map(node=>node.value)),['school-director',a,b]);
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);
   assert.equal(await page.locator('#cabinetUpdateTrigger').isVisible(),true);
-  assert.equal(await page.locator('#cabinetRailNav [data-sm-dynamic="role"]').count(),3);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),6);
   await page.locator('#workspaceSettingsToggle').click();
   assert.equal(await page.locator('#profFirst').inputValue(),'Нав');
   assert.equal(await page.locator('#profLast').inputValue(),'Озмоишӣ');
@@ -127,8 +127,6 @@ test('startup works inside the offline file viewer with independent profile edit
   assert.equal(await cabinet.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   await cabinet.locator('#workspaceSettingsToggle').click();
   assert.equal(await cabinet.locator('#profFirst').inputValue(),'Демо');
-  await cabinet.locator('#cabinetRailToggle').click();
-  assert.equal(await cabinet.locator('#cabinetRailToggle').getAttribute('aria-expanded'),'false');
  }finally{await browser.close();}
 });
 
@@ -162,7 +160,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
   await page.locator('#teacherSchoolLinks a').click();
   await page.waitForURL('**/teacher.html?school=demo-b&lang=ru');
   assert.equal(await page.locator('#selectedSchool').textContent(),'МТМУ № 4');
-  await page.locator('#teacherDocumentPanel').waitFor({state:'hidden'});
+  assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 4');
   await settings('9Б','ru');
   assert.equal(await page.locator('#profileClasses').textContent(),'9Б · Информатика');
   await page.locator('#teacherSchoolLinks a').click();
