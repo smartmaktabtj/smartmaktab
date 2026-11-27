@@ -38,44 +38,38 @@ def entry(row):
 <label class="field">{txt('Поиск школы по номеру или названию','Ҷустуҷӯи мактаб аз рӯи рақам ё ном')}<input id="institutionSearch" type="search" maxlength="80" autocomplete="off" placeholder="МТМУ № 88"></label>
 <label class="field">{txt('Школа','Мактаб')}<select id="institutionChoice"></select></label></div><div class="control"><button class="button" type="button" id="confirmInstitution">{txt('Выбрать школу','Интихоби мактаб')}</button></div><p class="small" role="status" id="institutionStatus"></p></section>'''
     return '<!-- ROLE-PROFILE START -->\n'+roles+'\n'+picker+'\n<!-- ROLE-PROFILE END -->'
-def workspace(row):
-    items,materials_ru,materials_tg=documents[row['id']]
-    buttons=''.join(f'<button class="document-tile" type="button" data-doc-template="{i}" data-title-tg="{escape(tg,quote=True)}"><span aria-hidden="true">▤</span><strong>{txt(ru,tg)}</strong><small>{txt("Открыть черновик","Кушодани пешнавис")}</small></button>' for i,(ru,tg) in enumerate(items,1))
-    return f'''<!-- ROLE-WORKSPACE START -->
-<section class="section workspace-overview no-print" id="workspaceOverview" aria-labelledby="workspaceOverviewTitle"><div class="pill-row"><span class="tag">SmartMaktab</span><h2 id="workspaceOverviewTitle">{txt('Мой рабочий стол','Мизи кории ман')}</h2></div><div class="summary workspace-summary"><div class="metric"><span>{txt('Должность','Вазифа')}</span><b>{escape(row['title'])}</b></div><div class="metric"><span>{txt('Учреждение','Муассиса')}</span><b id="workspaceSchool">—</b></div><div class="metric"><span>{txt('Рабочие шаблоны','Намунаҳои корӣ')}</span><b>{len(items)}</b></div></div></section>
-<section class="section no-print" id="workspaceDocs"><div class="pill-row"><span class="workspace-icon" aria-hidden="true">▤</span><h2>{txt('Документы','Ҳуҷҷатҳо')}</h2></div><p class="small">{txt('Шаблоны для этой должности · не утверждены.','Намунаҳо барои ҳамин вазифа · тасдиқ нашудаанд.')}</p><div class="workspace-tiles">{buttons}</div></section>
-<section class="section" id="workspaceDraft" hidden><div class="no-print"><h2 id="workspaceDraftTitle" tabindex="-1"></h2><form id="workspaceDraftForm" inert><div class="steps"><label class="field">{txt('Период','Давра')}<input id="workspaceDraftPeriod" required maxlength="50"></label><label class="field">{txt('Тема или задача','Мавзӯъ ё вазифа')}<input id="workspaceDraftTopic" required maxlength="120"></label></div><label class="field spacer">{txt('Содержание и следующие шаги','Мундариҷа ва қадамҳои навбатӣ')}<textarea id="workspaceDraftBody" rows="4" maxlength="800"></textarea></label><div class="control"><button type="button" class="button" id="workspacePreview">{txt('Показать черновик','Дидани пешнавис')}</button><button type="button" class="button alt" id="workspaceCloseDraft">{txt('Закрыть','Пӯшидан')}</button></div></form><p id="workspaceDraftStatus" class="small" role="status"></p></div>
-<div class="print-card" id="workspaceSheet" hidden><h3 id="workspaceSheetTitle"></h3><p id="workspaceSheetSchool"></p><dl><dt>{txt('Период','Давра')}</dt><dd id="workspaceSheetPeriod"></dd><dt>{txt('Тема','Мавзӯъ')}</dt><dd id="workspaceSheetTopic"></dd><dt>{txt('Содержание','Мундариҷа')}</dt><dd id="workspaceSheetBody"></dd></dl><p class="small">{txt('Черновик · не утверждён','Пешнавис · тасдиқ нашудааст')}</p><button type="button" id="workspacePrint" class="button alt no-print">{txt('Печать','Чоп')}</button></div></section>
-<section class="section no-print" id="workspaceMaterials"><div class="pill-row"><span class="workspace-icon" aria-hidden="true">◇</span><h2>{txt('Материалы и подсказки','Мавод ва роҳнамо')}</h2></div><p>{txt(materials_ru,materials_tg)}</p><ul class="workspace-guide"><li>{txt('Проверьте учреждение, период и цель документа.','Муассиса, давра ва ҳадафи ҳуҷҷатро санҷед.')}</li><li>{txt('Используйте вымышленные или обезличенные данные.','Додаҳои сохта ё беномро истифода баред.')}</li></ul></section>
-<!-- ROLE-WORKSPACE END -->'''
-settings_links={'roleIntake','directorPersonnel','directorInstitution','directorCourses','teacherWorkplaces','teacherProfilePanel','libraryProfilePanel','institutionPicker'}
+def header_html(row):
+    prefix='../'*(len(Path(row['path']).parts)-1)
+    return (
+        f'<header class="top"><div class="teacher-context">'
+        f'<a class="brand top-brand" href="{prefix}index.html"><span class="logo" aria-hidden="true">S</span><span class="brand-name">SmartMaktab</span></a>'
+        f'<h1 class="crumb">{escape(row["title"])}</h1>'
+        f'<span class="tag" id="workspaceSchool">—</span></div><div class="actions">\n'
+        f'<select id="cabinetLang" class="lang-select" aria-label="Забон / Язык"><option value="tg">Тоҷикӣ</option><option value="ru">Русский</option></select></div></header>'
+    )
+
 for row in rows:
-    p=ROOT/row['path']; s=p.read_text(); block=entry(row)
+    p=ROOT/row['path']; raw=p.read_text(); block=entry(row)
+    if '<!-- SMARTMAKTAB INLINE START -->' in raw:
+        idx=raw.index('<!-- SMARTMAKTAB INLINE START -->')
+        s,tail=raw[:idx],raw[idx:]
+    else:
+        s,tail=raw,''
+    s=re.sub(r'<aside class="rail">.*?</aside>\s*', '', s, count=1, flags=re.S)
+    s=re.sub(r'<header class="top">.*?</header>', lambda _: header_html(row), s, count=1, flags=re.S)
+    s=re.sub(r'<div class="hero">.*?</div>\s*<(?:p|div) class="notice[^"]*"[^>]*>.*?</(?:p|div)>\s*', '', s, count=1, flags=re.S)
+    s=re.sub(r'\.rail[^}]*\}\s*', '', s)
+    s=re.sub(r'\.hero\{[^}]*\}\s*', '', s)
+    if row['id']=='school-teacher':
+        s=re.sub(r'<section class="section" id="teacherDocumentPanel"[^>]*>.*?</section>\s*', '', s, count=1, flags=re.S)
     if '<!-- ROLE-PROFILE START -->' in s:
         s=re.sub(r'<!-- ROLE-PROFILE START -->.*?<!-- ROLE-PROFILE END -->',lambda _:block,s,count=1,flags=re.S)
     else:
-        # After title and notice, before working content. Director's existing personnel form comes first.
         if row['id']=='school-director': point=s.index('<section class="section no-print" id="directorCourses"')
         else:
-            m=re.search(r'<(?:p|div) class="notice[^>]*>.*?</(?:p|div)>',s,flags=re.S)
+            m=re.search(r'<article data-cabinet-id="[^"]+">\s*',s)
             assert m,row['path'];point=m.end()
         s=s[:point]+'\n'+block+'\n'+s[point:]
-    if 'id="cabinetRailToggle"' not in s:
-        s=s.replace('<nav aria-label="Разделы кабинета">','<button type="button" id="cabinetRailToggle" class="rail-toggle" aria-expanded="true" aria-controls="cabinetRailNav">☰ <span>'+txt('Свернуть меню','Пӯшидани меню')+'</span></button><nav id="cabinetRailNav" aria-label="Разделы кабинета">',1)
-        if row['id']!='school-director':
-            i=s.index('</nav>');s=s[:i]+'<a href="#roleIntake">'+txt('Анкета должности','Варақаи вазифа')+'</a>'+s[i:]
-        i=s.index('</nav>');s=s[:i]+'<a href="#institutionPicker" data-institution-link hidden>'+txt('Выбор школы','Интихоби мактаб')+'</a>'+s[i:]
-    block=workspace(row)
-    if '<!-- ROLE-WORKSPACE START -->' in s:
-        s=re.sub(r'<!-- ROLE-WORKSPACE START -->.*?<!-- ROLE-WORKSPACE END -->',lambda _:block,s,count=1,flags=re.S)
-    else:
-        end_section=s.index('</article>');s=s[:end_section]+block+s[end_section:]
-    nav=re.search(r'<nav[^>]+id="cabinetRailNav"[^>]*>.*?</nav>',s,flags=re.S)
-    if nav:
-        original=nav.group(0)
-        menu=re.sub(r'<a href="#([^"\s]+)"[^>]*>.*?</a>',lambda m:'' if m.group(1) in settings_links|{'workspaceDocs','workspaceMaterials'} else m.group(0),original,flags=re.S)
-        links=f'<a href="#workspaceDocs">▤ {txt("Документы","Ҳуҷҷатҳо")}</a><a href="#workspaceMaterials">◇ {txt("Материалы","Мавод")}</a>'
-        menu=menu.replace('</nav>',links+'</nav>')
-        s=s[:nav.start()]+menu+s[nav.end():]
-    p.write_text(s)
+    s=re.sub(r'\s*<!-- ROLE-WORKSPACE START -->.*?<!-- ROLE-WORKSPACE END -->', '', s, count=1, flags=re.S)
+    p.write_text(s+tail)
 

@@ -13,8 +13,9 @@ test('each planned cabinet is an individual document with its own identity',asyn
     assert.match(row.path,/^cabinets\/(?:[a-z-]+\/)*[a-z-]+\.html$/);
     const html=await read(row.path);
     assert.ok(html.includes(`data-cabinet-id="${row.id}"`),row.path);
-    assert.ok(html.includes(`<h1>${row.title}</h1>`),row.path);
-    assert.doesNotMatch(html.match(/<aside class="rail">.*?<\/aside>/s)[0],/onboarding\/index\.html/);
+    assert.ok(html.includes(`<h1 class="crumb">${row.title}</h1>`),row.path);
+    assert.doesNotMatch(html,/<aside class="rail">/);
+    assert.doesNotMatch(html,/<div class="hero">/);
     assert.doesNotMatch(html,/<a[^>]+href="[^"]*onboarding\/index\.html/);
   }
   const school=rows.filter(row=>row.group==='school');
@@ -23,17 +24,18 @@ test('each planned cabinet is an individual document with its own identity',asyn
   assert.deepEqual(rows.filter(row=>row.group==='advisers').map(row=>row.schoolCounterpart),school.map(row=>row.id.replace('school-','')));
 });
 
-test('all 54 HTML files have a profile, institution picker, and sidebar controls',async()=>{
+test('all 54 HTML files have a profile, institution picker, and clean header controls without rail or DOCX template clutter',async()=>{
  const labels=new Set();
  for(const role of rows){
-  const html=await read(role.path);assert.match(html,/id="institutionSearch"/);assert.match(html,/id="cabinetRailToggle"/);
+  const html=await read(role.path);assert.match(html,/id="institutionSearch"/);assert.match(html,/id="workspaceSchool"/);
+  assert.match(html,/class="brand top-brand"/);
   assert.match(html,/id="institutionPicker" hidden/);
+  assert.doesNotMatch(html,/id="cabinetRailToggle"|id="workspaceDocs"|id="workspaceMaterials"|id="workspaceOverview"|id="teacherDocumentPanel"/);
   if(role.id==='school-director')assert.match(html,/id="directorPersonnel"/);
   else{
    const match=html.match(/<label class="field"><span data-tg="[^"]+">([^<]+)<\/span><input data-intake-field="work-1" maxlength="120" required/);
    const title=match?.[1]??html.match(/<strong><span data-tg="[^"]+">([^<]+)<\/span><\/strong><div data-role-class=/)?.[1];
    assert.ok(title,role.id);assert.ok(!labels.has(title),role.id);labels.add(title);
-   assert.match(html,/id="workspaceDocs"/);assert.match(html,/id="workspaceMaterials"/);
   }
  }
  assert.equal(labels.size,53);

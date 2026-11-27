@@ -38,16 +38,6 @@ function attachDropdown(details,menu){
  window.addEventListener('resize',position);
  document.addEventListener('click',event=>{if(details.open&&!details.contains(event.target))details.open=false;});
 }
-export function setupNativeFiles(anchor){
- if((!bridge&&!globalThis.SmartMaktabWindows)||!anchor)return;
- const details=document.createElement('details'),header=document.createElement('summary'),menu=document.createElement('div');details.className='sm-native-files';header.className='theme-toggle';details.append(header,menu);
- const open=document.createElement('button'),share=document.createElement('button');open.type=share.type='button';open.className=share.className='button alt';menu.append(open);if(bridge)menu.append(share);anchor.before(details);
- attachDropdown(details,menu);
- function refresh(){const tg=document.documentElement.lang==='tg';header.textContent=tg?'Файлҳо':'Файлы';open.textContent=tg?'Кушодан дар барномаи дигар':'Открыть в другой программе';share.textContent=tg?'Мубодила':'Поделиться';}
- open.addEventListener('click',()=>{details.open=false;if(bridge)void send({action:'openFile'}).catch(()=>{});else void globalThis.SmartMaktabWindows.openFile().catch(()=>{});});
- share.addEventListener('click',()=>{details.open=false;void send({action:'shareFile'}).catch(()=>{});});refresh();document.addEventListener('cabinet:language',refresh);
-}
-
 if(bridge)globalThis.smartMaktabBack=()=>{const openMenu=document.querySelector('details.sm-native-files[open]');if(openMenu){openMenu.open=false;return true;}return !document.dispatchEvent(new Event('sm:native-back',{cancelable:true}));};
 
 export function setupUnifiedUpdateMenu(anchor,onOpenMaterials){

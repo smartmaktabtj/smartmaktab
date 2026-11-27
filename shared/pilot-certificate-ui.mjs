@@ -9,7 +9,8 @@ export function setupPilotCertificate(article,group,school){
  const tg=()=>document.documentElement.lang!=='ru',t=k=>labels[k][tg()?0:1],fieldLabel=f=>tg()?f.label_tg:f.label_ru;
  const make=(tag,cls)=>{const x=document.createElement(tag);if(cls)x.className=cls;return x;};
  const trigger=make('button','button alt'),actions=make('div','control');trigger.type='button';trigger.dataset.pilotCertificate='';actions.append(trigger);group.append(actions);
- const panel=make('section','section no-print');panel.id='pilotCertificate';panel.hidden=true;document.getElementById('workspaceDocs').after(panel);
+ const panel=make('section','section no-print');panel.id='pilotCertificate';panel.hidden=true;
+ const anchor=document.getElementById('workspaceDocs');if(anchor?.after)anchor.after(panel);else article.append(panel);
  const form=make('form'),head=make('h2'),note=make('p','small'),scope=make('p'),grid=make('div','school-fields'),classBox=make('fieldset','class-form-field'),legend=make('legend'),host=make('div');
  form.autocomplete='off';form.noValidate=true;head.tabIndex=-1;classBox.append(legend,host);grid.append(classBox);
  const picker=mountClassPicker(host,{onChange:clearResult}),button=make('button','button'),close=make('button','button alt'),line=make('div','control'),status=make('p','small'),summary=make('p','notice'),download=make('button','button alt'),hint=make('p','small');

@@ -150,10 +150,10 @@ query?.addEventListener('input',refreshDirectory);
 $('cabinetLang')?.addEventListener('change',event=>{lang=event.target.value==='ru'?'ru':'tg';saveLanguage(lang);publishLanguage(lang);cabinetPageURL.searchParams.set('lang',lang);if(!offlineViewer)try{history.replaceState(null,'',cabinetPageURL);}catch{}if(workspace&&cabinet)saveActiveResume({role:cabinet.dataset.cabinetId,school:fromURL,lang,route:currentResumeRoute()});applyLanguage();});
 window.addEventListener('hashchange',readHash);
 
-const roleCopy={saved:['Анкета заполнена. Теперь выберите школу.','Варақа пур шуд. Акнун мактабро интихоб кунед.'],invalid:['Заполните обязательные поля.','Майдонҳои ҳатмиро пур кунед.'],choose:['Выберите из списка','Аз рӯйхат интихоб кунед'],nothing:['Школы не найдены.','Мактаб ёфт нашуд.'],selected:['Выбрано: ','Интихоб шуд: '],expand:['Развернуть меню','Кушодани меню'],collapse:['Свернуть меню','Пӯшидани меню']};
+const roleCopy={saved:['Анкета заполнена. Теперь выберите школу.','Варақа пур шуд. Акнун мактабро интихоб кунед.'],invalid:['Заполните обязательные поля.','Майдонҳои ҳатмиро пур кунед.'],choose:['Выберите из списка','Аз рӯйхат интихоб кунед'],nothing:['Школы не найдены.','Мактаб ёфт нашуд.'],selected:['Выбрано: ','Интихоб шуд: ']};
 const rt=key=>roleCopy[key][lang==='tg'?1:0];
-const roleForm=$('roleIntakeForm'),picker=$('institutionPicker'),toggle=$('cabinetRailToggle');
-let intakeReady=!!fromURL,intakeNote='',collapsed=false;
+const roleForm=$('roleIntakeForm'),picker=$('institutionPicker');
+let intakeReady=!!fromURL,intakeNote='';
 function takeSetup(){
  const id=cabinet?.dataset.cabinetId,key=`smartmaktab.demo.role-setup.v3.${id}`,savedKey=`smartmaktab.demo.saved-setup.v3.${id}`;
  if(!id)return null;
@@ -212,10 +212,6 @@ function refreshRoleUI(){
     if($('roleIntakeStatus'))$('roleIntakeStatus').textContent=intakeNote?rt(intakeNote):'';
     renderSchools();
   }
-  if(toggle){
-    toggle.querySelector('span span').textContent=rt(collapsed?'expand':'collapse');
-    toggle.setAttribute('aria-label',rt(collapsed?'expand':'collapse'));
-  }
 }
 if(roleForm){
  const fields=[...roleForm.querySelectorAll('[data-intake-field]')],person=roleSetup??takeRolePerson();
@@ -258,14 +254,5 @@ if(offlineViewer){
   event.preventDefault();openCabinetView(url);
  });
 }
-function setRail(value){
-  if(!toggle)return;
-  collapsed=value;
-  const nav=$('cabinetRailNav');if(value&&nav.contains(document.activeElement))toggle.focus({preventScroll:true});
-  nav.hidden=value;toggle.setAttribute('aria-expanded',String(!value));
-  toggle.closest('.layout').classList.toggle('rail-collapsed',value);
-  refreshRoleUI();
-}
-if(toggle){toggle.addEventListener('click',()=>setRail(!collapsed));setTimeout(()=>setRail(true),15000);}
 setupWorkspace({configured:!!workspace&&!!selectedDemoSchool,school:()=>selectedDemoSchool});
 applyLanguage(); readHash();
