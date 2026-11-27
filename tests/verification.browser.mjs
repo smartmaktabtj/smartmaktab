@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { fillStartupProfile } from './onboarding-fixtures.mjs';
+import { canonicalRegionName } from '../shared/tajikistan-locations.mjs';
 
 const base = process.env.SM_BASE_URL ?? 'http://localhost:4180';
 const repoRoot = resolve(new URL('..', import.meta.url).pathname);
@@ -131,10 +132,11 @@ test('Verification & Territory browser: empty schools bootstrap, Region->Distric
 
     // With empty schools: [], user adds their real school via Region -> District -> Jamoat -> Village cascade
     await page.locator('#toggleNewSchoolBtn').click();
-    await page.locator('#newSchoolRegion').selectOption('Суғд');
+    await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
     await page.locator('#newSchoolDistrict').fill('Исфара');
-    await page.locator('#newSchoolDistrict').dispatchEvent('change');
+    await page.locator('#newSchoolJamoatSelect option[value="Ворух"]').waitFor({ state: 'attached' });
     await page.locator('#newSchoolJamoatSelect').selectOption('Ворух');
+    await page.locator('#newSchoolVillageSelect option[value="Ворух"]').waitFor({ state: 'attached' });
     await page.locator('#newSchoolVillageSelect').selectOption('Ворух');
     await page.locator('#newSchoolName').fill('МТМУ № 77');
     await page.waitForFunction(() => !document.getElementById('begin')?.disabled);
@@ -142,7 +144,7 @@ test('Verification & Territory browser: empty schools bootstrap, Region->Distric
 
     await page.waitForURL(/\/cabinets\/school\/director\.html/);
     assert.ok(capturedRegisterPayload, 'register-user payload was not sent');
-    assert.equal(capturedRegisterPayload.new_school?.region_name, 'Суғд');
+    assert.equal(canonicalRegionName(capturedRegisterPayload.new_school?.region_name), 'Суғд');
     assert.equal(capturedRegisterPayload.new_school?.district_name, 'Исфара');
     assert.equal(capturedRegisterPayload.new_school?.jamoat_name, 'Ворух');
     assert.equal(capturedRegisterPayload.new_school?.village_name, 'Ворух');
@@ -238,6 +240,21 @@ test('Verification & Territory browser: verification form submission, primary-on
         user: { id: '44444444-4444-4444-8444-444444444444' },
       }));
       localStorage.setItem('smartmaktab.cloud.last_org.v1', orgId);
+      localStorage.setItem('smartmaktab.profile.v1', JSON.stringify({
+        schoolId: orgId,
+        school: orgId,
+        schoolName: 'МТМУ № 77',
+        primary: 'school-director',
+        primaryPosition: 'school-director',
+        extras: ['school-five-method-groups'],
+        roles: [
+          { id: 'school-director', path: 'cabinets/school/director.html', title: 'Директор' },
+          { id: 'school-five-method-groups', path: 'cabinets/school/five-method-groups.html', title: 'Методобъединение' },
+        ],
+        schools: {},
+        person: { first: 'Бахтиёр', last: 'Каримов' },
+        lang: 'ru',
+      }));
     }, { orgId });
     await page.reload();
 
