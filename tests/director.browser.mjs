@@ -42,7 +42,7 @@ test('Chromium: director profile, school-year validation and printable plan',asy
     await addCourse('Курси анҷомёфта','2024-02-01','2024-02-29','completed');
     assert.equal(await page.locator('#directorDueNext').textContent(),'28.02.2027');
     await addCourse('Курси дигар','2025-02-01','2025-01-01','completed');
-    assert.match(await page.locator('#directorCourseStatus').textContent(),/пеш аз санаи оғоз/);
+    assert.match(await page.locator('#directorCourseStatus').textContent(),/пеш аз оғоз/);
     await addCourse('Курси ба нақша гирифта','2028-01-10','2028-01-20','planned');
     assert.equal(await page.locator('#directorDueNext').textContent(),'28.02.2027');
     assert.equal(await page.locator('#directorCourseList li').count(),2);
