@@ -114,7 +114,7 @@ const copy={
  opening:['Открываем кабинет…','Утоқи корӣ кушода мешавад…'],
  authTitleSchool:['Вход в SmartMaktab','Воридшавӣ ба SmartMaktab'],
  authSubSchool:['Введите логин, номер телефона или Email и пароль.','Логин, рақами телефон ё Email ва пароли худро ворид кунед.'],
- authTitleAuthority:['Вход: Мудири маориф / Сардори раёсат','Вуруд: Мудири маориф / Сардори раёсат'],
+ authTitleAuthority:['Вход: Мудири маориф / Сардори раёсат / Коргаргузор','Вуруд: Мудири маориф / Сардори раёсат / Коргаргузор'],
  authSubAuthority:['Введите логин и пароль, выданные администратором.','Логин ва пароли аз ҷониби маъмур додашударо ворид кунед.'],
 };
 const t=key=>copy[key][lang==='tg'?1:0];
@@ -556,6 +556,14 @@ async function showLoginDeviceLimit(accessToken,orgId){
   }
  }catch{box.hidden=true;}
 }
+
+$('toggleLoginPassword')?.addEventListener('click',()=>{
+ const inp=$('loginPassword');
+ if(!inp)return;
+ const show=inp.type==='password';
+ inp.type=show?'text':'password';
+ $('toggleLoginPassword').textContent=show?'🙈':'👁️';
+});
 
 $('loginForm')?.addEventListener('submit',async ev=>{
  ev.preventDefault();

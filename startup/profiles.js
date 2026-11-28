@@ -242,20 +242,17 @@ function populateNewSchoolTerritory(){
  distSel.replaceChildren(
   new Option(pickDistLbl,''),
   ...districts.map(d=>new Option(d,d)),
-  new Option(otherLbl,'__custom__'),
  );
- if(distPrev&&(distPrev==='__custom__'||districts.includes(distPrev)))distSel.value=distPrev;
+ if(distPrev&&districts.includes(distPrev))distSel.value=distPrev;
  else if(state.newSchool?.district_name&&districts.includes(state.newSchool.district_name))distSel.value=state.newSchool.district_name;
  else if(state.newSchool?.district_name&&distSel.value===''){
   const matchedDist=districts.find(d=>stripDistrictPrefix(d)===stripDistrictPrefix(state.newSchool.district_name));
   if(matchedDist)distSel.value=matchedDist;
-  else distSel.value='__custom__';
  }
- const isCustomDist=distSel.value==='__custom__';
- if(distCustomWrap)distCustomWrap.hidden=!isCustomDist;
+ if(distCustomWrap)distCustomWrap.hidden=true;
 
- const curDist=isCustomDist?clean($('newSchoolDistrict')?.value):clean(distSel.value||state.newSchool?.district_name||'');
- if(!isCustomDist&&curDist)state.newSchool.district_name=curDist;
+ const curDist=clean(distSel.value||state.newSchool?.district_name||'');
+ if(curDist)state.newSchool.district_name=curDist;
  if(!jamSel||!vilSel)return;
  const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
  const isCityDist=isDushanbeRegion||/^ш\.\s*/i.test(curDist);
@@ -266,16 +263,13 @@ function populateNewSchoolTerritory(){
  jamSel.replaceChildren(
   new Option(pickOptLbl,''),
   ...jamoats.map(j=>new Option(j,j)),
-  new Option(otherLbl,'__custom__'),
  );
- if(jamPrev&&(jamPrev==='__custom__'||jamoats.includes(jamPrev)))jamSel.value=jamPrev;
+ if(jamPrev&&jamoats.includes(jamPrev))jamSel.value=jamPrev;
  else if(state.newSchool?.jamoat_name&&jamoats.includes(state.newSchool.jamoat_name))jamSel.value=state.newSchool.jamoat_name;
- else if(state.newSchool?.jamoat_name&&jamSel.value==='')jamSel.value='__custom__';
- const isCustomJam=jamSel.value==='__custom__';
- if(jamCustomWrap)jamCustomWrap.hidden=!isCustomJam;
+ if(jamCustomWrap)jamCustomWrap.hidden=true;
 
- const curJam=isCustomJam?clean($('newSchoolJamoatCustom')?.value):jamSel.value;
- const villages=(curDist&&curJam&&!isCustomJam)?getVillagesForJamoat(curReg,curDist,curJam,locs||undefined):[];
+ const curJam=jamSel.value;
+ const villages=(curDist&&curJam)?getVillagesForJamoat(curReg,curDist,curJam,locs||undefined):[];
  const vilPrev=vilSel.value;
  vilSel.replaceChildren(
   new Option(pickOptLbl,''),
