@@ -57,6 +57,15 @@ export const USER_MANAGER_POSITIONS = Object.freeze([
   'raesat-clerk',
 ]);
 
+export const STUDENT_UPDATE_APPROVER_POSITIONS = Object.freeze([
+  'school-director',
+  'school-records-clerk',
+  'school-academic-deputy',
+  'school-upbringing-deputy',
+  'school-primary-deputy',
+  'school-class-teacher',
+]);
+
 export const SUBSCRIPTION_PERIOD_PACKAGES = Object.freeze([
   { months: 1, days: 30, discountPct: 0, labelTg: '1 моҳ (бе тахфиф)', labelRu: '1 месяц (без скидки)' },
   { months: 3, days: 90, discountPct: 3, labelTg: '3 моҳ (тахфифи 3%)', labelRu: '3 месяца (скидка 3%)' },
@@ -71,6 +80,10 @@ export function canPositionVerifySchoolStaff(positionCode) {
 
 export function canPositionManageUsers(positionCode) {
   return USER_MANAGER_POSITIONS.includes(String(positionCode || '').trim());
+}
+
+export function canPositionApproveStudentUpdates(positionCode) {
+  return STUDENT_UPDATE_APPROVER_POSITIONS.includes(String(positionCode || '').trim());
 }
 
 export function computeAllowedDeviceQuota(extraPositionsCount = 0) {

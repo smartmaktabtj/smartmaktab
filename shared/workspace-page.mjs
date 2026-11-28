@@ -384,8 +384,114 @@ export function setupWorkspace({configured,school}){
  if($('teacherBookPanel'))article.append($('teacherBookPanel'));
 
  const actionsEl=document.querySelector('header.top .actions');
+ const bellWrap=document.createElement('div');
+ bellWrap.className='sm-bell-wrap';
+ const bellBtn=document.createElement('button');
+ bellBtn.type='button';
+ bellBtn.id='smBellBtn';
+ bellBtn.className='sm-bell-btn';
+ bellBtn.setAttribute('aria-haspopup','true');
+ bellBtn.setAttribute('aria-expanded','false');
+ bellBtn.textContent='🔔';
+ const bellCount=document.createElement('span');
+ bellCount.id='smBellCount';
+ bellCount.className='sm-bell-count';
+ bellCount.hidden=true;
+ bellBtn.append(bellCount);
+ const bellPopover=document.createElement('div');
+ bellPopover.id='smBellPopover';
+ bellPopover.className='sm-bell-popover';
+ bellPopover.hidden=true;
+ bellWrap.append(bellBtn,bellPopover);
+
+ const notifState={studentRequests:[],accountVerifications:[]};
+ function renderBell(){
+  const stuReqs=Array.isArray(notifState.studentRequests)?notifState.studentRequests:[];
+  const accReqs=Array.isArray(notifState.accountVerifications)?notifState.accountVerifications:[];
+  const total=stuReqs.length+accReqs.length;
+  bellBtn.setAttribute('aria-label',label(`Уведомления (${total})`,`Огоҳиномаҳо (${total})`));
+  if(total>0){
+   bellCount.textContent=total>99?'99+':String(total);
+   bellCount.hidden=false;
+  }else{
+   bellCount.textContent='';
+   bellCount.hidden=true;
+  }
+  bellPopover.replaceChildren();
+  const titleEl=document.createElement('div');
+  titleEl.style.cssText='font-weight:700;font-size:.92rem;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;';
+  titleEl.textContent=label(`Уведомления (${total})`,`Огоҳиномаҳо (${total})`);
+  bellPopover.append(titleEl);
+  if(!total){
+   const emptyEl=document.createElement('div');
+   emptyEl.className='small';
+   emptyEl.textContent=label('Новых уведомлений пока нет.','Ҳоло огоҳиномаи нав нест.');
+   bellPopover.append(emptyEl);
+   return;
+  }
+  for(const req of accReqs.slice(0,5)){
+   const item=document.createElement('button');
+   item.type='button';
+   item.className='sm-bell-item';
+   item.dataset.bellOpen='smUsersPanel';
+   item.style.cssText='width:100%;text-align:left;background:transparent;border:0;color:inherit;cursor:pointer;';
+   const st=document.createElement('strong');
+   st.textContent=`👤 ${req.full_name||req.login_name||'—'}`;
+   const desc=document.createElement('span');
+   desc.className='small';
+   desc.style.display='block';
+   desc.textContent=label('Новая заявка на подтверждение аккаунта','Дархости нави тасдиқи аккаунт');
+   item.append(st,desc);
+   item.addEventListener('click',()=>{
+    bellPopover.hidden=true;
+    bellBtn.setAttribute('aria-expanded','false');
+    document.dispatchEvent(new CustomEvent('sm:open-phase2-panel',{detail:{panelId:'smUsersPanel'}}));
+   });
+   bellPopover.append(item);
+  }
+  for(const req of stuReqs.slice(0,5)){
+   const item=document.createElement('button');
+   item.type='button';
+   item.className='sm-bell-item';
+   item.dataset.bellOpen='smStudentsPanel';
+   item.style.cssText='width:100%;text-align:left;background:transparent;border:0;color:inherit;cursor:pointer;';
+   const st=document.createElement('strong');
+   st.textContent=`📝 ${req.requested_by_name||req.submitted_by_name||'—'}${req.requested_by_position?` (${req.requested_by_position})`:''}`;
+   const desc=document.createElement('span');
+   desc.className='small';
+   desc.style.display='block';
+   desc.textContent=req.summary_text||`${req.class_code||''} · ${label('Заявка на изменение ученика','Дархости тағйири хонанда')}`;
+   item.append(st,desc);
+   item.addEventListener('click',()=>{
+    bellPopover.hidden=true;
+    bellBtn.setAttribute('aria-expanded','false');
+    document.dispatchEvent(new CustomEvent('sm:open-phase2-panel',{detail:{panelId:'smStudentsPanel',subtab:'requests'}}));
+   });
+   bellPopover.append(item);
+  }
+ }
+ bellBtn.addEventListener('click',ev=>{
+  ev.stopPropagation();
+  const nextOpen=bellPopover.hidden;
+  bellPopover.hidden=!nextOpen;
+  bellBtn.setAttribute('aria-expanded',String(nextOpen));
+ });
+ document.addEventListener('click',ev=>{
+  if(!bellPopover.hidden&&!bellWrap.contains(ev.target)){
+   bellPopover.hidden=true;
+   bellBtn.setAttribute('aria-expanded','false');
+  }
+ });
+ document.addEventListener('sm:notifications-updated',ev=>{
+  const d=ev?.detail||{};
+  if(Array.isArray(d.studentRequests))notifState.studentRequests=d.studentRequests;
+  if(Array.isArray(d.accountVerifications))notifState.accountVerifications=d.accountVerifications;
+  renderBell();
+ });
+ renderBell();
+
  const themeEl=$('themeToggle');
- if(themeEl)themeEl.before(toggle); else actionsEl?.append(toggle);
+ if(themeEl)themeEl.before(bellWrap,toggle); else actionsEl?.append(bellWrap,toggle);
 
  setupSchoolForms(article,formsBar,school);setupCloudWorkspace(article,profCard.cloudHost,school);
  const views=initWorkspaceViews(article);
@@ -418,6 +524,7 @@ export function setupWorkspace({configured,school}){
   profCard.syncLabels();
   syncProfTopBar();
   syncProfSubBar();
+  renderBell();
   views.refresh();
  }
  function setSettings(open){if(open)views.open('workspaceSettings',toggle);else views.close('workspaceSettings');sync();}

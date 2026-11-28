@@ -1,5 +1,6 @@
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
+import { getPositionMeta, canPositionApproveStudentUpdates } from './position-catalog.mjs';
 
 export const CATEGORY_LABELS = {
   higher: { tg: 'Дараҷаи олӣ (+20%)', ru: 'Высшая категория (+20%)', defaultPct: 20 },
@@ -89,20 +90,25 @@ async function cloudRpc(fnName, params) {
 }
 
 export function resolvePhase2Context(pageCtx = {}) {
+  if (pageCtx && pageCtx._resolved) return pageCtx;
   const cloudProfile = readJsonStore('smartmaktab.profile.v1', null);
   const cloudSess = readJsonStore('smartmaktab.cloud.session.v1', null);
   const cfg = getCloudConfig(getStorage());
-  const orgId = pageCtx.organizationId || cloudProfile?.organizationId || 'demo-school';
-  const orgName = pageCtx.organizationName || cloudProfile?.organizationName || 'Мактаби намунавӣ № 1';
+  const orgId = pageCtx.orgId || pageCtx.organizationId || cloudProfile?.organizationId || 'demo-school';
+  const orgName = pageCtx.orgName || pageCtx.organizationName || cloudProfile?.organizationName || 'Мактаби намунавӣ № 1';
   const kind = pageCtx.cabinetId && (pageCtx.cabinetId.startsWith('office-') || pageCtx.cabinetId.startsWith('maorif-') || pageCtx.cabinetId.startsWith('raesat-')) ? 'education_authority' : 'school';
   const tier = pageCtx.cabinetId?.startsWith('raesat-') ? 'raesat' : (kind === 'education_authority' ? 'maorif' : '');
   const hasCloudSession = Boolean(cloudSess?.access_token && cfg?.url && cfg?.publishableKey && /^[0-9a-f-]{36}$/i.test(String(orgId)));
   const verificationStatus = cloudProfile?.verificationStatus || (hasCloudSession ? 'verified' : 'offline');
   const verified = !hasCloudSession || verificationStatus === 'verified';
   const isOnline = hasCloudSession && verified;
+  const primaryPosition = cloudProfile?.primaryPosition || pageCtx.cabinetId || '';
+  const posMeta = getPositionMeta(primaryPosition);
+  const positionTitle = posMeta?.titleTg || pageCtx.cabinetTitle || primaryPosition || '';
   const actorRole = pageCtx.cabinetId === 'school-director' ? 'director' : (kind === 'education_authority' ? 'authority_viewer' : 'staff');
   const actorName = cloudProfile?.fullName || pageCtx.userName || pageCtx.cabinetTitle || '';
   return {
+    _resolved: true,
     orgId: String(orgId),
     orgName,
     kind,
@@ -114,6 +120,9 @@ export function resolvePhase2Context(pageCtx = {}) {
     accessToken: cloudSess?.access_token || '',
     actorRole,
     actorName,
+    primaryPosition,
+    positionTitle,
+    canApproveStudentUpdates: canPositionApproveStudentUpdates(primaryPosition) || pageCtx.cabinetId === 'school-director',
     cabinetId: pageCtx.cabinetId || '',
     userId: cloudSess?.user?.id || 'local-user',
   };
@@ -150,19 +159,31 @@ export async function upsertStudents(ctx, incomingRows, { replaceClass = '' } = 
   const key = `smartmaktab.phase2.students.${c.orgId}`;
   const cleanReplace = String(replaceClass || '').trim().toUpperCase();
   const normalized = (incomingRows || [])
-    .map(r => ({
-      id: r.id || makeUuid(),
-      organization_id: c.orgId,
-      class_code: String(r.class_code || '').trim().toUpperCase().slice(0, 12) || '5А',
-      full_name: String(r.full_name || '').trim().slice(0, 180),
-      birth_year: r.birth_year ? Number(r.birth_year) : null,
-      gender: ['male', 'female'].includes(r.gender) ? r.gender : '',
-      guardian_name: String(r.guardian_name || '').trim().slice(0, 160),
-      guardian_phone: String(r.guardian_phone || '').trim().slice(0, 40),
-      student_code: String(r.student_code || '').trim().slice(0, 40),
-      status: ['active', 'transferred', 'graduated'].includes(r.status) ? r.status : 'active',
-      updated_at: new Date().toISOString(),
-    }))
+    .map(r => {
+      const bDateRaw = String(r.birth_date || '').trim();
+      let birthDate = null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(bDateRaw)) {
+        birthDate = bDateRaw;
+      } else {
+        const dmy = bDateRaw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (dmy) birthDate = `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+      }
+      const birthYear = r.birth_year ? Number(r.birth_year) : (birthDate ? Number(birthDate.slice(0, 4)) : null);
+      return {
+        id: r.id || makeUuid(),
+        organization_id: c.orgId,
+        class_code: String(r.class_code || '').trim().toUpperCase().slice(0, 12) || '5А',
+        full_name: String(r.full_name || '').trim().slice(0, 180),
+        birth_date: birthDate,
+        birth_year: birthYear,
+        gender: ['male', 'female'].includes(r.gender) ? r.gender : '',
+        guardian_name: String(r.guardian_name || '').trim().slice(0, 160),
+        guardian_phone: String(r.guardian_phone || '').trim().slice(0, 40),
+        student_code: String(r.student_code || '').trim().slice(0, 40),
+        status: ['active', 'transferred', 'graduated'].includes(r.status) ? r.status : 'active',
+        updated_at: new Date().toISOString(),
+      };
+    })
     .filter(r => r.full_name.length > 0);
 
   let current = readJsonStore(key, []);
@@ -459,7 +480,98 @@ export async function loadQuarterGrades(ctx, { yearStart = 2026, period = '', cl
     && (!sClean || String(r.subject || '').toLowerCase() === sClean));
 }
 
-export async function saveQuarterGrades(ctx, { yearStart = 2026, period = 'q1', classCode, subject, entries }) {
+export const TAHLIL_SUBJECTS_BY_CLASS = Object.freeze({
+  1: ['Алифбо', 'Забони тоҷикӣ', 'Математика', 'Табиатшиносӣ', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Мусиқӣ', 'Меҳнат'],
+  2: ['Математика', 'Забони тоҷикӣ', 'Хониш', 'Табиатшиносӣ', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Мусиқӣ', 'Меҳнат'],
+  3: ['Математика', 'Забони тоҷикӣ', 'Забони русӣ', 'Хониш', 'Табиатшиносӣ', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Мусиқӣ', 'Меҳнат'],
+  4: ['Математика', 'Забони тоҷикӣ', 'Забони русӣ', 'Адабиёти тоҷик', 'Табиатшиносӣ', 'Таърихи Тоҷикистон', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Мусиқӣ', 'Меҳнат'],
+  5: ['Математика', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Таърих', 'Ҷуғрофия', 'Биология', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Мусиқӣ', 'Меҳнат'],
+  6: ['Алгебра', 'Геометрия', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Таърих', 'Ҷуғрофия', 'Биология', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Мусиқӣ', 'Меҳнат'],
+  7: ['Алгебра', 'Геометрия', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Забони англисӣ', 'Таърих', 'Ҷуғрофия', 'Биология', 'Физика', 'Химия', 'Тарбияи ҷисмонӣ', 'Рассомӣ', 'Меҳнат'],
+  8: ['Алгебра', 'Геометрия', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Забони англисӣ', 'Таърих', 'Ҷуғрофия', 'Биология', 'Физика', 'Химия', 'Тарбияи ҷисмонӣ', 'Информатика', 'Меҳнат'],
+  9: ['Алгебра', 'Геометрия', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Забони англисӣ', 'Таърих', 'Ҷомеашиносӣ', 'Ҷуғрофия', 'Биология', 'Физика', 'Химия', 'Тарбияи ҷисмонӣ', 'Информатика'],
+  10: ['Алгебра', 'Геометрия', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Забони англисӣ', 'Таърих', 'Ҷомеашиносӣ', 'Ҷуғрофия', 'Биология', 'Физика', 'Химия', 'Астрономия', 'Тарбияи ҷисмонӣ', 'Информатика'],
+  11: ['Алгебра', 'Геометрия', 'Забони тоҷикӣ', 'Адабиёти тоҷик', 'Забони русӣ', 'Забони англисӣ', 'Таърих', 'Ҷомеашиносӣ', 'Биология', 'Физика', 'Химия', 'Астрономия', 'Тарбияи ҷисмонӣ', 'Информатика'],
+});
+
+export function getSubjectsForClassCode(classCode) {
+  const num = Number(String(classCode || '').match(/^(\d{1,2})/)?.[1] || 7);
+  const clamped = Math.max(1, Math.min(11, num));
+  return TAHLIL_SUBJECTS_BY_CLASS[clamped] || TAHLIL_SUBJECTS_BY_CLASS[7];
+}
+
+export function roundTajikGrade(v) {
+  const num = Number(v);
+  if (!Number.isFinite(num)) return null;
+  const f = Math.floor(num);
+  return Math.max(1, Math.min(10, f + (num - f >= 0.5 ? 1 : 0)));
+}
+
+export function parseTahlilNumbers(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map(Number).filter(n => Number.isFinite(n) && n >= 1 && n <= 10);
+  }
+  return String(raw || '')
+    .split(/[,;\s]+/)
+    .map(x => Number(x.trim()))
+    .filter(n => Number.isFinite(n) && n >= 1 && n <= 10);
+}
+
+export function computeTahlilScore(currentInput, controlInput) {
+  const cur = parseTahlilNumbers(currentInput);
+  const ctrl = parseTahlilNumbers(controlInput);
+  if (!cur.length && !ctrl.length) return null;
+  const avgCur = cur.length ? cur.reduce((a, b) => a + b, 0) / cur.length : (ctrl.reduce((a, b) => a + b, 0) / ctrl.length);
+  const avgCtrl = ctrl.length ? ctrl.reduce((a, b) => a + b, 0) / ctrl.length : avgCur;
+  const exactAvg = (avgCur + avgCtrl) / 2;
+  const finalGrade = roundTajikGrade(exactAvg);
+  let prognosis = null;
+  if (cur.length > 0) {
+    const targetGrade = Math.floor(avgCur) + 1;
+    if (targetGrade <= 10) {
+      const needed = Math.ceil((targetGrade - 0.5) * (cur.length + 1) - cur.reduce((a, b) => a + b, 0));
+      if (needed > 0 && needed <= 10) {
+        prognosis = { targetGrade, neededScore: needed };
+      }
+    }
+  }
+  return {
+    currentGrades: cur,
+    controlGrades: ctrl,
+    avgCurrent: Number(avgCur.toFixed(2)),
+    avgControl: Number(avgCtrl.toFixed(2)),
+    exactAvg: Number(exactAvg.toFixed(2)),
+    finalGrade,
+    prognosis,
+  };
+}
+
+export function computePeriodDatesStatus(periodStart, periodEnd) {
+  const ds = String(periodStart || '').trim();
+  const de = String(periodEnd || '').trim();
+  if (!ds && !de) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const s = ds ? new Date(`${ds}T00:00:00`) : null;
+  const e = de ? new Date(`${de}T00:00:00`) : null;
+  if (s && e && !Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime())) {
+    if (today > e) return { state: 'done', label: '✓ Ба анҷом расид', days: 0, tone: 'neutral' };
+    if (today < s) {
+      const days = Math.ceil((s - today) / 86400000);
+      return { state: 'upcoming', label: `Пас аз ${days} рӯз оғоз мешавад`, days, tone: 'info' };
+    }
+    const days = Math.ceil((e - today) / 86400000);
+    return {
+      state: 'active',
+      label: `${days} рӯз монд`,
+      days,
+      tone: days <= 7 ? 'danger' : (days <= 14 ? 'warn' : 'ok'),
+    };
+  }
+  return { state: 'partial', label: ds ? `Аз ${ds}` : `То ${de}`, days: null, tone: 'info' };
+}
+
+export async function saveQuarterGrades(ctx, { yearStart = 2026, period = 'q1', classCode, subject, entries, periodStart = null, periodEnd = null }) {
   const c = resolvePhase2Context(ctx);
   const key = `smartmaktab.phase2.grades.${c.orgId}`;
   const clsClean = String(classCode || '').trim().toUpperCase().slice(0, 12);
@@ -473,9 +585,17 @@ export async function saveQuarterGrades(ctx, { yearStart = 2026, period = 'q1', 
   for (const e of entries || []) {
     const sName = String(e.student_name || '').trim().slice(0, 180);
     if (!sName) continue;
-    const rawG = e.grade === '' || e.grade === null || e.grade === undefined ? null : Number(e.grade);
+    const curArr = parseTahlilNumbers(e.current_grades);
+    const ctrlArr = parseTahlilNumbers(e.control_grades);
+    let rawG = e.grade === '' || e.grade === null || e.grade === undefined ? null : Number(e.grade);
+    if (rawG === null && (curArr.length || ctrlArr.length)) {
+      rawG = computeTahlilScore(curArr, ctrlArr)?.finalGrade ?? null;
+    }
     const grade = rawG !== null && Number.isFinite(rawG) ? Math.max(0, Math.min(10, rawG)) : null;
     const absent = Math.max(0, Math.min(1000, Math.round(Number(e.absent_hours) || 0)));
+    const pStart = /^\d{4}-\d{2}-\d{2}$/.test(String(e.period_start || periodStart || '')) ? String(e.period_start || periodStart) : null;
+    const pEnd = /^\d{4}-\d{2}-\d{2}$/.test(String(e.period_end || periodEnd || '')) ? String(e.period_end || periodEnd) : null;
+
     const item = {
       id: e.id || makeUuid(),
       organization_id: c.orgId,
@@ -487,6 +607,10 @@ export async function saveQuarterGrades(ctx, { yearStart = 2026, period = 'q1', 
       student_name: sName,
       grade,
       absent_hours: absent,
+      current_grades: curArr,
+      control_grades: ctrlArr,
+      period_start: pStart,
+      period_end: pEnd,
       updated_at: new Date().toISOString(),
     };
     const k = `${item.year_start}::${item.period}::${clsClean}::${subjClean.toLowerCase()}::${sName.toLowerCase()}`;
@@ -541,144 +665,134 @@ export function computeGradeMetrics(rows) {
 }
 
 // ============================================================================
-// 5. HIERARCHICAL VERIFICATION (Staff -> Director -> Maorif)
+// 5. STUDENT UPDATE REQUESTS (Non-anonymous Staff -> Leadership Approval)
 // ============================================================================
-function verificationStoreKey(orgId) {
-  return `smartmaktab.phase2.verifications.${orgId}`;
+function studentReqStoreKey(orgId) {
+  return `smartmaktab.phase2.student_requests.${orgId}`;
 }
 
-export async function loadVerifications(ctx) {
+export async function loadStudentUpdateRequests(ctx) {
   const c = resolvePhase2Context(ctx);
+  const key = studentReqStoreKey(c.orgId);
+  let rows = readJsonStore(key, []);
   if (c.isOnline) {
     try {
-      const q = c.kind === 'school'
-        ? `verification_submissions?organization_id=eq.${encodeURIComponent(c.orgId)}&order=submitted_at.desc`
-        : `verification_submissions?maorif_status=neq.not_sent&order=submitted_at.desc`;
-      const remote = await cloudRestGet(q, c.accessToken);
-      if (Array.isArray(remote)) return remote;
+      const q = `organization_id=eq.${encodeURIComponent(c.orgId)}&order=created_at.desc`;
+      const remote = await cloudRestGet(`student_update_requests?${q}`);
+      if (Array.isArray(remote)) {
+        rows = remote;
+        writeJsonStore(key, rows);
+      }
     } catch {}
   }
-  const st = getStorage();
-  if (!st) return [];
-  if (c.kind === 'school') {
-    return readJsonStore(verificationStoreKey(c.orgId), []);
-  }
-  // Authority (Maorif / Raesat) aggregates forwarded items across local schools
-  const collected = [];
-  for (let i = 0; i < st.length; i += 1) {
-    const k = st.key(i);
-    if (k && k.startsWith('smartmaktab.phase2.verifications.')) {
-      const list = readJsonStore(k, []);
-      if (Array.isArray(list)) {
-        collected.push(...list.filter(item => item.maorif_status && item.maorif_status !== 'not_sent'));
-      }
-    }
-  }
-  return collected.sort((a, b) => String(b.submitted_at || '').localeCompare(String(a.submitted_at || '')));
+  return rows;
 }
 
-export async function submitVerification(ctx, { category, title, periodLabel = '', payload = {}, directToMaorif = false }) {
+export async function submitStudentUpdateRequest(ctx, { classCode = '', actionType = 'import', replaceClass = false, rowsPayload = [], summaryText = '' }) {
   const c = resolvePhase2Context(ctx);
-  const isDirector = c.cabinetId === 'school-director' || ['director', 'school_admin'].includes(c.actorRole);
-  const dirApproved = Boolean(directToMaorif && isDirector);
+  const cleanRows = (Array.isArray(rowsPayload) ? rowsPayload : []).slice(0, 1500);
+  if (!cleanRows.length) throw new Error('rows_payload_required');
 
   const rec = {
     id: makeUuid(),
     organization_id: c.orgId,
-    organization_name: c.orgName,
-    source_cabinet: c.cabinetId || 'school',
-    category: category || 'document',
-    title: String(title || '').trim() || 'Ҳуҷҷат',
-    period_label: String(periodLabel || '').trim(),
-    payload: payload && typeof payload === 'object' ? payload : {},
-    submitted_by: c.userId,
-    submitted_by_name: c.actorName || c.cabinetId || 'Корманд',
-    submitted_at: new Date().toISOString(),
-    director_status: dirApproved ? 'approved' : 'pending',
-    director_note: '',
-    director_at: dirApproved ? new Date().toISOString() : null,
-    maorif_status: dirApproved ? 'pending' : 'not_sent',
-    maorif_note: '',
-    maorif_at: null,
+    class_code: String(classCode || '').trim().toUpperCase().slice(0, 24),
+    action_type: ['import', 'add', 'update', 'delete'].includes(actionType) ? actionType : 'import',
+    replace_class: Boolean(replaceClass),
+    rows_payload: cleanRows,
+    summary_text: String(summaryText || '').trim().slice(0, 400),
+    requested_by: c.userId,
+    requested_by_name: c.actorName || 'Корманд',
+    requested_by_position: c.positionTitle || '',
+    status: 'pending',
+    reviewed_by_name: '',
+    review_note: '',
+    created_at: new Date().toISOString(),
+    reviewed_at: null,
   };
 
   if (c.isOnline) {
     try {
-      const remoteId = await cloudRpc('submit_for_verification', {
+      const remoteId = await cloudRpc('submit_student_update_request', {
         p_org_id: c.orgId,
-        p_source_cabinet: rec.source_cabinet,
-        p_category: rec.category,
-        p_title: rec.title,
-        p_period_label: rec.period_label,
-        p_payload: rec.payload,
-        p_submitted_by_name: rec.submitted_by_name,
-        p_direct_to_maorif: dirApproved,
-      }, c.accessToken);
+        p_class_code: rec.class_code,
+        p_action_type: rec.action_type,
+        p_replace_class: rec.replace_class,
+        p_rows_payload: rec.rows_payload,
+        p_summary_text: rec.summary_text,
+        p_requested_by_name: rec.requested_by_name,
+        p_requested_by_position: rec.requested_by_position,
+      });
       if (remoteId) rec.id = remoteId;
     } catch {}
   }
 
-  const list = readJsonStore(verificationStoreKey(c.orgId), []);
+  const list = readJsonStore(studentReqStoreKey(c.orgId), []);
   list.unshift(rec);
-  writeJsonStore(verificationStoreKey(c.orgId), list);
+  writeJsonStore(studentReqStoreKey(c.orgId), list);
   return rec;
 }
 
-export async function directorReviewVerification(ctx, submissionId, decision, note = '', forwardToMaorif = false) {
+export async function reviewStudentUpdateRequest(ctx, requestId, decision, note = '') {
   const c = resolvePhase2Context(ctx);
-  if (c.isOnline && /^[0-9a-f-]{36}$/i.test(String(submissionId))) {
-    try {
-      await cloudRpc('director_review_submission', {
-        p_submission_id: submissionId,
-        p_decision: decision,
-        p_note: note,
-        p_forward_to_maorif: Boolean(forwardToMaorif),
-      }, c.accessToken);
-    } catch {}
+  const cleanDecision = decision === 'rejected' ? 'rejected' : 'approved';
+  const key = studentReqStoreKey(c.orgId);
+
+  if (c.isOnline && /^[0-9a-f-]{36}$/i.test(String(requestId))) {
+    await cloudRpc('review_student_update_request', {
+      p_request_id: requestId,
+      p_decision: cleanDecision,
+      p_note: String(note || ''),
+    });
+    const list = await loadStudentUpdateRequests(c);
+    await loadStudents(c);
+    return list;
   }
-  const key = verificationStoreKey(c.orgId);
+
   const list = readJsonStore(key, []);
-  const idx = list.findIndex(r => r.id === submissionId);
+  const idx = list.findIndex(r => r.id === requestId);
   if (idx >= 0) {
+    const req = list[idx];
+    if (cleanDecision === 'approved') {
+      if (req.action_type === 'delete') {
+        for (const item of req.rows_payload || []) {
+          if (item.id) await deleteStudent(c, item.id);
+        }
+      } else {
+        await upsertStudents(c, req.rows_payload || [], {
+          replaceClass: req.replace_class ? req.class_code : '',
+        });
+      }
+    }
     list[idx] = {
-      ...list[idx],
-      director_status: decision,
-      director_note: String(note || ''),
-      director_at: new Date().toISOString(),
-      maorif_status: decision === 'approved' && forwardToMaorif
-        ? 'pending'
-        : (decision === 'rejected' || decision === 'changes' ? 'not_sent' : list[idx].maorif_status),
+      ...req,
+      status: cleanDecision,
+      reviewed_by_name: c.actorName || '',
+      review_note: String(note || ''),
+      reviewed_at: new Date().toISOString(),
     };
     writeJsonStore(key, list);
   }
-  return loadVerifications(c);
+  return list;
 }
 
-export async function maorifReviewVerification(ctx, submissionId, schoolOrgId, decision, note = '') {
+// ============================================================================
+// 5b. SCHOOL COLLEAGUES DIRECTORY
+// ============================================================================
+export async function loadColleaguesDirectory(ctx) {
   const c = resolvePhase2Context(ctx);
-  if (c.isOnline && /^[0-9a-f-]{36}$/i.test(String(submissionId))) {
+  const key = `smartmaktab.phase2.colleagues.${c.orgId}`;
+  let rows = readJsonStore(key, []);
+  if (c.isOnline) {
     try {
-      await cloudRpc('maorif_review_submission', {
-        p_submission_id: submissionId,
-        p_decision: decision,
-        p_note: note,
-      }, c.accessToken);
+      const remote = await cloudRpc('get_school_colleagues_directory', { p_org_id: c.orgId });
+      if (Array.isArray(remote)) {
+        rows = remote;
+        writeJsonStore(key, rows);
+      }
     } catch {}
   }
-  const targetOrg = schoolOrgId || 'demo-school';
-  const key = verificationStoreKey(targetOrg);
-  const list = readJsonStore(key, []);
-  const idx = list.findIndex(r => r.id === submissionId);
-  if (idx >= 0) {
-    list[idx] = {
-      ...list[idx],
-      maorif_status: decision,
-      maorif_note: String(note || ''),
-      maorif_at: new Date().toISOString(),
-    };
-    writeJsonStore(key, list);
-  }
-  return loadVerifications(c);
+  return rows;
 }
 
 // ============================================================================
@@ -697,7 +811,6 @@ export async function loadAnalyticsSummary(ctx, yearStart = 2026) {
     } catch {}
   }
 
-  // Local aggregation fallback across single school or demo schools for authorities
   const st = getStorage();
   const orgIds = new Set();
   if (c.kind === 'school') {
@@ -705,7 +818,7 @@ export async function loadAnalyticsSummary(ctx, yearStart = 2026) {
   } else if (st) {
     for (let i = 0; i < st.length; i += 1) {
       const k = st.key(i) || '';
-      const m = k.match(/^smartmaktab\.phase2\.(?:students|grades|verifications)\.(.+)$/);
+      const m = k.match(/^smartmaktab\.phase2\.(?:students|grades|student_requests)\.(.+)$/);
       if (m && m[1]) orgIds.add(m[1]);
     }
     if (!orgIds.size) orgIds.add('demo-school');
@@ -715,20 +828,20 @@ export async function loadAnalyticsSummary(ctx, yearStart = 2026) {
 
   let totalStudents = 0;
   let allGrades = [];
-  let allVerifs = [];
+  let pendingStudentRequests = 0;
   const schoolRows = [];
 
   for (const oid of orgIds) {
     const students = readJsonStore(`smartmaktab.phase2.students.${oid}`, []);
     const grades = readJsonStore(`smartmaktab.phase2.grades.${oid}`, []).filter(g => Number(g.year_start) === Number(yearStart));
-    const verifs = readJsonStore(`smartmaktab.phase2.verifications.${oid}`, []);
+    const reqs = readJsonStore(`smartmaktab.phase2.student_requests.${oid}`, []);
     totalStudents += students.length;
     allGrades = allGrades.concat(grades);
-    allVerifs = allVerifs.concat(verifs);
+    pendingStudentRequests += reqs.filter(r => r.status === 'pending').length;
     const gm = computeGradeMetrics(grades);
     schoolRows.push({
       id: oid,
-      name: verifs[0]?.organization_name || (oid === c.orgId ? c.orgName : (oid === 'demo-school' ? 'Мактаби намунавӣ № 1' : oid)),
+      name: oid === c.orgId ? c.orgName : (oid === 'demo-school' ? 'Мактаби намунавӣ № 1' : oid),
       district: '',
       students: students.length,
       assessed: gm.assessed,
@@ -767,12 +880,8 @@ export async function loadAnalyticsSummary(ctx, yearStart = 2026) {
     },
     periods,
     schools: schoolRows,
-    verifications: {
-      total: allVerifs.length,
-      director_pending: allVerifs.filter(v => v.director_status === 'pending').length,
-      director_approved: allVerifs.filter(v => v.director_status === 'approved').length,
-      maorif_pending: allVerifs.filter(v => v.maorif_status === 'pending').length,
-      maorif_approved: allVerifs.filter(v => v.maorif_status === 'approved').length,
+    student_requests: {
+      pending: pendingStudentRequests,
     },
   };
 }

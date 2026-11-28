@@ -65,21 +65,25 @@ test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll,
     assert.ok(dims[0] <= dims[1] + 1, `teacher #cabinetHome overflows 1280x720: ${dims}`);
     assert.equal(dims[2], dims[3]);
 
-    // Open Student Registry via main module card and upload a real .docx
+    // Open Student Registry via main module card and upload a real .docx (with birth dates)
+    // On Stage 4, ordinary school-teacher submits a named update request instead of writing directly
     await page.locator('#smMainModules [data-open-phase2="smStudentsPanel"]').click();
     await page.locator('#smStuFile').waitFor();
-    const docxBytes = buildSimpleDocxBytes('5А', ['№', 'ФИО', 'Класс', 'Пол'], [
-      ['1', 'Алиев Беҳрӯз', '5А', 'М'],
-      ['2', 'Саидова Мадина', '5А', 'Ж'],
+    const docxBytes = buildSimpleDocxBytes('5А', ['№', 'ФИО', 'Санаи таваллуд', 'Пол'], [
+      ['1', 'Алиев Беҳрӯз', '14.05.2013', 'М'],
+      ['2', 'Саидова Мадина', '22.08.2013', 'Ж'],
     ]);
     await page.locator('#smStuFile').setInputFiles({
       name: '5a.docx',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       buffer: Buffer.from(docxBytes),
     });
-    await page.waitForFunction(() => (document.getElementById('smStuStatus')?.textContent || '').includes('2'));
-    assert.match(await page.locator('#smStudentsPanel').innerText(), /Алиев Беҳрӯз/);
-    assert.match(await page.locator('#smStudentsPanel').innerText(), /Саидова Мадина/);
+    await page.waitForFunction(() => /дархост|заявк/i.test(document.getElementById('smStuStatus')?.textContent || ''));
+    await page.locator('[data-stu-tab="requests"]').click();
+    await page.locator('.sm-req-card').first().waitFor();
+    const reqText = await page.locator('#smStudentsPanel').innerText();
+    assert.match(reqText, /Алиев Беҳрӯз \(14\.05\.2013\)/);
+    assert.match(reqText, /Маҳмудова Нигина/);
 
     // Return home & open Teacher Workload panel -> save 27h Higher category
     await homeView(page);
@@ -138,64 +142,91 @@ test('Phase 2 browser: Accountant tariffs & Tajik holiday calendar exclusions', 
   }
 });
 
-test('Phase 2 browser: Staff grades & animated charts -> Director -> Maorif verification chain', async () => {
+test('Stage 4 browser: Tahlil 10-point grades -> Analytics, and Teacher student request -> Header bell -> Director approval', async () => {
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
     await ctx.route('https://*.supabase.co/**', route => route.abort());
     const errors = [];
 
-    // 1. Class Teacher enters quarter grades, checks live SVG charts, submits for verification
+    // 1. Class Teacher uses Tahlil 10-point calculator + journal + Rohbari sinf, saves grades -> auto-reflects in Analytics
     const pTeacher = await ctx.newPage();
     pTeacher.on('pageerror', e => errors.push(e.message));
-    await pTeacher.goto(`${base}/cabinets/school/class-teacher.html?school=demo-88&lang=tg`);
+    await pTeacher.goto(`${base}/cabinets/school/class-teacher.html?school=demo-a&lang=tg`);
     await homeView(pTeacher);
     await pTeacher.locator('[data-open-phase2="smGradesPanel"]').click();
+
+    // Check Tahlil calculator live scoring
+    await pTeacher.locator('[data-gr-tab="calc"]').click();
+    await pTeacher.locator('#smTahCur').fill('8, 9, 10');
+    await pTeacher.locator('#smTahCtrl').fill('9');
+    assert.match(await pTeacher.locator('#smTahLiveOut').innerText(), /9/);
+    await pTeacher.locator('[data-gr-tab="roh"]').click();
+    assert.match(await pTeacher.locator('#smGradesPanel').innerText(), /Математика|Забони тоҷикӣ/);
+
+    // Enter journal grades (10-point current grades auto-compute + direct grade)
+    await pTeacher.locator('[data-gr-tab="journal"]').click();
     await pTeacher.locator('#smGrAddStudent').waitFor();
     await pTeacher.locator('#smGrAddStudent').click();
     await pTeacher.locator('#smGrAddStudent').click();
     await pTeacher.locator('[data-gr-name="0"]').fill('Хонандаи 1');
-    await pTeacher.locator('[data-gr-val="0"]').fill('9');
+    await pTeacher.locator('[data-gr-cur="0"]').fill('8, 10');
+    await pTeacher.locator('[data-gr-ctrl="0"]').fill('9');
+    assert.equal(await pTeacher.locator('[data-gr-val="0"]').inputValue(), '9');
     await pTeacher.locator('[data-gr-name="1"]').fill('Хонандаи 2');
     await pTeacher.locator('[data-gr-val="1"]').fill('7');
     await pTeacher.locator('#smGrSaveBtn').click();
     await pTeacher.waitForFunction(() => (document.getElementById('smGrStatus')?.textContent || '').length > 0);
     assert.ok((await pTeacher.locator('#smGradesPanel .sm-ring-svg').count()) >= 1);
     assert.match((await pTeacher.locator('#smGradesPanel .sm-ring-svg').textContent()) || '', /50(\.0)?%/);
-    await pTeacher.locator('#smGrSubmitVerif').click();
-    await pTeacher.waitForFunction(() => (document.getElementById('smGrStatus')?.textContent || '').includes('директор'));
+    assert.match(await pTeacher.locator('#smGradesPanel').innerText(), /Тақсимоти баҳоҳо/);
 
-    // 2. Director approves & forwards to Maorif
+    // 2. Ordinary subject teacher submits a student addition request with full birth_date
+    const pSubj = await ctx.newPage();
+    pSubj.on('pageerror', e => errors.push(e.message));
+    await pSubj.goto(`${base}/cabinets/school/teacher.html?school=demo-a&lang=tg`);
+    await homeView(pSubj);
+    await pSubj.locator('#smMainModules [data-open-phase2="smStudentsPanel"]').click();
+    await pSubj.locator('#smStuName').waitFor();
+    await pSubj.locator('#smStuName').fill('Сафаров Рустам');
+    await pSubj.locator('#smStuCls').fill('6А');
+    await pSubj.locator('#smStuBirthDate').fill('2013-09-21');
+    await pSubj.locator('#smStuGender').selectOption('male');
+    await pSubj.locator('#smStuAddBtn').click();
+    await pSubj.waitForFunction(() => /дархост|заявк/i.test(document.getElementById('smStuStatus')?.textContent || ''));
+
+    // 3. Director sees bell notification -> opens request -> approves -> student appears with 21.09.2013 & 6А filter pill
     const pDir = await ctx.newPage();
     pDir.on('pageerror', e => errors.push(e.message));
-    await pDir.goto(`${base}/cabinets/school/director.html?school=demo-88&lang=tg`);
+    await pDir.goto(`${base}/cabinets/school/director.html?school=demo-a&lang=tg`);
     await homeView(pDir);
-    await pDir.locator('#smMainModules [data-open-phase2="smVerificationPanel"]').click();
-    await pDir.locator('[data-dir-act="approve-forward"]').first().waitFor();
-    await pDir.locator('[data-dir-act="approve-forward"]').first().click();
-    await pDir.waitForFunction(() => (document.getElementById('smVfStatus')?.textContent || '').includes('Маориф'));
+    await pDir.waitForFunction(() => !document.getElementById('smBellCount')?.hidden && (document.getElementById('smBellCount')?.textContent || '').trim() === '1');
+    await pDir.locator('#smBellBtn').click();
+    await pDir.locator('#smBellPopover:not([hidden]) [data-bell-open="smStudentsPanel"]').first().click();
+    await pDir.locator('[data-stu-req-act="approved"]').first().waitFor();
+    await pDir.locator('[data-stu-req-act="approved"]').first().click();
+    await pDir.locator('[data-stu-tab="list"]').click();
+    await pDir.locator('.sm-class-pill[data-cls-pick="6А"]').waitFor();
+    await pDir.locator('.sm-class-pill[data-cls-pick="6А"]').click();
+    const stuListTxt = await pDir.locator('#smStudentsPanel').innerText();
+    assert.match(stuListTxt, /Сафаров Рустам/);
+    assert.match(stuListTxt, /21\.09\.2013/);
 
-    // 3. Maorif Head approves and checks animated analytics
+    // 4. Maorif Head opens Analytics -> immediately sees saved grades & student count
     const pMaorif = await ctx.newPage();
     pMaorif.on('pageerror', e => errors.push(e.message));
-    await pMaorif.goto(`${base}/cabinets/maorif/head.html?school=demo-88&lang=tg`);
-    await homeView(pMaorif);
-    await pMaorif.locator('#smMainModules [data-open-phase2="smVerificationPanel"]').click();
-    await pMaorif.locator('[data-mao-act="approved"]').first().waitFor();
-    await pMaorif.locator('[data-mao-act="approved"]').first().click();
-    await pMaorif.waitForFunction(() => (document.getElementById('smVfStatus')?.textContent || '').includes('Маориф тасдиқ кард'));
-
+    await pMaorif.goto(`${base}/cabinets/maorif/head.html?school=demo-a&lang=tg`);
     await homeView(pMaorif);
     await pMaorif.locator('#smMainModules [data-open-phase2="smAnalyticsPanel"]').click();
     await pMaorif.locator('#smAnalyticsPanel .sm-ring-svg').waitFor();
-    assert.match(await pMaorif.locator('#smAnalyticsPanel').innerText(), /1 \/ 1/);
+    assert.match(await pMaorif.locator('#smAnalyticsPanel').innerText(), /50(\.0)?%/);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
   }
 });
 
-test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child orgs', async () => {
+test('Stage 4 browser: Admin sidebar, Day/Night theme, tg/ru toggle, Territory tree & Scoped Admin Managers', async () => {
   const browser = await chromium.launch();
   const adminSrv = await startAdminStaticServer();
   try {
@@ -205,10 +236,39 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
       { id: 'm-1', name: 'Шуъбаи маорифи Хуҷанд', kind: 'education_authority', authority_tier: 'maorif', parent_id: 'r-1', region_name: 'Вилояти Суғд', district_name: 'Хуҷанд', school_code: 'SM-MAO-01' },
       { id: 's-1', name: 'МТМУ № 88', kind: 'school', authority_tier: null, parent_id: 'm-1', region_name: 'Вилояти Суғд', district_name: 'Хуҷанд', school_code: 'SM-088' },
     ];
+    let mockManagers = [
+      {
+        user_id: 'mgr-1',
+        full_name: 'Менеҷер Фирдавс',
+        login_name: 'mgr_sughd',
+        permissions: ['orgs', 'verifications'],
+        region_scope: 'Вилояти Суғд',
+        is_active: true,
+        notes: 'Назорати Суғд',
+      },
+    ];
+    let ctxMode = 'super';
     await ctx.route('https://*.supabase.co/**', async route => {
       const url = route.request().url();
       const json = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
-      if (url.includes('/rpc/get_my_workspace_context')) return json({ is_super_admin: true, user_id: 'admin-1', memberships: [] });
+      if (url.includes('/rpc/get_my_workspace_context')) {
+        if (ctxMode === 'manager') {
+          return json({
+            is_super_admin: false,
+            is_admin_manager: true,
+            admin_permissions: ['orgs'],
+            admin_region_scope: 'Вилояти Суғд',
+            user_id: 'mgr-1',
+            profile: { full_name: 'Менеҷер Фирдавс', login_name: 'mgr_sughd', preferred_lang: 'tg' },
+            memberships: [],
+          });
+        }
+        return json({ is_super_admin: true, user_id: 'admin-1', profile: { full_name: 'Супер Админ', login_name: 'admin' }, memberships: [] });
+      }
+      if (url.includes('/rpc/admin_list_admin_managers')) return json(mockManagers);
+      if (url.includes('/rpc/admin_list_subscription_plans')) return json([]);
+      if (url.includes('/rpc/admin_list_role_tariffs')) return json([]);
+      if (url.includes('/rpc/admin_list_document_catalog')) return json({ categories: [], subcategories: [], templates: [] });
       if (url.includes('/auth/v1/token')) return json({ access_token: 'mock_jwt', refresh_token: 'mock_ref', expires_at: Math.floor(Date.now() / 1000) + 3600 });
       if (url.includes('/rest/v1/organizations')) return json(mockOrgs);
       if (url.includes('/functions/v1/admin-users')) return json({ users: [] });
@@ -221,9 +281,18 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
     page.on('pageerror', e => errors.push(e.message));
 
     await page.goto(`${adminSrv.url}/admin/index.html#access_token=mock_jwt&refresh_token=mock_ref`);
+    assert.equal(await page.locator('#loginEmail').getAttribute('type'), 'text');
     await page.locator('#admWorkspace:not([hidden])').waitFor();
     await page.locator('#orgHierarchyTree').waitFor();
     await page.waitForFunction(() => (document.getElementById('orgHierarchyTree')?.textContent || '').includes('Раёсати маорифи Суғд'));
+
+    // Day/Night theme toggle + tg/ru language toggle
+    await page.locator('#admThemeToggle').click();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    await page.locator('#admLangToggle').click();
+    assert.equal(await page.evaluate(() => localStorage.getItem('smartmaktab.admin.lang')), 'ru');
+    await page.locator('#admLangToggle').click();
+    await page.locator('#admThemeToggle').click();
 
     // Expand Raesat node -> click "+ Мактаби нав" under Maorif node -> verify form prefill
     await page.locator('#orgHierarchyTree > details.adm-tree-node > summary').first().click();
@@ -232,6 +301,25 @@ test('Phase 2 browser: Admin Territory Hierarchy tree expands and prefills child
     assert.equal(await page.locator('#orgRegion').inputValue(), 'Вилояти Суғд');
     assert.equal(await page.locator('#orgDistrict').inputValue(), 'Хуҷанд');
     assert.equal(await page.locator('#orgParent').inputValue(), 'm-1');
+
+    // Open Scoped Admin Managers tab -> verify list & form
+    await page.locator('[data-tab="managers"]').click();
+    await page.locator('#managerForm').waitFor();
+    await page.waitForFunction(() => (document.getElementById('managersTbody')?.textContent || '').includes('Менеҷер Фирдавс'));
+
+    // Re-open as scoped admin manager (only 'orgs' in Вилояти Суғд) -> restricted tabs hidden
+    ctxMode = 'manager';
+    const mgrPage = await ctx.newPage();
+    mgrPage.setDefaultTimeout(10000);
+    mgrPage.on('pageerror', e => errors.push(e.message));
+    await mgrPage.goto(`${adminSrv.url}/admin/index.html#access_token=mock_jwt&refresh_token=mock_ref`);
+    await mgrPage.locator('#admWorkspace:not([hidden])').waitFor();
+    assert.match(await mgrPage.locator('#admRoleLabel').innerText(), /Менеҷер/);
+    assert.match(await mgrPage.locator('#admScopeLabel').innerText(), /Вилояти Суғд/);
+    assert.equal(await mgrPage.locator('[data-tab="orgs"]').isVisible(), true);
+    assert.equal(await mgrPage.locator('[data-tab="managers"]').isVisible(), false);
+    assert.equal(await mgrPage.locator('[data-tab="plans"]').isVisible(), false);
+    assert.equal(await mgrPage.locator('[data-tab="documents"]').isVisible(), false);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

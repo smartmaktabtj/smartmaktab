@@ -31,25 +31,92 @@ function normalizeClassCode(raw, fallbackClass = '') {
 function normalizeGender(raw) {
   const val = String(raw || '').trim().toLowerCase();
   if (!val) return '';
-  if (/^(м|m|male|писар|мард|муж|мужской)$/i.test(val)) return 'male';
+  if (/^(м|m|male|писар|мард|муж|мужской|п)$/i.test(val)) return 'male';
   if (/^(ж|f|д|female|духтар|зан|жен|женский)$/i.test(val)) return 'female';
   return '';
 }
 
+function normalizeBirthDateAndYear(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return { birth_date: null, birth_year: null, matchedText: '' };
+
+  // ISO YYYY-MM-DD or YYYY.MM.DD
+  const iso = s.match(/\b(199\d|20[0-2]\d)[./-](\d{1,2})[./-](\d{1,2})\b/);
+  if (iso) {
+    const yr = Number(iso[1]);
+    const mo = Number(iso[2]);
+    const dy = Number(iso[3]);
+    if (yr >= 1995 && yr <= 2026 && mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31) {
+      return {
+        birth_date: `${yr}-${String(mo).padStart(2, '0')}-${String(dy).padStart(2, '0')}`,
+        birth_year: yr,
+        matchedText: iso[0],
+      };
+    }
+  }
+
+  // DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
+  const dmy = s.match(/\b(\d{1,2})[./-](\d{1,2})[./-](199\d|20[0-2]\d)\b/);
+  if (dmy) {
+    const dy = Number(dmy[1]);
+    const mo = Number(dmy[2]);
+    const yr = Number(dmy[3]);
+    if (yr >= 1995 && yr <= 2026 && mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31) {
+      return {
+        birth_date: `${yr}-${String(mo).padStart(2, '0')}-${String(dy).padStart(2, '0')}`,
+        birth_year: yr,
+        matchedText: dmy[0],
+      };
+    }
+  }
+
+  // Excel 1900 serial date (approx 1995-01-01 = 34700 .. 2026-12-31 = 46387)
+  if (/^\d{5}(?:\.\d+)?$/.test(s)) {
+    const serial = Math.floor(Number(s));
+    if (serial >= 34700 && serial <= 46750) {
+      const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+      const yr = utc.getUTCFullYear();
+      if (yr >= 1995 && yr <= 2026) {
+        const mo = String(utc.getUTCMonth() + 1).padStart(2, '0');
+        const dy = String(utc.getUTCDate()).padStart(2, '0');
+        return {
+          birth_date: `${yr}-${mo}-${dy}`,
+          birth_year: yr,
+          matchedText: s,
+        };
+      }
+    }
+  }
+
+  const yrMatch = s.match(/\b(199\d|20[0-2]\d)\b/);
+  if (yrMatch) {
+    const yr = Number(yrMatch[1]);
+    if (yr >= 1995 && yr <= 2026) {
+      return { birth_date: null, birth_year: yr, matchedText: yrMatch[0] };
+    }
+  }
+  return { birth_date: null, birth_year: null, matchedText: '' };
+}
+
 function normalizeBirthYear(raw) {
-  const m = String(raw || '').match(/\b(199\d|20[0-2]\d)\b/);
-  if (!m) return null;
-  const yr = Number(m[1]);
-  return yr >= 1995 && yr <= 2026 ? yr : null;
+  return normalizeBirthDateAndYear(raw).birth_year;
+}
+
+export function formatBirthDateDisplay(birthDate, birthYear) {
+  const s = String(birthDate || '').trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}.${iso[2]}.${iso[1]}`;
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
+  return birthYear ? String(birthYear) : '';
 }
 
 function normalizeHeaderField(header) {
   const h = String(header || '').trim().toLowerCase().replace(/\s+/g, ' ');
   if (!h) return '';
   if (/^(№|#|n|no|п\/п|тартиб|рақам)$/.test(h)) return 'index';
-  if (/(ному?\s*насаб|фио|ф\.и\.о|хонанда|ученик|full\s*name|name|фамилия)/i.test(h)) return 'full_name';
+  if (/(ному?\s*насаб|фио|ф\.и\.о|хонанда|ученик|full\s*name|name|фамилия|ном)/i.test(h)) return 'full_name';
   if (/(синф|класс|class|grade)/i.test(h)) return 'class_code';
-  if (/(таваллуд|birth|год\s*рожд|соли)/i.test(h)) return 'birth_year';
+  if (/(таваллуд|birth|год\s*рожд|дата\s*рожд|санаи|соли|д\.р\.|dob)/i.test(h)) return 'birth_year';
   if (/(ҷинс|пол|gender|sex)/i.test(h)) return 'gender';
   if (/(волид|падар|модар|родител|guardian|parent)/i.test(h)) return 'guardian_name';
   if (/(телеф|тел|phone|mob|рақами\s*тамос)/i.test(h)) return 'guardian_phone';
@@ -200,8 +267,15 @@ function parseSingleLineFallback(rawText, defaultClassCode) {
   if (!line || line.length < 3) return null;
   if (/^(№|#|фио|ному\s*насаб|рӯйхати|список)/i.test(line)) return null;
 
-  const year = normalizeBirthYear(line);
-  if (year) line = line.replace(String(year), '').trim();
+  const bd = normalizeBirthDateAndYear(line);
+  if (bd.matchedText) line = line.replace(bd.matchedText, '').trim();
+
+  let gender = '';
+  const gMatch = line.match(/(?:^|[\s,;])(писар|духтар|мард|зан|муж|жен|male|female|м|ж|п)(?:$|[\s,;])/i);
+  if (gMatch) {
+    gender = normalizeGender(gMatch[1]);
+    if (gender) line = line.replace(gMatch[0], ' ').trim();
+  }
 
   let cls = '';
   const clsMatch = line.match(/\b(1[01]|[1-9])\s*[-–]?\s*([А-ЯЁA-Z])\b/u);
@@ -214,8 +288,9 @@ function parseSingleLineFallback(rawText, defaultClassCode) {
   return {
     full_name: fullName,
     class_code: cls || normalizeClassCode(defaultClassCode || '5А'),
-    birth_year: year,
-    gender: '',
+    birth_date: bd.birth_date,
+    birth_year: bd.birth_year,
+    gender,
     guardian_name: '',
     guardian_phone: '',
     student_code: '',
@@ -245,6 +320,7 @@ export function matrixToStudentRows(matrix, defaultClassCode = '5А') {
       const rec = {
         full_name: '',
         class_code: '',
+        birth_date: null,
         birth_year: null,
         gender: '',
         guardian_name: '',
@@ -257,7 +333,11 @@ export function matrixToStudentRows(matrix, defaultClassCode = '5А') {
         if (!val || key === 'index') continue;
         if (key === 'full_name') rec.full_name = val;
         else if (key === 'class_code') rec.class_code = normalizeClassCode(val);
-        else if (key === 'birth_year') rec.birth_year = normalizeBirthYear(val);
+        else if (key === 'birth_year') {
+          const bd = normalizeBirthDateAndYear(val);
+          rec.birth_date = bd.birth_date || rec.birth_date;
+          rec.birth_year = bd.birth_year || rec.birth_year;
+        }
         else if (key === 'gender') rec.gender = normalizeGender(val);
         else if (key === 'guardian_name') rec.guardian_name = val;
         else if (key === 'guardian_phone') rec.guardian_phone = val;
@@ -276,14 +356,19 @@ export function matrixToStudentRows(matrix, defaultClassCode = '5А') {
       const name = filtered[0];
       if (/^(фио|ному\s*насаб|хонанда)$/i.test(name)) continue;
       let cls = '';
-      let birth = null;
+      let birthDate = null;
+      let birthYear = null;
       let gender = '';
       let phone = '';
       let guardian = '';
       for (let i = 1; i < filtered.length; i += 1) {
         const v = filtered[i];
+        const bd = !birthDate && !birthYear ? normalizeBirthDateAndYear(v) : { birth_date: null, birth_year: null };
         if (!cls && /^(1[01]|[1-9])\s*[А-ЯЁA-Z]$/i.test(v)) cls = normalizeClassCode(v);
-        else if (!birth && normalizeBirthYear(v)) birth = normalizeBirthYear(v);
+        else if (!birthDate && !birthYear && (bd.birth_date || bd.birth_year)) {
+          birthDate = bd.birth_date;
+          birthYear = bd.birth_year;
+        }
         else if (!gender && normalizeGender(v)) gender = normalizeGender(v);
         else if (!phone && /\d{7,}/.test(v.replace(/[\s+()-]/g, ''))) phone = v;
         else if (!guardian && v.length >= 3) guardian = v;
@@ -291,7 +376,8 @@ export function matrixToStudentRows(matrix, defaultClassCode = '5А') {
       out.push({
         full_name: name,
         class_code: cls || normalizeClassCode(defaultClassCode || '5А'),
-        birth_year: birth,
+        birth_date: birthDate,
+        birth_year: birthYear,
         gender,
         guardian_name: guardian,
         guardian_phone: phone,
@@ -316,11 +402,12 @@ export function parseStudentImportFile(bufferOrText, fileName = '', defaultClass
     ? bufferOrText
     : new TextDecoder('utf-8').decode(new Uint8Array(bufferOrText));
   const matrix = parseCsvMatrix(text);
-  return { format: lower.endsWith('.tsv') ? 'tsv' : 'csv', rows: matrixToStudentRows(matrix, defaultClassCode) };
+  const fmt = lower.endsWith('.tsv') ? 'tsv' : (lower.endsWith('.txt') ? 'txt' : 'csv');
+  return { format: fmt, rows: matrixToStudentRows(matrix, defaultClassCode) };
 }
 
 export function buildStudentsCsv(rows) {
-  const header = ['№', 'Ному насаб', 'Синф', 'Соли таваллуд', 'Ҷинс', 'Волидайн', 'Телефон'];
+  const header = ['№', 'Ному насаб', 'Синф', 'Санаи таваллуд', 'Ҷинс', 'Волидайн', 'Телефон'];
   const esc = v => {
     const s = String(v ?? '');
     return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -331,7 +418,7 @@ export function buildStudentsCsv(rows) {
       idx + 1,
       esc(r.full_name || ''),
       esc(r.class_code || ''),
-      esc(r.birth_year || ''),
+      esc(formatBirthDateDisplay(r.birth_date, r.birth_year)),
       esc(r.gender === 'male' ? 'Писар' : (r.gender === 'female' ? 'Духтар' : '')),
       esc(r.guardian_name || ''),
       esc(r.guardian_phone || ''),

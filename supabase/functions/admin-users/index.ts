@@ -193,13 +193,141 @@ Deno.serve(async (req) => {
     }
 
     // -----------------------------------------------------------------------
-    // Super-admin only actions
+    // Admin portal actions (super-admin OR granular admin manager)
     // -----------------------------------------------------------------------
-    if (!ctx?.is_super_admin) {
-      return json(403, { error: 'super_admin_required' });
+    const isSuperAdmin = ctx?.is_super_admin === true;
+    const isAdminManager = ctx?.is_admin_manager === true;
+    const adminPerms = Array.isArray(ctx?.admin_permissions) ? ctx.admin_permissions.map(String) : [];
+    const managerRegionScope = typeof ctx?.admin_region_scope === 'string' ? ctx.admin_region_scope.trim().toLowerCase() : '';
+    const hasAdminPerm = (perm: string) => isSuperAdmin || (isAdminManager && adminPerms.includes(perm));
+
+    if (action === 'create_or_update_admin_manager') {
+      if (!isSuperAdmin) {
+        return json(403, { error: 'super_admin_required' });
+      }
+      const rawIdentifier = typeof body?.login === 'string' && body.login.trim()
+        ? body.login.trim()
+        : (typeof body?.email === 'string' ? body.email.trim() : '');
+      const parsedLogin = rawIdentifier ? normalizeLoginOrEmail(rawIdentifier) : { valid: true, email: '', display: '' };
+      const rawEmail = parsedLogin.email;
+      const loginDisplay = parsedLogin.display;
+      const rawUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
+      const fullName = typeof body?.full_name === 'string' ? body.full_name.trim().slice(0, 160) : '';
+      const customPassword = typeof body?.password === 'string' ? body.password.trim() : '';
+      const forceResetPassword = body?.reset_password === true;
+      const permissions = Array.isArray(body?.permissions)
+        ? body.permissions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
+        : [];
+      const regionScope = typeof body?.region_scope === 'string' ? body.region_scope.trim().slice(0, 120) : '';
+      const isActive = body?.is_active !== false;
+      const notes = typeof body?.notes === 'string' ? body.notes.trim().slice(0, 400) : '';
+
+      if (!rawEmail && !/^[0-9a-f-]{36}$/i.test(rawUserId)) {
+        return json(400, { error: 'email_or_user_id_required' });
+      }
+      if (rawIdentifier && !parsedLogin.valid) {
+        return json(400, { error: 'invalid_email' });
+      }
+      if (customPassword && customPassword.length < 6) {
+        return json(400, { error: 'password_too_short' });
+      }
+
+      const authUsers = await listAllAuthUsers(adminClient);
+      let existing = rawUserId ? authUsers.find((u) => u.id === rawUserId) : undefined;
+      if (!existing && rawEmail) {
+        existing = authUsers.find((u) => u.email.toLowerCase() === rawEmail);
+      }
+
+      let targetUserId = existing?.id ?? '';
+      let targetEmail = existing?.email ?? rawEmail;
+      let created = false;
+      let temporaryPassword: string | null = null;
+
+      if (!existing) {
+        if (!rawEmail) return json(404, { error: 'user_not_found' });
+        temporaryPassword = customPassword || generateReadablePassword();
+        const { data: createdData, error: createErr } = await adminClient.auth.admin.createUser({
+          email: rawEmail,
+          password: temporaryPassword,
+          email_confirm: true,
+          user_metadata: { full_name: fullName, login_name: loginDisplay },
+        });
+        if (createErr || !createdData?.user) {
+          return json(400, { error: createErr?.message || 'create_user_failed' });
+        }
+        targetUserId = createdData.user.id;
+        targetEmail = createdData.user.email ?? rawEmail;
+        created = true;
+      } else if (forceResetPassword || customPassword) {
+        temporaryPassword = customPassword || generateReadablePassword();
+        const { error: updErr } = await adminClient.auth.admin.updateUserById(targetUserId, {
+          password: temporaryPassword,
+          email_confirm: true,
+          ...(fullName ? { user_metadata: { ...(existing.user_metadata ?? {}), full_name: fullName } } : {}),
+        });
+        if (updErr) {
+          return json(400, { error: updErr.message || 'update_password_failed' });
+        }
+      }
+
+      if (fullName || loginDisplay) {
+        await adminClient.rpc('service_upsert_user_profile', {
+          p_user_id: targetUserId,
+          p_full_name: fullName || null,
+          p_login_name: loginDisplay || null,
+          p_preferred_lang: 'ru',
+        });
+      }
+
+      const { error: mgrErr } = await userClient.rpc('admin_upsert_admin_manager', {
+        p_user_id: targetUserId,
+        p_full_name: fullName,
+        p_login_name: loginDisplay || targetEmail,
+        p_permissions: permissions,
+        p_region_scope: regionScope || null,
+        p_is_active: isActive,
+        p_notes: notes,
+      });
+      if (mgrErr) {
+        return json(400, { error: mgrErr.message || 'upsert_manager_failed' });
+      }
+
+      return json(200, {
+        user_id: targetUserId,
+        email: targetEmail,
+        login_name: loginDisplay || targetEmail,
+        full_name: fullName,
+        permissions,
+        region_scope: regionScope,
+        is_active: isActive,
+        notes,
+        created,
+        temporary_password: temporaryPassword,
+      });
+    }
+
+    if (action === 'delete_admin_manager') {
+      if (!isSuperAdmin) {
+        return json(403, { error: 'super_admin_required' });
+      }
+      const targetUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
+      if (!/^[0-9a-f-]{36}$/i.test(targetUserId)) {
+        return json(400, { error: 'invalid_user_id' });
+      }
+      const { data: removed, error: delErr } = await userClient.rpc('admin_delete_admin_manager', {
+        p_user_id: targetUserId,
+      });
+      if (delErr) {
+        return json(400, { error: delErr.message || 'delete_manager_failed' });
+      }
+      return json(200, { deleted: Boolean(removed), user_id: targetUserId });
     }
 
     if (action === 'list_users') {
+      const canReadUsers = isSuperAdmin || (isAdminManager && adminPerms.some((p) => ['roles', 'verifications', 'orgs', 'licenses', 'payments'].includes(p)));
+      if (!canReadUsers) {
+        return json(403, { error: 'super_admin_required' });
+      }
       const authUsers = await listAllAuthUsers(adminClient);
       const { data: profiles } = await adminClient.rpc('service_list_user_profiles');
       const profileMap = new Map<string, { full_name: string; preferred_lang: string; login_name: string }>();
@@ -230,6 +358,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'assign_or_create') {
+      if (!hasAdminPerm('roles')) {
+        return json(403, { error: 'super_admin_required' });
+      }
       const rawIdentifier = typeof body?.login === 'string' && body.login.trim()
         ? body.login.trim()
         : (typeof body?.email === 'string' ? body.email.trim() : '');
@@ -266,6 +397,16 @@ Deno.serve(async (req) => {
       if (!/^[0-9a-f-]{36}$/i.test(orgId) || !VALID_ROLES.has(role)) {
         return json(400, { error: 'invalid_org_or_role' });
       }
+      if (!isSuperAdmin && managerRegionScope) {
+        const { data: orgRow } = await adminClient
+          .from('organizations')
+          .select('region_name')
+          .eq('id', orgId)
+          .maybeSingle();
+        if (!orgRow || String(orgRow.region_name || '').trim().toLowerCase() !== managerRegionScope) {
+          return json(403, { error: 'region_scope_denied' });
+        }
+      }
       if (maxExtraPositions < 0 || maxExtraPositions > 19 || maxDevices < 1 || maxDevices > 40) {
         return json(400, { error: 'invalid_quotas' });
       }
@@ -285,6 +426,15 @@ Deno.serve(async (req) => {
         : undefined;
       if (!existing && rawEmail) {
         existing = authUsers.find((u) => u.email.toLowerCase() === rawEmail);
+      }
+
+      if (existing && !isSuperAdmin) {
+        const { data: isPriv } = await adminClient.rpc('service_is_privileged_admin', {
+          p_user_id: existing.id,
+        });
+        if (isPriv === true) {
+          return json(403, { error: 'cannot_modify_privileged_account' });
+        }
       }
 
       let targetUserId = existing?.id ?? '';
@@ -366,6 +516,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'reset_password') {
+      if (!hasAdminPerm('roles')) {
+        return json(403, { error: 'super_admin_required' });
+      }
       const rawUserId = typeof body?.user_id === 'string' ? body.user_id.trim() : '';
       const rawEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
       const customPassword = typeof body?.password === 'string' ? body.password.trim() : '';
@@ -380,6 +533,27 @@ Deno.serve(async (req) => {
           : undefined;
       if (!target) {
         return json(404, { error: 'user_not_found' });
+      }
+      if (!isSuperAdmin) {
+        const { data: isPriv } = await adminClient.rpc('service_is_privileged_admin', {
+          p_user_id: target.id,
+        });
+        if (isPriv === true) {
+          return json(403, { error: 'cannot_modify_privileged_account' });
+        }
+        if (managerRegionScope) {
+          const { data: memOrgs } = await adminClient
+            .from('school_memberships')
+            .select('organization_id, organizations!inner(region_name)')
+            .eq('user_id', target.id);
+          const inRegion = (Array.isArray(memOrgs) ? memOrgs : []).some((r: Record<string, unknown>) => {
+            const org = r.organizations as { region_name?: string } | undefined;
+            return String(org?.region_name || '').trim().toLowerCase() === managerRegionScope;
+          });
+          if (!inRegion) {
+            return json(403, { error: 'region_scope_denied' });
+          }
+        }
       }
       const nextPassword = customPassword || generateReadablePassword();
       const { error: updErr } = await adminClient.auth.admin.updateUserById(target.id, {

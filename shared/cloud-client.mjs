@@ -265,5 +265,11 @@ export function createCloudClient({
     adminDeleteDocumentSubcategory: id => rpc('admin_delete_document_subcategory', { p_id: id }),
     adminUpsertDocumentTemplate: args => rpc('admin_upsert_document_template', args),
     adminDeleteDocumentTemplate: id => rpc('admin_delete_document_template', { p_id: id }),
+    adminListAdminManagers: () => rpc('admin_list_admin_managers'),
+    adminUpsertAdminManager: args => rpc('admin_upsert_admin_manager', args),
+    adminDeleteAdminManager: userId => rpc('admin_delete_admin_manager', { p_user_id: userId }),
+    getSchoolColleaguesDirectory: (orgId = null) => rpc('get_school_colleagues_directory', { p_org_id: orgId }),
+    submitStudentUpdateRequest: args => rpc('submit_student_update_request', args),
+    reviewStudentUpdateRequest: args => rpc('review_student_update_request', args),
   };
 }

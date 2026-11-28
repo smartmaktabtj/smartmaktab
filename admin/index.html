@@ -10,26 +10,29 @@
 <body>
   <header class="adm-head">
     <div class="adm-brand">
-      <img src="../shared/brand-icon.png" alt="" class="adm-brand-icon" width="36" height="36">
+      <button id="admMenuToggle" type="button" class="btn alt sm adm-menu-toggle" aria-label="Меню">☰</button>
+      <img src="../shared/brand-icon.png" alt="" class="adm-brand-icon" width="38" height="38">
       <div>
         <h1 data-t="title">SmartMaktab Admin</h1>
         <p data-t="sub"></p>
       </div>
     </div>
     <div class="adm-row" style="margin-top:0">
-      <button id="reloadBtn" type="button" class="btn alt" data-t="reload" hidden></button>
-      <button id="signOutBtn" type="button" class="btn alt" data-t="signOut" hidden></button>
+      <button id="admThemeToggle" type="button" class="btn alt sm">🌙 Шаб</button>
+      <button id="admLangToggle" type="button" class="btn alt sm">TJ / RU</button>
+      <button id="reloadBtn" type="button" class="btn alt sm" data-t="reload" hidden></button>
+      <button id="signOutBtn" type="button" class="btn alt sm" data-t="signOut" hidden></button>
     </div>
   </header>
 
   <main class="adm-main">
     <p id="admStatus" class="adm-status" role="status" hidden></p>
 
-    <section id="admLoginCard" class="adm-card">
+    <section id="admLoginCard" class="adm-card" style="max-width:680px;margin:20px auto;width:100%">
       <h2 data-t="loginTitle"></h2>
       <p class="adm-meta"><strong data-t="projectInfo"></strong>: <code id="projectEndpoint"></code></p>
       <form id="admLoginForm" class="adm-grid" autocomplete="off">
-        <label class="adm-field"><span data-t="email"></span><input id="loginEmail" type="email" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required value="sinamostudio@gmail.com"></label>
+        <label class="adm-field"><span data-t="emailOrLogin"></span><input id="loginEmail" type="text" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required value="sinamostudio@gmail.com"></label>
         <label class="adm-field"><span data-t="password"></span><div class="adm-pass-wrap"><input id="loginPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required><button type="button" id="toggleAdmLoginPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div></label>
         <p class="adm-latin-warn" id="admLoginLatinWarn" hidden>⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
         <div class="adm-row" style="align-self:end">
@@ -40,7 +43,7 @@
     </section>
 
     <section id="admWorkspace" hidden>
-      <section id="admPasswordCard" class="adm-card" hidden>
+      <section id="admPasswordCard" class="adm-card" style="margin-bottom:14px" hidden>
         <h2 data-t="setPasswordTitle"></h2>
         <form id="admPasswordForm" class="adm-grid">
           <label class="adm-field"><span data-t="newPassword"></span><div class="adm-pass-wrap"><input id="newPasswordInput" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" minlength="8" required><button type="button" id="toggleAdmNewPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div></label>
@@ -48,563 +51,634 @@
         </form>
       </section>
 
-      <div id="admSummaryBar" class="adm-stats"></div>
+      <div class="adm-shell">
+        <aside id="admSidebar" class="adm-sidebar">
+          <div class="adm-profile-badge">
+            <strong id="admRoleLabel">Супер-админ</strong>
+            <span id="admScopeLabel">Ҳамаи минтақаҳо</span>
+          </div>
+          <nav class="adm-tabs" role="tablist">
+            <button type="button" class="btn alt" data-tab="orgs"><span>🏛 <span data-t="tabOrgs"></span></span></button>
+            <button type="button" class="btn alt" data-tab="verifications"><span>✅ <span data-t="tabVerifications"></span></span><span class="adm-tab-badge" id="admTabBadgeVerif" hidden></span></button>
+            <button type="button" class="btn alt" data-tab="roles"><span>👥 <span data-t="tabRoles"></span></span></button>
+            <button type="button" class="btn alt" data-tab="licenses"><span>🪪 <span data-t="tabLicenses"></span></span></button>
+            <button type="button" class="btn alt" data-tab="plans"><span>💳 <span data-t="tabPlans"></span></span></button>
+            <button type="button" class="btn alt" data-tab="payments"><span>🧾 <span data-t="tabPayments"></span></span><span class="adm-tab-badge" id="admTabBadgePay" hidden></span></button>
+            <button type="button" class="btn alt" data-tab="documents"><span>📄 <span data-t="tabDocuments"></span></span></button>
+            <button type="button" class="btn alt" data-tab="managers" hidden><span>🛡 <span data-t="tabManagers"></span></span></button>
+          </nav>
+        </aside>
 
-      <nav class="adm-tabs" role="tablist">
-        <button type="button" class="btn alt" data-tab="orgs" data-t="tabOrgs"></button>
-        <button type="button" class="btn alt" data-tab="verifications" data-t="tabVerifications"></button>
-        <button type="button" class="btn alt" data-tab="roles" data-t="tabRoles"></button>
-        <button type="button" class="btn alt" data-tab="licenses" data-t="tabLicenses"></button>
-        <button type="button" class="btn alt" data-tab="plans" data-t="tabPlans"></button>
-        <button type="button" class="btn alt" data-tab="payments" data-t="tabPayments"></button>
-        <button type="button" class="btn alt" data-tab="documents" data-t="tabDocuments"></button>
-      </nav>
+        <div class="adm-content">
+          <div id="admSummaryBar" class="adm-stats"></div>
 
-      <!-- 1. ОРГАНИЗАЦИИ И ШКОЛЫ -->
-      <section class="adm-card" data-pane="orgs">
-        <h2 data-t="tabOrgs"></h2>
-        <p class="adm-hint" data-t="orgsHint"></p>
-        <div id="orgEditBanner" class="adm-edit-banner" hidden>
-          <span id="orgEditLabel"></span>
-          <button id="orgCancelEdit" type="button" class="btn alt sm" data-t="cancelEdit"></button>
-        </div>
-        <form id="orgForm" class="adm-grid">
-          <label class="adm-field">
-            <span data-t="orgName"></span>
-            <input id="orgName" required maxlength="160">
-            <small data-t="orgNameHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="orgTypeLabel"></span>
-            <select id="orgTypePreset">
-              <option value="school" data-t="presetSchool"></option>
-              <option value="maorif" data-t="presetMaorif"></option>
-              <option value="raesat" data-t="presetRaesat"></option>
-            </select>
-            <small data-t="orgTypeHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="region"></span>
-            <input id="orgRegion" maxlength="120" list="regionDatalist">
-            <datalist id="regionDatalist"></datalist>
-            <small data-t="regionHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="district"></span>
-            <input id="orgDistrict" maxlength="120" list="districtDatalist">
-            <datalist id="districtDatalist"></datalist>
-            <small data-t="districtHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="jamoat"></span>
-            <input id="orgJamoat" maxlength="120" list="jamoatDatalist">
-            <datalist id="jamoatDatalist"></datalist>
-          </label>
-          <label class="adm-field">
-            <span data-t="village"></span>
-            <input id="orgVillage" maxlength="120" list="villageDatalist">
-            <datalist id="villageDatalist"></datalist>
-          </label>
-          <label class="adm-field">
-            <span data-t="orgParent"></span>
-            <select id="orgParent"></select>
-            <small data-t="orgParentHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="schoolCode"></span>
-            <div class="adm-inline">
-              <input id="orgCode" maxlength="40" placeholder="SM-089">
-              <button id="orgGenCode" type="button" class="btn alt sm" data-t="generateCode"></button>
+          <!-- 1. ОРГАНИЗАЦИИ И ШКОЛЫ -->
+          <section class="adm-card" data-pane="orgs">
+            <h2 data-t="tabOrgs"></h2>
+            <p class="adm-hint" data-t="orgsHint"></p>
+            <div id="orgEditBanner" class="adm-edit-banner" hidden>
+              <span id="orgEditLabel"></span>
+              <button id="orgCancelEdit" type="button" class="btn alt sm" data-t="cancelEdit"></button>
             </div>
-            <small data-t="schoolCodeHint"></small>
-          </label>
-          <div class="adm-row" style="align-self:end">
-            <button type="submit" class="btn" data-t="save"></button>
-          </div>
-        </form>
-
-        <div class="adm-filters">
-          <label class="adm-field"><span data-t="filterRegion"></span><select id="filterRegion"></select></label>
-          <label class="adm-field"><span data-t="filterDistrict"></span><select id="filterDistrict"></select></label>
-          <label class="adm-field"><span data-t="filterKind"></span>
-            <select id="filterKind">
-              <option value="all" data-t="allKinds"></option>
-              <option value="school" data-t="presetSchool"></option>
-              <option value="maorif" data-t="presetMaorif"></option>
-              <option value="raesat" data-t="presetRaesat"></option>
-            </select>
-          </label>
-          <label class="adm-field"><span data-t="filterSearch"></span><input id="filterSearch" type="search" maxlength="80"></label>
-        </div>
-        <details id="orgHierarchyBox" class="adm-tree-box" open>
-          <summary data-t="hierarchyTitle"></summary>
-          <div id="orgHierarchyTree" class="adm-tree"></div>
-        </details>
-        <p id="orgsCountInfo" class="adm-meta"></p>
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colName"></th>
-                <th data-t="colKind"></th>
-                <th data-t="colLocation"></th>
-                <th data-t="colParent"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="orgsTbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 1Б. ВЕРИФИКАЦИЯ АККАУНТОВ И НОВЫХ ШКОЛ -->
-      <section class="adm-card" data-pane="verifications" hidden>
-        <h2 data-t="tabVerifications"></h2>
-        <p class="adm-hint" data-t="verificationsHint"></p>
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colUser"></th>
-                <th data-t="colOrgPosition"></th>
-                <th data-t="colIdentity"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="verificationsTbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 2. ПОЛЬЗОВАТЕЛИ, ДОЛЖНОСТИ И УСТРОЙСТВА -->
-      <section class="adm-card" data-pane="roles" hidden>
-        <h2 data-t="tabRoles"></h2>
-        <p class="adm-hint" data-t="rolesHint"></p>
-        <form id="roleForm" class="adm-grid">
-          <label class="adm-field">
-            <span data-t="pickUser"></span>
-            <select id="roleUserPick"></select>
-          </label>
-          <label class="adm-field">
-            <span data-t="userEmail"></span>
-            <input id="roleUserId" type="text" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="sharipov, 907972295 ё email">
-          </label>
-          <label class="adm-field">
-            <span data-t="fullName"></span>
-            <input id="roleFullName" maxlength="160">
-          </label>
-          <label class="adm-field">
-            <span data-t="roleRegionFilter"></span>
-            <select id="roleRegionFilter"></select>
-          </label>
-          <label class="adm-field">
-            <span data-t="targetOrg"></span>
-            <select id="roleOrg" required></select>
-            <small id="roleOrgQuotaInfo" class="adm-quota-note"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="primaryPosition"></span>
-            <select id="rolePrimaryPos" required></select>
-            <small id="roleLoginAllowedHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="accessLevel"></span>
-            <select id="roleName"></select>
-            <small data-t="accessLevelHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="maxExtraPos"></span>
-            <input id="roleMaxExtra" type="number" min="0" max="19" value="0" required>
-            <small data-t="maxExtraHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="maxDevices"></span>
-            <input id="roleMaxDevices" type="number" min="1" max="40" value="2" required>
-            <small data-t="maxDevicesHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="tempPassword"></span>
-            <div class="adm-pass-wrap"><input id="roleTempPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" minlength="8" autocomplete="new-password"><button type="button" id="toggleRoleTempPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div>
-            <small data-t="tempPassHint"></small>
-          </label>
-          <p class="adm-latin-warn" id="admRoleLatinWarn" hidden>⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
-          <div class="adm-field" style="align-self:end;gap:8px">
-            <label class="adm-check"><input id="roleResetPass" type="checkbox"><span data-t="issueTempPassword"></span></label>
-            <label class="adm-check"><input id="roleAccountActive" type="checkbox" checked><span data-t="accountActive"></span></label>
-            <label class="adm-check"><input id="roleAliyaEnabled" type="checkbox"><span>Алия (+30 TJS)</span></label>
-          </div>
-          <div class="adm-field adm-wide">
-            <span data-t="extraPositionsLabel"></span>
-            <div id="roleExtraPositionsBox" class="adm-checkbox-grid"></div>
-          </div>
-          <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="assignRole"></button></div>
-        </form>
-
-        <section id="issuedAccessCard" class="adm-issued" hidden>
-          <strong id="issuedAccessTitle"></strong>
-          <pre id="issuedAccessText"></pre>
-          <div class="adm-row" style="margin-top:4px">
-            <button id="copyAccessBtn" type="button" class="btn sm" data-t="copyCredentials"></button>
-            <button id="closeAccessBtn" type="button" class="btn alt sm" data-t="hideCard"></button>
-          </div>
-        </section>
-
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colUser"></th>
-                <th data-t="colOrgPosition"></th>
-                <th data-t="colQuotas"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="rolesTbody"></tbody>
-          </table>
-        </div>
-
-        <h3 class="adm-subhead" data-t="devicesHeading"></h3>
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colUser"></th>
-                <th data-t="colDevice"></th>
-                <th data-t="colLastSeen"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="devicesTbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 3. ЛИЦЕНЗИИ И КВОТЫ ОРГАНИЗАЦИЙ -->
-      <section class="adm-card" data-pane="licenses" hidden>
-        <h2 data-t="tabLicenses"></h2>
-        <p class="adm-hint" data-t="licensesHint"></p>
-        <form id="licForm" class="adm-grid">
-          <label class="adm-field"><span data-t="licRegionFilter"></span><select id="licRegionFilter"></select></label>
-          <label class="adm-field"><span data-t="targetOrg"></span><select id="licOrg" required></select></label>
-          <label class="adm-field"><span data-t="licenseStatus"></span>
-            <select id="licStatus">
-              <option value="trial" data-t="statusTrial"></option>
-              <option value="active" data-t="statusActive"></option>
-              <option value="grace" data-t="statusGrace"></option>
-              <option value="expired" data-t="statusExpired"></option>
-              <option value="suspended" data-t="statusSuspended"></option>
-            </select>
-          </label>
-          <label class="adm-field"><span data-t="planCode"></span><input id="licPlan" value="standard" required></label>
-          <label class="adm-field"><span data-t="expiresAt"></span><input id="licExpires" type="date" required></label>
-          <label class="adm-field"><span data-t="graceDays"></span><input id="licGraceDays" type="number" min="0" max="90" value="30" required></label>
-          <label class="adm-field">
-            <span data-t="maxAccounts"></span>
-            <input id="licMaxAccounts" type="number" min="1" max="500" value="1" required>
-            <small data-t="maxAccountsHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="maxPosPerAcc"></span>
-            <input id="licMaxPos" type="number" min="1" max="20" value="1" required>
-            <small data-t="maxPosPerAccHint"></small>
-          </label>
-          <label class="adm-field">
-            <span data-t="defaultMaxDev"></span>
-            <input id="licDefaultDev" type="number" min="1" max="40" value="2" required>
-          </label>
-          <label class="adm-field"><span data-t="notes"></span><input id="licNotes" maxlength="400"></label>
-          <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
-        </form>
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colName"></th>
-                <th data-t="colStatus"></th>
-                <th data-t="colQuotas"></th>
-                <th data-t="expiresAt"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="licensesTbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 4. ТАРИФЫ ДОЛЖНОСТЕЙ И РЕКВИЗИТЫ -->
-      <section class="adm-card" data-pane="plans" hidden>
-        <h2 data-t="tabPlans"></h2>
-        <p class="adm-hint" data-t="plansHint"></p>
-        <form id="planForm" class="adm-grid">
-          <label class="adm-field"><span data-t="planCode"></span><input id="planCode" value="trial_10" required maxlength="40"></label>
-          <label class="adm-field"><span data-t="planTitleTg"></span><input id="planTitleTg" required maxlength="160"></label>
-          <label class="adm-field"><span data-t="planTitleRu"></span><input id="planTitleRu" required maxlength="160"></label>
-          <label class="adm-field"><span data-t="planPrice"></span><input id="planPrice" type="number" step="0.01" min="0" value="10.00" required></label>
-          <label class="adm-field"><span data-t="planDays"></span><input id="planDays" type="number" min="1" max="3650" value="30" required></label>
-          <label class="adm-field"><span data-t="recipientPhone"></span><input id="planPhone" value="+992 907972295" required maxlength="32"></label>
-          <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
-        </form>
-
-        <h3 class="adm-subhead" data-t="roleTariffsTitle"></h3>
-        <div class="adm-filters">
-          <label class="adm-field">
-            <span data-t="tariffGroupFilter"></span>
-            <select id="tariffGroupFilter">
-              <option value="all" data-t="groupAll"></option>
-              <option value="school" data-t="groupSchool"></option>
-              <option value="office" data-t="groupOffice"></option>
-              <option value="raesat" data-t="groupRaesat"></option>
-            </select>
-          </label>
-          <label class="adm-field">
-            <span data-t="tariffSearch"></span>
-            <input id="tariffSearch" type="search" maxlength="80">
-          </label>
-        </div>
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colPosition"></th>
-                <th data-t="colBasePrice"></th>
-                <th data-t="colExtraPrice"></th>
-                <th data-t="colDays"></th>
-                <th data-t="colDevices"></th>
-                <th data-t="colCanLogin"></th>
-                <th data-t="colActive"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="roleTariffsTbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 5. ПЛАТЕЖИ И ЧЕКИ -->
-      <section class="adm-card" data-pane="payments" hidden>
-        <h2 data-t="tabPayments"></h2>
-        <div class="adm-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th data-t="colName"></th>
-                <th data-t="colReceipt"></th>
-                <th data-t="colActions"></th>
-              </tr>
-            </thead>
-            <tbody id="paymentsTbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 6. ДОКУМЕНТЫ И ШАБЛОНЫ -->
-      <section class="adm-card" data-pane="documents" hidden>
-        <h2 data-t="tabDocuments"></h2>
-        <p class="adm-hint" data-t="docsHint"></p>
-
-        <div class="adm-doc-sections">
-          <!-- Категория -->
-          <details class="adm-tree-box" open>
-            <summary data-t="docCatSection"></summary>
-            <form id="docCatForm" class="adm-grid" style="margin-top:10px">
+            <form id="orgForm" class="adm-grid">
               <label class="adm-field">
-                <span data-t="docTitleTg"></span>
-                <input id="docCatTitleTg" required maxlength="140" placeholder="Нақшаҳо ва ҳисоботҳо">
+                <span data-t="orgName"></span>
+                <input id="orgName" required maxlength="160">
+                <small data-t="orgNameHint"></small>
               </label>
               <label class="adm-field">
-                <span data-t="docTitleRu"></span>
-                <input id="docCatTitleRu" maxlength="140" placeholder="Планы и отчёты">
+                <span data-t="orgTypeLabel"></span>
+                <select id="orgTypePreset">
+                  <option value="school" data-t="presetSchool"></option>
+                  <option value="maorif" data-t="presetMaorif"></option>
+                  <option value="raesat" data-t="presetRaesat"></option>
+                </select>
+                <small data-t="orgTypeHint"></small>
               </label>
               <label class="adm-field">
-                <span data-t="docIcon"></span>
-                <input id="docCatIcon" maxlength="10" value="📁">
+                <span data-t="region"></span>
+                <input id="orgRegion" maxlength="120" list="regionDatalist">
+                <datalist id="regionDatalist"></datalist>
+                <small data-t="regionHint"></small>
               </label>
               <label class="adm-field">
-                <span data-t="docSort"></span>
-                <input id="docCatSort" type="number" value="100" min="0" max="9999">
+                <span data-t="district"></span>
+                <input id="orgDistrict" maxlength="120" list="districtDatalist">
+                <datalist id="districtDatalist"></datalist>
+                <small data-t="districtHint"></small>
               </label>
-              <label class="adm-field" style="align-self:end">
-                <span style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                  <input id="docCatActive" type="checkbox" checked style="width:auto">
-                  <span data-t="colActive"></span>
-                </span>
+              <label class="adm-field">
+                <span data-t="jamoat"></span>
+                <input id="orgJamoat" maxlength="120" list="jamoatDatalist">
+                <datalist id="jamoatDatalist"></datalist>
               </label>
-              <div class="adm-wide">
-                <div class="adm-row" style="margin-bottom:6px">
-                  <strong style="font-size:0.86rem" data-t="docPositionsLabel"></strong>
-                  <button type="button" class="btn alt sm" id="docCatPickSchool" data-t="docPickSchool"></button>
-                  <button type="button" class="btn alt sm" id="docCatPickMaorif" data-t="docPickMaorif"></button>
-                  <button type="button" class="btn alt sm" id="docCatPickRaesat" data-t="docPickRaesat"></button>
-                  <button type="button" class="btn alt sm" id="docCatPickClear" data-t="docPickClear"></button>
+              <label class="adm-field">
+                <span data-t="village"></span>
+                <input id="orgVillage" maxlength="120" list="villageDatalist">
+                <datalist id="villageDatalist"></datalist>
+              </label>
+              <label class="adm-field">
+                <span data-t="orgParent"></span>
+                <select id="orgParent"></select>
+                <small data-t="orgParentHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="schoolCode"></span>
+                <div class="adm-inline">
+                  <input id="orgCode" maxlength="40" placeholder="SM-089">
+                  <button id="orgGenCode" type="button" class="btn alt sm" data-t="generateCode"></button>
                 </div>
-                <div id="docCatPositionsBox" class="adm-pos-grid"></div>
-              </div>
-              <div class="adm-row adm-wide">
-                <button type="submit" class="btn" id="docCatSaveBtn" data-t="docSaveCat"></button>
-                <button type="button" class="btn alt" id="docCatCancelBtn" hidden data-t="cancelEdit"></button>
+                <small data-t="schoolCodeHint"></small>
+              </label>
+              <div class="adm-row" style="align-self:end">
+                <button type="submit" class="btn" data-t="save"></button>
               </div>
             </form>
-          </details>
 
-          <!-- Подкатегория -->
-          <details class="adm-tree-box" open>
-            <summary data-t="docSubSection"></summary>
-            <form id="docSubForm" class="adm-grid" style="margin-top:10px">
+            <div class="adm-filters">
+              <label class="adm-field"><span data-t="filterRegion"></span><select id="filterRegion"></select></label>
+              <label class="adm-field"><span data-t="filterDistrict"></span><select id="filterDistrict"></select></label>
+              <label class="adm-field"><span data-t="filterKind"></span>
+                <select id="filterKind">
+                  <option value="all" data-t="allKinds"></option>
+                  <option value="school" data-t="presetSchool"></option>
+                  <option value="maorif" data-t="presetMaorif"></option>
+                  <option value="raesat" data-t="presetRaesat"></option>
+                </select>
+              </label>
+              <label class="adm-field"><span data-t="filterSearch"></span><input id="filterSearch" type="search" maxlength="80"></label>
+            </div>
+            <details id="orgHierarchyBox" class="adm-tree-box" open>
+              <summary data-t="hierarchyTitle"></summary>
+              <div id="orgHierarchyTree" class="adm-tree"></div>
+            </details>
+            <p id="orgsCountInfo" class="adm-meta"></p>
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colName"></th>
+                    <th data-t="colKind"></th>
+                    <th data-t="colLocation"></th>
+                    <th data-t="colParent"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="orgsTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- 1Б. ВЕРИФИКАЦИЯ АККАУНТОВ И НОВЫХ ШКОЛ -->
+          <section class="adm-card" data-pane="verifications" hidden>
+            <h2 data-t="tabVerifications"></h2>
+            <p class="adm-hint" data-t="verificationsHint"></p>
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colUser"></th>
+                    <th data-t="colOrgPosition"></th>
+                    <th data-t="colIdentity"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="verificationsTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- 2. ПОЛЬЗОВАТЕЛИ, ДОЛЖНОСТИ И УСТРОЙСТВА -->
+          <section class="adm-card" data-pane="roles" hidden>
+            <h2 data-t="tabRoles"></h2>
+            <p class="adm-hint" data-t="rolesHint"></p>
+            <form id="roleForm" class="adm-grid">
               <label class="adm-field">
-                <span data-t="docParentCat"></span>
-                <select id="docSubCatSelect" required></select>
+                <span data-t="pickUser"></span>
+                <select id="roleUserPick"></select>
               </label>
               <label class="adm-field">
-                <span data-t="docTitleTg"></span>
-                <input id="docSubTitleTg" required maxlength="140" placeholder="Нақшаи солона">
+                <span data-t="userEmail"></span>
+                <input id="roleUserId" type="text" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="sharipov, 907972295 ё email">
               </label>
               <label class="adm-field">
-                <span data-t="docTitleRu"></span>
-                <input id="docSubTitleRu" maxlength="140" placeholder="Годовой план">
+                <span data-t="fullName"></span>
+                <input id="roleFullName" maxlength="160">
               </label>
               <label class="adm-field">
-                <span data-t="docSort"></span>
-                <input id="docSubSort" type="number" value="100" min="0" max="9999">
+                <span data-t="roleRegionFilter"></span>
+                <select id="roleRegionFilter"></select>
+              </label>
+              <label class="adm-field">
+                <span data-t="targetOrg"></span>
+                <select id="roleOrg" required></select>
+                <small id="roleOrgQuotaInfo" class="adm-quota-note"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="primaryPosition"></span>
+                <select id="rolePrimaryPos" required></select>
+                <small id="roleLoginAllowedHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="accessLevel"></span>
+                <select id="roleName"></select>
+                <small data-t="accessLevelHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="maxExtraPos"></span>
+                <input id="roleMaxExtra" type="number" min="0" max="19" value="0" required>
+                <small data-t="maxExtraHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="maxDevices"></span>
+                <input id="roleMaxDevices" type="number" min="1" max="40" value="2" required>
+                <small data-t="maxDevicesHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="tempPassword"></span>
+                <div class="adm-pass-wrap"><input id="roleTempPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" minlength="8" autocomplete="new-password"><button type="button" id="toggleRoleTempPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div>
+                <small data-t="tempPassHint"></small>
+              </label>
+              <p class="adm-latin-warn" id="admRoleLatinWarn" hidden>⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
+              <div class="adm-field" style="align-self:end;gap:8px">
+                <label class="adm-check"><input id="roleResetPass" type="checkbox"><span data-t="issueTempPassword"></span></label>
+                <label class="adm-check"><input id="roleAccountActive" type="checkbox" checked><span data-t="accountActive"></span></label>
+                <label class="adm-check"><input id="roleAliyaEnabled" type="checkbox"><span>Алия (+30 TJS)</span></label>
+              </div>
+              <div class="adm-field adm-wide">
+                <span data-t="extraPositionsLabel"></span>
+                <div id="roleExtraPositionsBox" class="adm-checkbox-grid"></div>
+              </div>
+              <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="assignRole"></button></div>
+            </form>
+
+            <section id="issuedAccessCard" class="adm-issued" hidden>
+              <strong id="issuedAccessTitle"></strong>
+              <pre id="issuedAccessText"></pre>
+              <div class="adm-row" style="margin-top:4px">
+                <button id="copyAccessBtn" type="button" class="btn sm" data-t="copyCredentials"></button>
+                <button id="closeAccessBtn" type="button" class="btn alt sm" data-t="hideCard"></button>
+              </div>
+            </section>
+
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colUser"></th>
+                    <th data-t="colOrgPosition"></th>
+                    <th data-t="colQuotas"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="rolesTbody"></tbody>
+              </table>
+            </div>
+
+            <h3 class="adm-subhead" data-t="devicesHeading"></h3>
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colUser"></th>
+                    <th data-t="colDevice"></th>
+                    <th data-t="colLastSeen"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="devicesTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- 3. ЛИЦЕНЗИИ И КВОТЫ ОРГАНИЗАЦИЙ -->
+          <section class="adm-card" data-pane="licenses" hidden>
+            <h2 data-t="tabLicenses"></h2>
+            <p class="adm-hint" data-t="licensesHint"></p>
+            <form id="licForm" class="adm-grid">
+              <label class="adm-field"><span data-t="licRegionFilter"></span><select id="licRegionFilter"></select></label>
+              <label class="adm-field"><span data-t="targetOrg"></span><select id="licOrg" required></select></label>
+              <label class="adm-field"><span data-t="licenseStatus"></span>
+                <select id="licStatus">
+                  <option value="trial" data-t="statusTrial"></option>
+                  <option value="active" data-t="statusActive"></option>
+                  <option value="grace" data-t="statusGrace"></option>
+                  <option value="expired" data-t="statusExpired"></option>
+                  <option value="suspended" data-t="statusSuspended"></option>
+                </select>
+              </label>
+              <label class="adm-field"><span data-t="planCode"></span><input id="licPlan" value="standard" required></label>
+              <label class="adm-field"><span data-t="expiresAt"></span><input id="licExpires" type="date" required></label>
+              <label class="adm-field"><span data-t="graceDays"></span><input id="licGraceDays" type="number" min="0" max="90" value="30" required></label>
+              <label class="adm-field">
+                <span data-t="maxAccounts"></span>
+                <input id="licMaxAccounts" type="number" min="1" max="500" value="1" required>
+                <small data-t="maxAccountsHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="maxPosPerAcc"></span>
+                <input id="licMaxPos" type="number" min="1" max="20" value="1" required>
+                <small data-t="maxPosPerAccHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="defaultMaxDev"></span>
+                <input id="licDefaultDev" type="number" min="1" max="40" value="2" required>
+              </label>
+              <label class="adm-field"><span data-t="notes"></span><input id="licNotes" maxlength="400"></label>
+              <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
+            </form>
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colName"></th>
+                    <th data-t="colStatus"></th>
+                    <th data-t="colQuotas"></th>
+                    <th data-t="expiresAt"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="licensesTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- 4. ТАРИФЫ ДОЛЖНОСТЕЙ И РЕКВИЗИТЫ -->
+          <section class="adm-card" data-pane="plans" hidden>
+            <h2 data-t="tabPlans"></h2>
+            <p class="adm-hint" data-t="plansHint"></p>
+            <form id="planForm" class="adm-grid">
+              <label class="adm-field"><span data-t="planCode"></span><input id="planCode" value="trial_10" required maxlength="40"></label>
+              <label class="adm-field"><span data-t="planTitleTg"></span><input id="planTitleTg" required maxlength="160"></label>
+              <label class="adm-field"><span data-t="planTitleRu"></span><input id="planTitleRu" required maxlength="160"></label>
+              <label class="adm-field"><span data-t="planPrice"></span><input id="planPrice" type="number" step="0.01" min="0" value="10.00" required></label>
+              <label class="adm-field"><span data-t="planDays"></span><input id="planDays" type="number" min="1" max="3650" value="30" required></label>
+              <label class="adm-field"><span data-t="recipientPhone"></span><input id="planPhone" value="+992 907972295" required maxlength="32"></label>
+              <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
+            </form>
+
+            <h3 class="adm-subhead" data-t="roleTariffsTitle"></h3>
+            <div class="adm-filters">
+              <label class="adm-field">
+                <span data-t="tariffGroupFilter"></span>
+                <select id="tariffGroupFilter">
+                  <option value="all" data-t="groupAll"></option>
+                  <option value="school" data-t="groupSchool"></option>
+                  <option value="office" data-t="groupOffice"></option>
+                  <option value="raesat" data-t="groupRaesat"></option>
+                </select>
+              </label>
+              <label class="adm-field">
+                <span data-t="tariffSearch"></span>
+                <input id="tariffSearch" type="search" maxlength="80">
+              </label>
+            </div>
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colPosition"></th>
+                    <th data-t="colBasePrice"></th>
+                    <th data-t="colExtraPrice"></th>
+                    <th data-t="colDays"></th>
+                    <th data-t="colDevices"></th>
+                    <th data-t="colCanLogin"></th>
+                    <th data-t="colActive"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="roleTariffsTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- 5. ПЛАТЕЖИ И ЧЕКИ -->
+          <section class="adm-card" data-pane="payments" hidden>
+            <h2 data-t="tabPayments"></h2>
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colName"></th>
+                    <th data-t="colReceipt"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="paymentsTbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- 6. ДОКУМЕНТЫ И ШАБЛОНЫ -->
+          <section class="adm-card" data-pane="documents" hidden>
+            <h2 data-t="tabDocuments"></h2>
+            <p class="adm-hint" data-t="docsHint"></p>
+
+            <div class="adm-doc-sections">
+              <!-- Категория -->
+              <details class="adm-tree-box" open>
+                <summary data-t="docCatSection"></summary>
+                <form id="docCatForm" class="adm-grid" style="margin-top:10px">
+                  <label class="adm-field">
+                    <span data-t="docTitleTg"></span>
+                    <input id="docCatTitleTg" required maxlength="140" placeholder="Нақшаҳо ва ҳисоботҳо">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docTitleRu"></span>
+                    <input id="docCatTitleRu" maxlength="140" placeholder="Планы и отчёты">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docIcon"></span>
+                    <input id="docCatIcon" maxlength="10" value="📁">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docSort"></span>
+                    <input id="docCatSort" type="number" value="100" min="0" max="9999">
+                  </label>
+                  <label class="adm-field" style="align-self:end">
+                    <span style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                      <input id="docCatActive" type="checkbox" checked style="width:auto">
+                      <span data-t="colActive"></span>
+                    </span>
+                  </label>
+                  <div class="adm-wide">
+                    <div class="adm-row" style="margin-bottom:6px">
+                      <strong style="font-size:0.86rem" data-t="docPositionsLabel"></strong>
+                      <button type="button" class="btn alt sm" id="docCatPickSchool" data-t="docPickSchool"></button>
+                      <button type="button" class="btn alt sm" id="docCatPickMaorif" data-t="docPickMaorif"></button>
+                      <button type="button" class="btn alt sm" id="docCatPickRaesat" data-t="docPickRaesat"></button>
+                      <button type="button" class="btn alt sm" id="docCatPickClear" data-t="docPickClear"></button>
+                    </div>
+                    <div id="docCatPositionsBox" class="adm-pos-grid"></div>
+                  </div>
+                  <div class="adm-row adm-wide">
+                    <button type="submit" class="btn" id="docCatSaveBtn" data-t="docSaveCat"></button>
+                    <button type="button" class="btn alt" id="docCatCancelBtn" hidden data-t="cancelEdit"></button>
+                  </div>
+                </form>
+              </details>
+
+              <!-- Подкатегория -->
+              <details class="adm-tree-box" open>
+                <summary data-t="docSubSection"></summary>
+                <form id="docSubForm" class="adm-grid" style="margin-top:10px">
+                  <label class="adm-field">
+                    <span data-t="docParentCat"></span>
+                    <select id="docSubCatSelect" required></select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docTitleTg"></span>
+                    <input id="docSubTitleTg" required maxlength="140" placeholder="Нақшаи солона">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docTitleRu"></span>
+                    <input id="docSubTitleRu" maxlength="140" placeholder="Годовой план">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docSort"></span>
+                    <input id="docSubSort" type="number" value="100" min="0" max="9999">
+                  </label>
+                  <label class="adm-field" style="align-self:end">
+                    <span style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                      <input id="docSubActive" type="checkbox" checked style="width:auto">
+                      <span data-t="colActive"></span>
+                    </span>
+                  </label>
+                  <div class="adm-row adm-wide">
+                    <button type="submit" class="btn" id="docSubSaveBtn" data-t="docSaveSub"></button>
+                    <button type="button" class="btn alt" id="docSubCancelBtn" hidden data-t="cancelEdit"></button>
+                  </div>
+                </form>
+              </details>
+
+              <!-- Шаблон документа + Мини-Word редактор -->
+              <details class="adm-tree-box" open>
+                <summary data-t="docTplSection"></summary>
+                <form id="docTplForm" class="adm-grid" style="margin-top:10px">
+                  <label class="adm-field">
+                    <span data-t="docParentCat"></span>
+                    <select id="docTplCatSelect" required></select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docParentSub"></span>
+                    <select id="docTplSubSelect" required></select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docTitleTg"></span>
+                    <input id="docTplTitleTg" required maxlength="180" placeholder="Фармоиш оид ба...">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docTitleRu"></span>
+                    <input id="docTplTitleRu" maxlength="180" placeholder="Приказ о...">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docDescTg"></span>
+                    <input id="docTplDescTg" maxlength="400">
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docLangFilter"></span>
+                    <select id="docTplLang">
+                      <option value="both">tg + ru</option>
+                      <option value="tg">tg</option>
+                      <option value="ru">ru</option>
+                    </select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docSchoolTypeFilter"></span>
+                    <select id="docTplSchoolType">
+                      <option value="all">Ҳама / Все</option>
+                      <option value="Мактаби миёна">Мактаби миёна</option>
+                      <option value="Гимназия">Гимназия</option>
+                      <option value="Литсей">Литсей</option>
+                      <option value="Мактаб-интернат">Мактаб-интернат</option>
+                      <option value="Мактаби ибтидоӣ">Мактаби ибтидоӣ</option>
+                    </select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docShiftFilter"></span>
+                    <select id="docTplShift">
+                      <option value="all">Ҳама / Все</option>
+                      <option value="1">1 баст</option>
+                      <option value="2">2 баст</option>
+                    </select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docTplFormat"></span>
+                    <select id="docTplFormat">
+                      <option value="word" data-t="docFormatWord"></option>
+                      <option value="pdf" data-t="docFormatPdf"></option>
+                    </select>
+                  </label>
+                  <label class="adm-field" id="docTplEditModeField">
+                    <span data-t="docEditMode"></span>
+                    <select id="docTplEditMode">
+                      <option value="full" data-t="docEditFull"></option>
+                      <option value="fields_only" data-t="docEditFields"></option>
+                    </select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docStatus"></span>
+                    <select id="docTplStatus">
+                      <option value="published" data-t="docStatusPublished"></option>
+                      <option value="draft" data-t="docStatusDraft"></option>
+                    </select>
+                  </label>
+                  <label class="adm-field">
+                    <span data-t="docSort"></span>
+                    <input id="docTplSort" type="number" value="100" min="0" max="9999">
+                  </label>
+                  <label class="adm-field" style="align-self:end">
+                    <span style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                      <input id="docTplStrictNative" type="checkbox" style="width:auto">
+                      <span data-t="docStrictNative"></span>
+                    </span>
+                  </label>
+                  <div class="adm-wide">
+                    <small style="display:block;margin-bottom:4px;color:var(--sub)" data-t="docTplPosHint"></small>
+                    <div id="docTplPositionsBox" class="adm-pos-grid"></div>
+                  </div>
+                  <div class="adm-wide adm-docx-import-bar">
+                    <label class="adm-field" style="flex:1">
+                      <span data-t="docImportFileLabel"></span>
+                      <input id="docTplFileInput" type="file" accept=".docx,.txt,.pdf,application/pdf">
+                    </label>
+                  </div>
+                  <div class="adm-wide" id="docTplPdfBox" hidden style="padding:14px;border:1px solid var(--danger);border-radius:12px;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                    <div>
+                      <strong id="docTplPdfStatus">📕 PDF / Скан</strong>
+                      <div id="docTplPdfMeta" style="font-size:0.84rem;opacity:.9;margin-top:3px"></div>
+                    </div>
+                    <button type="button" class="btn alt sm" id="docTplPdfPreviewBtn">👁️ Пешнамоиш / Просмотр</button>
+                  </div>
+                  <div class="adm-wide">
+                    <div id="docTplEditorHost" class="adm-doc-editor-host"></div>
+                  </div>
+                  <div class="adm-row adm-wide">
+                    <button type="submit" class="btn" id="docTplSaveBtn" data-t="docSaveTpl"></button>
+                    <button type="button" class="btn alt" id="docTplCancelBtn" hidden data-t="cancelEdit"></button>
+                  </div>
+                </form>
+              </details>
+            </div>
+
+            <h3 class="adm-subhead" data-t="docCatalogTreeTitle"></h3>
+            <div class="adm-filters">
+              <label class="adm-field">
+                <span data-t="colPosition"></span>
+                <select id="docCatalogPosFilter"></select>
+              </label>
+              <label class="adm-field">
+                <span data-t="filterSearch"></span>
+                <input id="docCatalogSearch" type="search" maxlength="100">
+              </label>
+              <div class="adm-row" style="margin-top:0">
+                <button type="button" class="btn alt" id="docCatalogRefreshBtn" data-t="reload"></button>
+              </div>
+            </div>
+            <div id="docCatalogTree" class="adm-tree"></div>
+          </section>
+
+          <!-- 7. МЕНЕДЖЕРЫ АДМИНКИ (ТОЛЬКО СУПЕР-АДМИН) -->
+          <section class="adm-card" data-pane="managers" hidden>
+            <h2 data-t="tabManagers"></h2>
+            <p class="adm-hint" data-t="managersHint"></p>
+            <form id="managerForm" class="adm-grid">
+              <label class="adm-field">
+                <span data-t="mgrLogin"></span>
+                <input id="mgrLogin" type="text" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="manager_sughd ё email">
+              </label>
+              <label class="adm-field">
+                <span data-t="fullName"></span>
+                <input id="mgrFullName" required maxlength="160">
+              </label>
+              <label class="adm-field">
+                <span data-t="mgrPassword"></span>
+                <div class="adm-pass-wrap"><input id="mgrPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" minlength="8" autocomplete="new-password"><button type="button" id="toggleMgrPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div>
+                <small data-t="tempPassHint"></small>
+              </label>
+              <label class="adm-field">
+                <span data-t="mgrRegionScope"></span>
+                <select id="mgrRegionScope"></select>
+              </label>
+              <label class="adm-field">
+                <span data-t="notes"></span>
+                <input id="mgrNotes" maxlength="300">
               </label>
               <label class="adm-field" style="align-self:end">
-                <span style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                  <input id="docSubActive" type="checkbox" checked style="width:auto">
-                  <span data-t="colActive"></span>
-                </span>
+                <label class="adm-check"><input id="mgrActive" type="checkbox" checked><span data-t="accountActive"></span></label>
               </label>
-              <div class="adm-row adm-wide">
-                <button type="submit" class="btn" id="docSubSaveBtn" data-t="docSaveSub"></button>
-                <button type="button" class="btn alt" id="docSubCancelBtn" hidden data-t="cancelEdit"></button>
-              </div>
-            </form>
-          </details>
-
-          <!-- Шаблон документа + Мини-Word редактор -->
-          <details class="adm-tree-box" open>
-            <summary data-t="docTplSection"></summary>
-            <form id="docTplForm" class="adm-grid" style="margin-top:10px">
-              <label class="adm-field">
-                <span data-t="docParentCat"></span>
-                <select id="docTplCatSelect" required></select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docParentSub"></span>
-                <select id="docTplSubSelect" required></select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docTitleTg"></span>
-                <input id="docTplTitleTg" required maxlength="180" placeholder="Фармоиш оид ба...">
-              </label>
-              <label class="adm-field">
-                <span data-t="docTitleRu"></span>
-                <input id="docTplTitleRu" maxlength="180" placeholder="Приказ о...">
-              </label>
-              <label class="adm-field">
-                <span data-t="docDescTg"></span>
-                <input id="docTplDescTg" maxlength="400">
-              </label>
-              <label class="adm-field">
-                <span data-t="docLangFilter"></span>
-                <select id="docTplLang">
-                  <option value="both">tg + ru</option>
-                  <option value="tg">tg</option>
-                  <option value="ru">ru</option>
-                </select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docSchoolTypeFilter"></span>
-                <select id="docTplSchoolType">
-                  <option value="all">Ҳама / Все</option>
-                  <option value="Мактаби миёна">Мактаби миёна</option>
-                  <option value="Гимназия">Гимназия</option>
-                  <option value="Литсей">Литсей</option>
-                  <option value="Мактаб-интернат">Мактаб-интернат</option>
-                  <option value="Мактаби ибтидоӣ">Мактаби ибтидоӣ</option>
-                </select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docShiftFilter"></span>
-                <select id="docTplShift">
-                  <option value="all">Ҳама / Все</option>
-                  <option value="1">1 баст</option>
-                  <option value="2">2 баст</option>
-                </select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docTplFormat"></span>
-                <select id="docTplFormat">
-                  <option value="word" data-t="docFormatWord"></option>
-                  <option value="pdf" data-t="docFormatPdf"></option>
-                </select>
-              </label>
-              <label class="adm-field" id="docTplEditModeField">
-                <span data-t="docEditMode"></span>
-                <select id="docTplEditMode">
-                  <option value="full" data-t="docEditFull"></option>
-                  <option value="fields_only" data-t="docEditFields"></option>
-                </select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docStatus"></span>
-                <select id="docTplStatus">
-                  <option value="published" data-t="docStatusPublished"></option>
-                  <option value="draft" data-t="docStatusDraft"></option>
-                </select>
-              </label>
-              <label class="adm-field">
-                <span data-t="docSort"></span>
-                <input id="docTplSort" type="number" value="100" min="0" max="9999">
-              </label>
-              <label class="adm-field" style="align-self:end">
-                <span style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                  <input id="docTplStrictNative" type="checkbox" style="width:auto">
-                  <span data-t="docStrictNative"></span>
-                </span>
-              </label>
-              <div class="adm-wide">
-                <small style="display:block;margin-bottom:4px;color:var(--sub)" data-t="docTplPosHint"></small>
-                <div id="docTplPositionsBox" class="adm-pos-grid"></div>
-              </div>
-              <div class="adm-wide adm-docx-import-bar">
-                <label class="adm-field" style="flex:1">
-                  <span data-t="docImportFileLabel"></span>
-                  <input id="docTplFileInput" type="file" accept=".docx,.txt,.pdf,application/pdf">
-                </label>
-              </div>
-              <div class="adm-wide" id="docTplPdfBox" hidden style="padding:14px;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;color:#7f1d1d;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-                <div>
-                  <strong id="docTplPdfStatus">📕 PDF / Скан</strong>
-                  <div id="docTplPdfMeta" style="font-size:0.84rem;opacity:.85;margin-top:3px"></div>
-                </div>
-                <button type="button" class="btn alt sm" id="docTplPdfPreviewBtn">👁️ Пешнамоиш / Просмотр</button>
-              </div>
-              <div class="adm-wide">
-                <div id="docTplEditorHost" class="adm-doc-editor-host"></div>
+              <div class="adm-field adm-wide">
+                <span data-t="mgrPermissionsLabel"></span>
+                <div id="mgrPermissionsBox" class="adm-checkbox-grid"></div>
               </div>
               <div class="adm-row adm-wide">
-                <button type="submit" class="btn" id="docTplSaveBtn" data-t="docSaveTpl"></button>
-                <button type="button" class="btn alt" id="docTplCancelBtn" hidden data-t="cancelEdit"></button>
+                <button type="submit" class="btn" id="mgrSaveBtn" data-t="mgrSaveBtn"></button>
+                <button type="button" class="btn alt" id="mgrResetBtn" data-t="cancelEdit" hidden></button>
               </div>
             </form>
-          </details>
-        </div>
 
-        <h3 class="adm-subhead" data-t="docCatalogTreeTitle"></h3>
-        <div class="adm-filters">
-          <label class="adm-field">
-            <span data-t="colPosition"></span>
-            <select id="docCatalogPosFilter"></select>
-          </label>
-          <label class="adm-field">
-            <span data-t="filterSearch"></span>
-            <input id="docCatalogSearch" type="search" maxlength="100">
-          </label>
-          <div class="adm-row" style="margin-top:0">
-            <button type="button" class="btn alt" id="docCatalogRefreshBtn" data-t="reload"></button>
-          </div>
+            <section id="mgrIssuedCard" class="adm-issued" hidden>
+              <strong data-t="issuedTitle"></strong>
+              <pre id="mgrIssuedText"></pre>
+            </section>
+
+            <div class="adm-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-t="colUser"></th>
+                    <th data-t="mgrColPerms"></th>
+                    <th data-t="mgrColScope"></th>
+                    <th data-t="colStatus"></th>
+                    <th data-t="colActions"></th>
+                  </tr>
+                </thead>
+                <tbody id="managersTbody"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
-        <div id="docCatalogTree" class="adm-tree"></div>
-      </section>
+      </div>
     </section>
   </main>
 
