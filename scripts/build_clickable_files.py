@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Inline cabinet assets for sandbox viewing, and derive embedded routes for the start file."""
+from base64 import b64encode
 from pathlib import Path
 import json,re,subprocess,sys
 
@@ -32,7 +33,8 @@ def assemble():
         runtime=f'<!-- SMARTMAKTAB INLINE START --><meta name="smartmaktab-path" content="{path}"><style>{CSS}</style>{inline_script(bundles[entry])}<!-- SMARTMAKTAB INLINE END -->'
         # CSS is attached at the bottom of the document with the runtime, after the entire DOM can be queried.
         f.write_text(source.replace('</body>',runtime+'</body>',1),encoding='utf8')
-    return {'routes':routes,'bundles':bundles,'css':CSS}
+    brand_icon='data:image/png;base64,'+b64encode((ROOT/'shared/brand-icon.png').read_bytes()).decode('ascii')
+    return {'routes':routes,'bundles':bundles,'css':CSS,'brandIcon':brand_icon}
 
 if __name__=='__main__':
     from build_startup import build_startup

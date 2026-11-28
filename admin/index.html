@@ -4,13 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SmartMaktab Admin</title>
+  <link rel="icon" type="image/png" href="../shared/brand-icon.png">
   <link rel="stylesheet" href="./admin.css">
 </head>
 <body>
   <header class="adm-head">
     <div class="adm-brand">
-      <h1 data-t="title">SmartMaktab Admin</h1>
-      <p data-t="sub"></p>
+      <img src="../shared/brand-icon.png" alt="" class="adm-brand-icon" width="36" height="36">
+      <div>
+        <h1 data-t="title">SmartMaktab Admin</h1>
+        <p data-t="sub"></p>
+      </div>
     </div>
     <div class="adm-row" style="margin-top:0">
       <button id="reloadBtn" type="button" class="btn alt" data-t="reload" hidden></button>
@@ -213,7 +217,7 @@
           </label>
           <label class="adm-field">
             <span data-t="maxDevices"></span>
-            <input id="roleMaxDevices" type="number" min="1" max="10" value="1" required>
+            <input id="roleMaxDevices" type="number" min="1" max="40" value="2" required>
             <small data-t="maxDevicesHint"></small>
           </label>
           <label class="adm-field">
@@ -303,7 +307,7 @@
           </label>
           <label class="adm-field">
             <span data-t="defaultMaxDev"></span>
-            <input id="licDefaultDev" type="number" min="1" max="10" value="1" required>
+            <input id="licDefaultDev" type="number" min="1" max="40" value="2" required>
           </label>
           <label class="adm-field"><span data-t="notes"></span><input id="licNotes" maxlength="400"></label>
           <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>

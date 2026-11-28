@@ -1,4 +1,5 @@
 import { getCloudConfig } from './cloud-config.mjs';
+import { detectDeviceKind } from './license-guard.mjs';
 import { normalizeLoginIdentifier } from './position-catalog.mjs';
 
 export function createCloudClient({
@@ -222,7 +223,14 @@ export function createCloudClient({
     getPendingAccountVerifications: (orgId = null) => rpc('get_pending_account_verifications', { p_org_id: orgId }),
     reviewAccountVerification: args => rpc('review_account_verification', args),
     getPendingSchools: () => rpc('get_pending_schools'),
-    claimDeviceSession: args => rpc('claim_device_session', args),
+    claimDeviceSession: args => rpc('claim_device_session', { p_device_kind: detectDeviceKind(), ...(args || {}) }),
+    getMyDeviceSessions: (orgId = null) => rpc('get_my_device_sessions', { p_org_id: orgId }),
+    revokeMyDeviceSession: args => rpc('revoke_my_device_session', args),
+    getManagedUsers: (orgId = null) => rpc('get_managed_users', { p_org_id: orgId }),
+    manageResetUserDevices: args => rpc('manage_reset_user_devices', args),
+    manageSetUserActive: args => rpc('manage_set_user_active', args),
+    managerResetPassword: ({ user_id, org_id }) => invokeFunction('admin-users', { action: 'manager_reset_password', user_id, org_id }),
+    managerDeleteUser: ({ user_id, org_id }) => invokeFunction('admin-users', { action: 'manager_delete_user', user_id, org_id }),
     manageLibraryBook: args => rpc('manage_library_book', args),
     manageLibraryLoan: args => rpc('manage_library_loan', args),
     adminUpsertOrganization: args => rpc('admin_upsert_organization', args),

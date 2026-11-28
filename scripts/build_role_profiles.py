@@ -42,10 +42,12 @@ def header_html(row):
     prefix='../'*(len(Path(row['path']).parts)-1)
     return (
         f'<header class="top"><div class="teacher-context">'
-        f'<a class="brand top-brand" href="{prefix}index.html"><span class="logo" aria-hidden="true">S</span><span class="brand-name">SmartMaktab</span></a>'
+        f'<a class="brand top-brand" href="{prefix}index.html"><img class="brand-logo" src="{prefix}shared/brand-icon.png" alt="" width="30" height="30"><span class="brand-name">SmartMaktab</span></a>'
         f'<h1 class="crumb">{escape(row["title"])}</h1>'
         f'<span class="tag" id="workspaceSchool">—</span></div><div class="actions"></div></header>'
     )
+
+FOOTER_TG='<footer class="ownership-notice no-print"><span data-tg="© Парвиз Шарипов. Ҳамаи ҳуқуқҳо ҳифз шудаанд.">© Парвиз Шарипов. Ҳамаи ҳуқуқҳо ҳифз шудаанд.</span></footer>'
 
 for row in rows:
     p=ROOT/row['path']; raw=p.read_text(); block=entry(row)
@@ -54,8 +56,10 @@ for row in rows:
         s,tail=raw[:idx],raw[idx:]
     else:
         s,tail=raw,''
+    s=re.sub(r'<title>.*?</title>', lambda _: f'<title>{escape(row["title"])} · SmartMaktab</title>', s, count=1, flags=re.S)
     s=re.sub(r'<aside class="rail">.*?</aside>\s*', '', s, count=1, flags=re.S)
     s=re.sub(r'<header class="top">.*?</header>', lambda _: header_html(row), s, count=1, flags=re.S)
+    s=re.sub(r'<footer class="ownership-notice[^>]*>.*?</footer>', lambda _: FOOTER_TG, s, count=1, flags=re.S)
     s=re.sub(r'<div class="hero">.*?</div>\s*<(?:p|div) class="notice[^"]*"[^>]*>.*?</(?:p|div)>\s*', '', s, count=1, flags=re.S)
     s=re.sub(r'\.rail[^}]*\}\s*', '', s)
     s=re.sub(r'\.hero\{[^}]*\}\s*', '', s)

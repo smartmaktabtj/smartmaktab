@@ -45,7 +45,11 @@ before(async () => {
     '../supabase/migrations/20261126000400_phase2_registries_payroll_grades_verification_hierarchy.sql',
     '../supabase/migrations/20261126000500_account_verification.sql',
     '../supabase/migrations/20261127000100_public_bootstrap_rpc.sql',
-    '../supabase/migrations/20261128000100_stage0_cleanup.sql'
+    '../supabase/migrations/20261128000100_stage0_cleanup.sql',
+    '../supabase/migrations/20261128000200_stage1_locations_tariffs_devices.sql',
+    '../supabase/migrations/20261128000300_stage1_registration_payments_quotas.sql',
+    '../supabase/migrations/20261128000400_stage1_self_devices_and_users.sql',
+    '../supabase/migrations/20261128000500_stage1_fix_assign_membership_and_ctx.sql'
   ]) {
     await db.exec(await read(m));
   }
@@ -301,5 +305,102 @@ test('phone/login canonicalization aligns client & Edge Functions and Android We
   assert.match(java, /cloud\(Uri u\)/);
   assert.match(java, /if\s*\(\s*r\.isForMainFrame\(\)\s*\)\s*return missing\(\);[\s\S]*cloud\(u\)/);
 });
+
+test('Stage 1 DB: 5-region bootstrap, (1+extra)*2 quotas, mobile/desktop limits, self-unlink & managed users hierarchy', async () => {
+  await q(`
+    insert into public.tajikistan_locations(region_name, district_name, jamoat_name, village_name) values
+    ('Душанбе', 'Сино', 'Сино', 'Сино'),
+    ('Суғд', 'Исфара', 'Ворух', 'Ворух'),
+    ('Хатлон', 'Кӯлоб', 'Зиракӣ', 'Зиракӣ'),
+    ('ВМКБ', 'Хоруғ', 'Хоруғ', 'Хоруғ'),
+    ('Ноҳияҳои тобеи ҷумҳурӣ', 'Ҳисор', 'Ҳисор', 'Ҳисор')
+    on conflict do nothing
+  `);
+  const b = (await as(0, () => q('select public.get_registration_bootstrap() as b'), 'anon'))[0].b;
+  assert.ok(b.locations.length >= 5);
+  const regs = new Set(b.locations.map(l => l.region_name));
+  assert.deepEqual([...regs].sort(), ['ВМКБ', 'Душанбе', 'Ноҳияҳои тобеи ҷумҳурӣ', 'Суғд', 'Хатлон']);
+  assert.ok(b.tariffs.every(t => Number(t.default_max_devices ?? 2) === 2));
+
+  // Register a verified director + teacher in a fresh school via service_register_account
+  const dirUid = uid(10);
+  const depUid = uid(11);
+  const tchUid = uid(12);
+  const othUid = uid(13);
+  for (const [u, nm] of [[dirUid, 'dir10'], [depUid, 'dep11'], [tchUid, 'tch12'], [othUid, 'oth13']]) {
+    await q('insert into auth.users values ($1,$2,now())', [u, `${nm}@example.test`]);
+  }
+
+  const regDir = (await as(0, () => q(
+    "select public.service_register_account($1,null,$2::jsonb,'school-director',array['school-five-method-groups']::text[],'Директор 10','tg','dir10','',jsonb_build_object('requested_aliya',false),'{}'::jsonb) as r",
+    [dirUid, JSON.stringify({ name: 'МТМУ № 450', region_name: 'Вилояти Хатлон', district_name: 'Кӯлоб' })],
+  ), 'service_role'))[0].r;
+  const s450 = regDir.school.id;
+  // With 1 primary + 1 extra position -> (1 + 1) * 2 = 4 devices!
+  const dirCtx0 = (await as(10, () => q('select public.get_my_workspace_context() as c')))[0].c;
+  assert.equal(dirCtx0.memberships[0].max_devices, 4);
+
+  // Register deputy (2 devices) & teacher (2 devices: 1 mobile + 1 desktop)
+  await as(0, () => q("select public.service_register_account($1,$2,'{}'::jsonb,'school-academic-deputy',array[]::text[],'Муовин 11','tg','dep11','',jsonb_build_object(),'{}'::jsonb)", [depUid, s450]), 'service_role');
+  await as(0, () => q("select public.service_register_account($1,$2,'{}'::jsonb,'school-teacher',array[]::text[],'Омӯзгор 12','tg','tch12','',jsonb_build_object(),'{}'::jsonb)", [tchUid, s450]), 'service_role');
+
+  // Verify director & school + deputy + teacher via super_admin
+  await q("update public.organizations set verification_status='verified' where id=$1", [s450]);
+  await q("update public.school_memberships set verification_status='verified' where organization_id=$1", [s450]);
+
+  // Teacher with max_devices=2 -> 1 mobile + 1 desktop allowed; 2nd mobile blocked!
+  const m1 = (await as(12, () => q("select public.claim_device_session($1,'dev-mob-1','Phone 1','school-teacher','mobile') as r", [s450])))[0].r;
+  assert.equal(m1.allowed, true);
+  assert.equal(m1.max_per_kind, 1);
+  const d1 = (await as(12, () => q("select public.claim_device_session($1,'dev-desk-1','PC 1','school-teacher','desktop') as r", [s450])))[0].r;
+  assert.equal(d1.allowed, true);
+  assert.equal(d1.active_mobile, 1);
+  assert.equal(d1.active_desktop, 1);
+  const m2 = (await as(12, () => q("select public.claim_device_session($1,'dev-mob-2','Phone 2','school-teacher','mobile') as r", [s450])))[0].r;
+  assert.equal(m2.allowed, false);
+  assert.equal(m2.reason, 'device_limit_reached');
+
+  // Teacher can view own device sessions and revoke dev-mob-1 so dev-mob-2 succeeds
+  const myDevs = (await as(12, () => q('select public.get_my_device_sessions($1) as rows', [s450])))[0].rows;
+  assert.equal(myDevs.length, 2);
+  await as(12, () => q("select public.revoke_my_device_session($1,'dev-mob-1')", [s450]));
+  const m2Ok = (await as(12, () => q("select public.claim_device_session($1,'dev-mob-2','Phone 2','school-teacher','mobile') as r", [s450])))[0].r;
+  assert.equal(m2Ok.allowed, true);
+
+  // "Корбарон" leadership permissions:
+  // Teacher sees 0 managed users and cannot mutate anyone
+  assert.deepEqual((await as(12, () => q('select public.get_managed_users($1) as rows', [s450])))[0].rows, []);
+  // Director sees deputy and teacher (NOT self)
+  const dirManaged = (await as(10, () => q('select public.get_managed_users($1) as rows', [s450])))[0].rows;
+  assert.equal(dirManaged.length, 2);
+  const tchMem = dirManaged.find(r => r.user_id === tchUid);
+  const dirMem = (await as(10, () => q('select id from public.school_memberships where user_id=$1 and organization_id=$2', [dirUid, s450])))[0].id;
+  assert.ok(tchMem);
+  await denied(as(12, () => q('select public.manage_set_user_active($1,false)', [tchMem.membership_id])));
+
+  // Deputy CANNOT manage Director, CAN manage Teacher
+  const depList = (await as(11, () => q('select public.get_managed_users($1) as rows', [s450])))[0].rows;
+  assert.equal(depList.some(r => r.user_id === dirUid), false);
+  assert.equal(depList.some(r => r.user_id === tchUid), true);
+  await denied(as(11, () => q('select public.manage_set_user_active($1,false)', [dirMem])));
+
+  // Director resets teacher devices & toggles active
+  await as(10, () => q('select public.manage_reset_user_devices($1,null)', [tchMem.membership_id]));
+  assert.equal((await as(12, () => q('select public.get_my_device_sessions($1) as rows', [s450])))[0].rows.length, 0);
+  await as(10, () => q('select public.manage_set_user_active($1,false)', [tchMem.membership_id]));
+  const disClaim = (await as(12, () => q("select public.claim_device_session($1,'dev-mob-2','Phone 2','school-teacher','mobile') as r", [s450])))[0].r;
+  assert.equal(disClaim.allowed, false);
+  assert.equal(disClaim.reason, 'account_disabled');
+
+  // service_check_manage_permission & service_delete_managed_membership (for Edge Function admin-users)
+  const chkDir = (await as(0, () => q('select public.service_check_manage_permission($1,$2,$3) as r', [dirUid, tchUid, s450]), 'service_role'))[0].r;
+  assert.equal(chkDir.allowed, true);
+  const chkDep = (await as(0, () => q('select public.service_check_manage_permission($1,$2,$3) as r', [depUid, dirUid, s450]), 'service_role'))[0].r;
+  assert.equal(chkDep.allowed, false);
+  const delRes = (await as(0, () => q('select public.service_delete_managed_membership($1,$2) as r', [tchUid, s450]), 'service_role'))[0].r;
+  assert.equal(delRes.deleted_user_id, tchUid);
+  assert.equal(delRes.should_delete_auth_user, true);
+});
+
 
 

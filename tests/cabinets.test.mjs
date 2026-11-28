@@ -14,6 +14,10 @@ test('each planned cabinet is an individual document with its own identity',asyn
     const html=await read(row.path);
     assert.ok(html.includes(`data-cabinet-id="${row.id}"`),row.path);
     assert.ok(html.includes(`<h1 class="crumb">${row.title}</h1>`),row.path);
+    assert.ok(html.includes('shared/brand-icon.png'),row.path);
+    assert.ok(html.includes('© Парвиз Шарипов. Ҳамаи ҳуқуқҳо ҳифз шудаанд.'),row.path);
+    assert.doesNotMatch(html,/<span class="logo"/);
+    assert.doesNotMatch(html,/Все права/);
     assert.doesNotMatch(html,/<aside class="rail">/);
     assert.doesNotMatch(html,/<div class="hero">/);
     assert.doesNotMatch(html,/<select[^>]+id="cabinetLang"/);

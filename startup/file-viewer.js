@@ -38,6 +38,7 @@ async function openEmbedded(path,options={}){
  embeddedChannel=Array.from(crypto.getRandomValues(new Uint32Array(4)),item=>item.toString(16)).join('-');
  const ctx={path,channel:embeddedChannel,school,lang,hash:options.hash??'',store:embeddedStore,theme:startupTheme.mode()};
  const doc=new DOMParser().parseFromString(route.html,'text/html');
+ if(pack.brandIcon){for(const img of doc.querySelectorAll('img.brand-logo'))img.src=pack.brandIcon;}
  const styles=doc.createElement('style');styles.textContent=pack.css;doc.head.append(styles);
  const data=doc.createElement('script');data.type='application/json';data.id='sm-viewer-context';data.textContent=cleanJson(ctx);doc.body.append(data);
  const portable=location.protocol==='file:'&&path==='cabinets/school/teacher.html';

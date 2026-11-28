@@ -151,7 +151,16 @@ async function mountRoleFields(id,container){
 function checkRoleFields(container){
  return container?.dataset.roleReady==='yes'?container.validateSetup?.()??null:null;
 }
-const DEFAULT_REGIONS=['Душанбе','Вилояти Суғд','Вилояти Хатлон','ВМКБ','Ноҳияҳои тобеи ҷумҳурӣ'];
+const DEFAULT_REGIONS=[
+ {value:'Душанбе',label:'Душанбе'},
+ {value:'Суғд',label:'Вилояти Суғд'},
+ {value:'Хатлон',label:'Вилояти Хатлон'},
+ {value:'ВМКБ',label:'ВМКБ'},
+ {value:'Ноҳияҳои тобеи ҷумҳурӣ',label:'Ноҳияҳои тобеи ҷумҳурӣ'},
+];
+function regionDisplayLabel(canon){
+ return DEFAULT_REGIONS.find(r=>r.value===canon)?.label||canon;
+}
 function readLocalCustomSchools(){
  try{const v=JSON.parse(localStorage.getItem('smartmaktab.custom_schools.v1')||'[]');return Array.isArray(v)?v:[];}catch{return [];}
 }
@@ -197,26 +206,23 @@ function resolveSchoolTitle(schoolId){
  return schoolNames[schoolId]||schoolId;
 }
 function populateNewSchoolTerritory(){
- const regSel=$('newSchoolRegion'),distList=$('newSchoolDistrictList');
+ const regSel=$('newSchoolRegion');
+ const distSel=$('newSchoolDistrictSelect'),distCustomWrap=$('newSchoolDistrictCustomWrap');
  const jamSel=$('newSchoolJamoatSelect'),jamCustomWrap=$('newSchoolJamoatCustomWrap');
  const vilSel=$('newSchoolVillageSelect'),vilCustomWrap=$('newSchoolVillageCustomWrap');
- if(!regSel||!distList)return;
+ if(!regSel||!distSel)return;
  const auths=Array.isArray(state.cloudAuthorities)?state.cloudAuthorities:[];
  const locs=Array.isArray(state.cloudLocations)&&state.cloudLocations.length?state.cloudLocations:null;
- const regionSet=new Set(DEFAULT_REGIONS);
+ const regionSet=new Set(DEFAULT_REGIONS.map(r=>r.value));
  for(const a of auths){
-  if(!a.region_name)continue;
-  const c=canonicalRegionName(a.region_name);
-  if(![...regionSet].some(r=>canonicalRegionName(r)===c))regionSet.add(a.region_name);
+  if(a.region_name)regionSet.add(canonicalRegionName(a.region_name));
  }
  if(locs){
-  for(const r of getRegionNames(locs)){
-   if(![...regionSet].some(x=>canonicalRegionName(x)===canonicalRegionName(r)))regionSet.add(r);
-  }
+  for(const r of getRegionNames(locs))regionSet.add(canonicalRegionName(r));
  }
  const regions=[...regionSet];
  const prevReg=regSel.value||state.newSchool?.region_name||'';
- regSel.replaceChildren(new Option(fp('pick'),''),...regions.map(r=>new Option(r,r)));
+ regSel.replaceChildren(new Option(fp('pick'),''),...regions.map(r=>new Option(regionDisplayLabel(r),r)));
  const matchingReg=regions.find(r=>r===prevReg||canonicalRegionName(r)===canonicalRegionName(prevReg));
  if(matchingReg)regSel.value=matchingReg;
  const curReg=regSel.value;
@@ -224,14 +230,30 @@ function populateNewSchoolTerritory(){
 
  const districts=[...new Set([
   ...getDistrictNames(curReg,locs||undefined),
-  ...auths.filter(a=>a.authority_tier==='maorif'&&(!canonReg||canonicalRegionName(a.region_name)===canonReg)).map(a=>a.district_name).filter(Boolean),
- ])];
- distList.replaceChildren(...districts.map(d=>Object.assign(document.createElement('option'),{value:d})));
-
- if(!jamSel||!vilSel)return;
- const curDist=clean($('newSchoolDistrict')?.value||state.newSchool?.district_name||'');
- const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
+  ...auths.filter(a=>a.authority_tier==='maorif'&&(!canonReg||canonicalRegionName(a.region_name)===canonReg)).map(a=>String(a.district_name||'').trim()).filter(Boolean),
+ ])].sort((a,b)=>a.localeCompare(b,'tg'));
  const otherLbl=lang==='tg'?'Дигар (дастӣ ворид кардан)':'Другой (ввести вручную)';
+ const pickDistLbl=fp('pick');
+ const distPrev=distSel.value;
+ distSel.replaceChildren(
+  new Option(pickDistLbl,''),
+  ...districts.map(d=>new Option(d,d)),
+  new Option(otherLbl,'__custom__'),
+ );
+ if(distPrev&&(distPrev==='__custom__'||districts.includes(distPrev)))distSel.value=distPrev;
+ else if(state.newSchool?.district_name&&districts.includes(state.newSchool.district_name))distSel.value=state.newSchool.district_name;
+ else if(state.newSchool?.district_name&&distSel.value===''){
+  const matchedDist=districts.find(d=>stripDistrictPrefix(d)===stripDistrictPrefix(state.newSchool.district_name));
+  if(matchedDist)distSel.value=matchedDist;
+  else distSel.value='__custom__';
+ }
+ const isCustomDist=distSel.value==='__custom__';
+ if(distCustomWrap)distCustomWrap.hidden=!isCustomDist;
+
+ const curDist=isCustomDist?clean($('newSchoolDistrict')?.value):clean(distSel.value||state.newSchool?.district_name||'');
+ if(!isCustomDist&&curDist)state.newSchool.district_name=curDist;
+ if(!jamSel||!vilSel)return;
+ const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
  const pickOptLbl=lang==='tg'?'Интихоб кунед (ихтиёрӣ)':'Выберите (необязательно)';
  const jamPrev=jamSel.value;
  jamSel.replaceChildren(

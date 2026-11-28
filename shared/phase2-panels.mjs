@@ -23,7 +23,7 @@ import {
 import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
-import { canPositionVerifySchoolStaff, formatPositionTitle } from './position-catalog.mjs';
+import { canPositionManageUsers, canPositionVerifySchoolStaff, formatPositionTitle } from './position-catalog.mjs';
 import {
   parseStudentImportFile,
   buildStudentsCsv,
@@ -82,6 +82,7 @@ export function setupPhase2Panels(article, docs, school, views) {
   const canGrades = isClassOrQuality;
   const canAnalytics = isAuthority || ['school-director', 'school-education-quality', 'school-academic-deputy', 'school-primary-deputy', 'school-class-teacher'].includes(cabinetId);
   const canVerify = true;
+  const canUsers = canPositionManageUsers(cabinetId);
 
   const ctx = () => {
     const s = typeof school === 'function' ? school() : null;
@@ -1026,6 +1027,355 @@ export function setupPhase2Panels(article, docs, school, views) {
     };
   }
 
+  // ============================================================================
+  // 7. КОРБАРОН (Идоракунии кормандон, дастгоҳҳо ва рамзҳо)
+  // ============================================================================
+  let renderUsers = async () => {};
+  if (canUsers) {
+    registerModule(
+      'smUsersPanel',
+      '👤',
+      'Корбарон',
+      'Пользователи',
+      'Идоракунии кормандон, дастгоҳҳо ва рамзҳо',
+      'Управление пользователями, устройствами и паролями',
+    );
+    const panel = createPanel(article, 'smUsersPanel');
+    const state = {
+      items: [],
+      search: '',
+      statusFilter: 'all',
+      orgFilter: 'all',
+      statusMsg: '',
+      issuedPass: null,
+      loading: false,
+      loadedOnce: false,
+    };
+
+    const verifBadge = st => {
+      const map = {
+        verified: txt('Тасдиқшуда', 'Верифицирован'),
+        pending: txt('Интизор', 'Ожидает'),
+        rejected: txt('Радшуда', 'Отклонён'),
+        unverified: txt('Бе тасдиқ', 'Не вериф.'),
+      };
+      const cls = st === 'verified' ? 'verified' : st === 'pending' ? 'pending' : st === 'rejected' ? 'rejected' : 'unverified';
+      return `<span class="sm-badge sm-badge-${cls}">${esc(map[st || 'unverified'] || st)}</span>`;
+    };
+
+    const renderUsersUi = () => {
+      const c = ctx();
+      const cl = getAuthedCloudClient();
+      if (!cl) {
+        panel.innerHTML = `
+          <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
+          <div class="notice">
+            <p class="small">${esc(txt('Барои дидан ва идоракунии корбарон, дастгоҳҳо ва бозсозии рамз аввал бо ҳисоби абрии худ ворид шавед.', 'Для управления сотрудниками, отвязки устройств и сброса паролей сначала войдите в облачный аккаунт.'))}</p>
+            <button type="button" class="button" id="smUsrOpenCloudBtn">${esc(txt('Ворид шудан ба абр', 'Войти в облако'))}</button>
+          </div>
+        `;
+        panel.querySelector('#smUsrOpenCloudBtn')?.addEventListener('click', () => {
+          const btn = document.querySelector('[data-cloud-panel-trigger]');
+          btn?.click?.();
+        });
+        return;
+      }
+
+      if (!c.verified) {
+        panel.innerHTML = `
+          <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
+          ${dbLockBannerHtml()}
+        `;
+        return;
+      }
+
+      const orgMap = new Map();
+      for (const u of state.items) {
+        if (u.organization_id && !orgMap.has(u.organization_id)) orgMap.set(u.organization_id, u.organization_name || u.organization_id);
+      }
+
+      const q = state.search.trim().toLowerCase();
+      const filtered = state.items.filter(u => {
+        if (state.statusFilter === 'pending' && u.verification_status !== 'pending') return false;
+        if (state.statusFilter === 'verified' && u.verification_status !== 'verified') return false;
+        if (state.statusFilter === 'disabled' && u.account_active !== false) return false;
+        if (state.orgFilter !== 'all' && u.organization_id !== state.orgFilter) return false;
+        if (q) {
+          const hay = `${u.full_name || ''} ${u.login_name || ''} ${u.phone || ''} ${u.organization_name || ''} ${u.primary_position || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      const totalCount = state.items.length;
+      const pendingCount = state.items.filter(u => u.verification_status === 'pending').length;
+      const verifiedCount = state.items.filter(u => u.verification_status === 'verified').length;
+      const disabledCount = state.items.filter(u => u.account_active === false).length;
+
+      const hierarchyNote = cabinetId.startsWith('raesat-')
+        ? txt('Шумо метавонед шуъбаҳои маориф ва мактабҳои вилоятро тасдиқ, бозсозии рамз, қатъи дастгоҳ ё идора кунед.', 'Вы управляете отделами Маориф и школами области.')
+        : cabinetId.startsWith('office-')
+          ? txt('Шумо метавонед роҳбарон ва кормандони мактабҳои шаҳр / ноҳияро идора кунед.', 'Вы управляете директорами и сотрудниками школ вашего района / города.')
+          : cabinetId === 'school-director'
+            ? txt('Директор ҳамаи кормандони мактабро идора мекунад: тасдиқ, қатъи дастгоҳ, рамзи нав ва хориҷкунӣ.', 'Директор управляет всеми сотрудниками школы: подтверждение, сброс устройств, пароль и удаление.')
+            : txt('Шумо метавонед кормандони мактабро (ғайр аз директор) тасдиқ, қатъи дастгоҳ ё бозсозии рамз кунед.', 'Вы управляете сотрудниками школы (кроме директора): подтверждение, сброс устройств и пароля.');
+
+      panel.innerHTML = `
+        <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
+        <p class="small">${esc(hierarchyNote)}</p>
+        <div class="sm-p2-kpis">
+          <div class="sm-p2-kpi"><span>${esc(txt('Ҳамаи корбарон', 'Всего пользователей'))}</span><b>${totalCount}</b></div>
+          <div class="sm-p2-kpi"><span>${esc(txt('Интизори тасдиқ', 'Ожидают подтверждения'))}</span><b>${pendingCount}</b></div>
+          <div class="sm-p2-kpi"><span>${esc(txt('Тасдиқшуда', 'Верифицированы'))}</span><b>${verifiedCount}</b></div>
+          <div class="sm-p2-kpi"><span>${esc(txt('Ғайрифаъол', 'Отключённые'))}</span><b>${disabledCount}</b></div>
+        </div>
+        ${state.issuedPass ? `
+          <div class="sm-issued-box" role="status">
+            <strong>${esc(txt('Рамзи муваққатии нав омода шуд:', 'Новый временный пароль создан:'))}</strong>
+            <div>${esc(state.issuedPass.full_name || state.issuedPass.email || '')} · <code>${esc(state.issuedPass.temporary_password)}</code></div>
+            <div class="control" style="margin:0">
+              <button type="button" class="button" id="smUsrCopyPassBtn">${esc(txt('Нусхабардорӣ', 'Копировать'))}</button>
+              <button type="button" class="button alt" id="smUsrHidePassBtn">${esc(txt('Пӯшидан', 'Скрыть'))}</button>
+            </div>
+          </div>
+        ` : ''}
+        <div class="sm-p2-grid">
+          <label class="field"><span>${esc(txt('Ҷустуҷӯ (ном, логин, телефон)', 'Поиск (ФИО, логин, телефон)'))}</span>
+            <input id="smUsrSearch" type="search" value="${esc(state.search)}" placeholder="${esc(txt('Ном ё рақамро нависед', 'Введите имя или номер'))}">
+          </label>
+          <label class="field"><span>${esc(txt('Ҳолат', 'Статус'))}</span>
+            <select id="smUsrStatus">
+              <option value="all"${state.statusFilter === 'all' ? ' selected' : ''}>${esc(txt('Ҳама', 'Все'))}</option>
+              <option value="pending"${state.statusFilter === 'pending' ? ' selected' : ''}>${esc(txt('Интизори тасдиқ', 'Ожидают подтверждения'))}</option>
+              <option value="verified"${state.statusFilter === 'verified' ? ' selected' : ''}>${esc(txt('Тасдиқшуда', 'Верифицированные'))}</option>
+              <option value="disabled"${state.statusFilter === 'disabled' ? ' selected' : ''}>${esc(txt('Ғайрифаъол', 'Отключённые'))}</option>
+            </select>
+          </label>
+          ${orgMap.size > 1 ? `
+            <label class="field"><span>${esc(txt('Муассиса / Мактаб', 'Организация / Школа'))}</span>
+              <select id="smUsrOrg">
+                <option value="all"${state.orgFilter === 'all' ? ' selected' : ''}>${esc(txt('Ҳамаи муассисаҳо', 'Все организации'))}</option>
+                ${[...orgMap.entries()].map(([id, name]) => `<option value="${esc(id)}"${state.orgFilter === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}
+              </select>
+            </label>
+          ` : ''}
+          <div class="control" style="align-self:end;margin:0">
+            <button type="button" class="button alt" id="smUsrReloadBtn" ${state.loading ? 'disabled' : ''}>${esc(txt('Навсозӣ', 'Обновить'))}</button>
+          </div>
+        </div>
+        <p class="small" role="status" id="smUsrStatusMsg">${esc(state.statusMsg)}</p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>${esc(txt('Корбар ва логин', 'Пользователь и логин'))}</th>
+                <th>${esc(txt('Муассиса ва вазифа', 'Организация и должность'))}</th>
+                <th>${esc(txt('Ҳолат ва дастгоҳҳо', 'Статус и устройства'))}</th>
+                <th>${esc(txt('Амалҳо', 'Действия'))}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.length ? filtered.map(u => {
+                const posTitle = formatPositionTitle(u.primary_position, getLang());
+                const extras = Array.isArray(u.extra_positions) && u.extra_positions.length
+                  ? ` (+ ${u.extra_positions.map(p => formatPositionTitle(p, getLang())).join(', ')})`
+                  : '';
+                const devs = Array.isArray(u.devices) ? u.devices : [];
+                const activeBadge = u.account_active === false
+                  ? `<span class="sm-badge sm-badge-disabled">${esc(txt('Ғайрифаъол', 'Отключён'))}</span>`
+                  : `<span class="sm-badge sm-badge-active">${esc(txt('Фаъол', 'Активен'))}</span>`;
+                const metaParts = [u.phone, u.birth_date ? `${txt('Тав.', 'Рожд.')}: ${u.birth_date}` : '', u.passport_number ? `${txt('Шиноснома', 'Паспорт')}: ${u.passport_number}` : ''].filter(Boolean).join(' · ');
+                return `
+                  <tr>
+                    <td>
+                      <strong>${esc(u.full_name || u.login_name || '—')}</strong>
+                      <div class="small">${esc(u.login_name || '')}</div>
+                      ${metaParts ? `<div class="small">${esc(metaParts)}</div>` : ''}
+                    </td>
+                    <td>
+                      <strong>${esc(u.organization_name || '—')}</strong>
+                      <div class="small">${esc(posTitle)}${esc(extras)}${u.custom_method_name ? ` · ${esc(u.custom_method_name)}` : ''}</div>
+                    </td>
+                    <td>
+                      <div class="pill-row">${verifBadge(u.verification_status)} ${activeBadge}</div>
+                      <div class="small">${esc(txt('Дастгоҳҳо', 'Устройства'))}: ${devs.length}/${esc(String(u.max_devices ?? 2))}</div>
+                      ${devs.length ? `
+                        <div class="sm-user-dev-list">
+                          ${devs.map(d => `
+                            <span class="sm-user-dev-chip">
+                              ${d.device_kind === 'mobile' ? '📱' : '🖥'} ${esc(d.device_label || 'Web')}
+                              <button type="button" title="${esc(txt('Ҷудо кардани дастгоҳ', 'Отвязать устройство'))}" data-usr-unlink="${esc(d.device_id)}" data-mem="${esc(u.membership_id)}">✕</button>
+                            </span>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                    </td>
+                    <td>
+                      <div class="sm-p2-actions" style="margin:0">
+                        ${u.verification_status !== 'verified' ? `<button type="button" class="button" data-usr-verify="verified" data-mem="${esc(u.membership_id)}">${esc(txt('Тасдиқ кардан', 'Подтвердить'))}</button>` : ''}
+                        ${u.verification_status === 'pending' ? `<button type="button" class="button alt" data-usr-verify="rejected" data-mem="${esc(u.membership_id)}">${esc(txt('Рад кардан', 'Отклонить'))}</button>` : ''}
+                        ${devs.length ? `<button type="button" class="button alt" data-usr-reset-dev="${esc(u.membership_id)}">${esc(txt('Қатъи дастгоҳҳо', 'Сброс устройств'))}</button>` : ''}
+                        <button type="button" class="button alt" data-usr-reset-pass="${esc(u.user_id)}" data-org="${esc(u.organization_id)}">${esc(txt('Рамзи нав', 'Новый пароль'))}</button>
+                        <button type="button" class="button alt" data-usr-toggle="${u.account_active === false ? '1' : '0'}" data-mem="${esc(u.membership_id)}">${esc(u.account_active === false ? txt('Фаъол кардан', 'Включить') : txt('Ғайрифаъол кардан', 'Отключить'))}</button>
+                        <button type="button" class="button alt" data-usr-delete="${esc(u.user_id)}" data-org="${esc(u.organization_id)}" data-name="${esc(u.full_name || u.login_name || '')}">${esc(txt('Ҳазф', 'Удалить'))}</button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `<tr><td colspan="4" class="small">${esc(txt('Ягон корбар ёфт нашуд.', 'Пользователи не найдены.'))}</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      panel.querySelector('#smUsrSearch')?.addEventListener('input', ev => {
+        state.search = ev.target.value;
+        renderUsersUi();
+        const inp = panel.querySelector('#smUsrSearch');
+        if (inp) {
+          inp.focus();
+          try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch {}
+        }
+      });
+      panel.querySelector('#smUsrStatus')?.addEventListener('change', ev => {
+        state.statusFilter = ev.target.value;
+        renderUsersUi();
+      });
+      panel.querySelector('#smUsrOrg')?.addEventListener('change', ev => {
+        state.orgFilter = ev.target.value;
+        renderUsersUi();
+      });
+      panel.querySelector('#smUsrReloadBtn')?.addEventListener('click', () => renderUsers({ refresh: true }));
+      panel.querySelector('#smUsrCopyPassBtn')?.addEventListener('click', async () => {
+        if (!state.issuedPass?.temporary_password) return;
+        try { await navigator.clipboard?.writeText(state.issuedPass.temporary_password); } catch {}
+        state.statusMsg = txt('Рамз нусхабардорӣ шуд.', 'Пароль скопирован.');
+        renderUsersUi();
+      });
+      panel.querySelector('#smUsrHidePassBtn')?.addEventListener('click', () => {
+        state.issuedPass = null;
+        renderUsersUi();
+      });
+
+      panel.querySelectorAll('[data-usr-unlink]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await cl.manageResetUserDevices({ p_membership_id: btn.dataset.mem, p_device_id: btn.dataset.usrUnlink });
+            state.statusMsg = txt('Дастгоҳ ҷудо карда шуд.', 'Устройство отвязано.');
+            await renderUsers({ refresh: true });
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
+      });
+
+      panel.querySelectorAll('[data-usr-reset-dev]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await cl.manageResetUserDevices({ p_membership_id: btn.dataset.usrResetDev, p_device_id: null });
+            state.statusMsg = txt('Ҳамаи дастгоҳҳои корбар қатъ шуданд.', 'Все устройства пользователя сброшены.');
+            await renderUsers({ refresh: true });
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
+      });
+
+      panel.querySelectorAll('[data-usr-verify]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const decision = btn.dataset.usrVerify;
+          try {
+            await cl.reviewAccountVerification({ p_membership_id: btn.dataset.mem, p_decision: decision, p_note: '' });
+            state.statusMsg = decision === 'verified'
+              ? txt('Ҳисоб тасдиқ карда шуд.', 'Аккаунт подтверждён.')
+              : txt('Дархост рад ва нест карда шуд.', 'Заявка отклонена и удалена.');
+            await renderUsers({ refresh: true });
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
+      });
+
+      panel.querySelectorAll('[data-usr-reset-pass]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            const res = await cl.managerResetPassword({ user_id: btn.dataset.usrResetPass, org_id: btn.dataset.org });
+            state.issuedPass = res;
+            state.statusMsg = txt('Рамзи муваққатии нав сохта шуд.', 'Создан новый временный пароль.');
+            renderUsersUi();
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
+      });
+
+      panel.querySelectorAll('[data-usr-toggle]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const nextActive = btn.dataset.usrToggle === '1';
+          try {
+            await cl.manageSetUserActive({ p_membership_id: btn.dataset.mem, p_active: nextActive });
+            state.statusMsg = nextActive
+              ? txt('Ҳисоб фаъол карда шуд.', 'Аккаунт включён.')
+              : txt('Ҳисоб ғайрифаъол карда шуд.', 'Аккаунт отключён.');
+            await renderUsers({ refresh: true });
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
+      });
+
+      panel.querySelectorAll('[data-usr-delete]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const targetName = btn.dataset.name || '';
+          const msg = txt(
+            `Корбар «${targetName}»-ро аз муассиса комилан ҳазф мекунед?`,
+            `Удалить пользователя «${targetName}» из организации?`,
+          );
+          if (!globalThis.confirm(msg)) return;
+          btn.disabled = true;
+          try {
+            await cl.managerDeleteUser({ user_id: btn.dataset.usrDelete, org_id: btn.dataset.org });
+            if (state.issuedPass?.user_id === btn.dataset.usrDelete) state.issuedPass = null;
+            state.statusMsg = txt('Корбар ҳазф карда шуд.', 'Пользователь удалён.');
+            await renderUsers({ refresh: true });
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
+      });
+    };
+
+    renderUsers = async ({ refresh = true } = {}) => {
+      const cl = getAuthedCloudClient();
+      const c = ctx();
+      if (refresh && cl && c.verified) {
+        state.loading = true;
+        renderUsersUi();
+        try {
+          const rows = await cl.getManagedUsers(null);
+          state.items = Array.isArray(rows) ? rows : [];
+          state.loadedOnce = true;
+        } catch (err) {
+          state.statusMsg = err?.message || 'Error';
+        } finally {
+          state.loading = false;
+        }
+      }
+      renderUsersUi();
+    };
+  }
+
   function refreshPanelById(id) {
     if (id === 'smStudentsPanel' && canStudents) renderStudents({ refresh: true });
     else if (id === 'smTeacherWorkloadPanel' && canWorkload) renderWorkload({ refresh: true });
@@ -1033,6 +1383,7 @@ export function setupPhase2Panels(article, docs, school, views) {
     else if (id === 'smGradesPanel' && canGrades) renderGrades({ refresh: true });
     else if (id === 'smAnalyticsPanel' && canAnalytics) renderAnalytics();
     else if (id === 'smVerificationPanel' && canVerify) renderVerification();
+    else if (id === 'smUsersPanel' && canUsers) renderUsers({ refresh: true });
   }
 
   function refreshAll(refreshData = true) {
@@ -1042,6 +1393,7 @@ export function setupPhase2Panels(article, docs, school, views) {
     if (canGrades) renderGrades({ refresh: refreshData });
     if (canAnalytics) renderAnalytics();
     if (canVerify) renderVerification();
+    if (canUsers) renderUsers({ refresh: refreshData });
   }
 
   function syncLabels() {

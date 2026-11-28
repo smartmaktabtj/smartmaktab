@@ -33,9 +33,14 @@ const copy = {
     'Доступ организации приостановлен администратором.',
   ],
   lockDeviceLimit: [
-    'Ин логин ва парол аллакай дар дигар дастгоҳ фаъол аст (маҳдудияти дастгоҳҳо). Расонидани логин ба кормандони дигар иҷозат дода намешавад.',
-    'Этот логин и пароль уже используются на максимальном числе устройств. Передача аккаунта другим сотрудникам запрещена — обратитесь к администратору для отвязки старого устройства.',
+    'Шумораи дастгоҳҳои иҷозатдодашуда барои ин намуд пур шудааст. Ҳар вазифа 1 телефон ва 1 компютер медиҳад. Дастгоҳи кӯҳнаро ҷудо кунед ё ба роҳбари муассиса муроҷиат намоед.',
+    'Достигнут лимит устройств данного типа. На каждую должность даётся 1 телефон и 1 компьютер. Отвяжите старое устройство или обратитесь к руководителю.',
   ],
+  myDevicesHeading: ['Дастгоҳҳои фаъоли ман', 'Мои активные устройства'],
+  unlinkOldDevice: ['Ҷудо кардан', 'Отвязать'],
+  currentDeviceBadge: ['Ин дастгоҳ', 'Это устройство'],
+  mobileKind: ['Телефон / Мобилӣ', 'Телефон / Мобильное'],
+  desktopKind: ['Компютер / Веб', 'Компьютер / Веб'],
   lockPosition: [
     'Ин утоқ ба вазифаи пардохтшудаи шумо дохил намешавад. Вазифаи иловагиро дар бахши обуна пайваст кунед.',
     'Этот кабинет не входит в оплаченный набор должностей вашего аккаунта. Подключите дополнительную должность по тарифу.',
@@ -51,6 +56,13 @@ const copy = {
   verifyBtn: ['Тафтиши онлайн', 'Проверить онлайн'],
   receiptBtn: ['Обуна ва пардохт', 'Тариф и оплата'],
 };
+
+export function detectDeviceKind(userAgent = globalThis.navigator?.userAgent || '') {
+  if (globalThis.SmartMaktabAndroid) return 'mobile';
+  const s = String(userAgent || '');
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(s)) return 'mobile';
+  return 'desktop';
+}
 
 export function getOrCreateDeviceId(storage) {
   const store = safeStorage(storage);
@@ -85,7 +97,11 @@ export function evaluateLicenseState(record, nowMs = Date.now(), cabinetId = '')
       daysLeft: 0,
       graceDaysLeft: 0,
       clockTampered: false,
-      maxDevices: record.max_devices ?? 1,
+      deviceKind: record.blocked_device_kind || '',
+      maxDevices: record.max_devices ?? 2,
+      maxPerKind: record.max_per_kind ?? 1,
+      activeMobile: record.active_mobile ?? 0,
+      activeDesktop: record.active_desktop ?? 0,
     };
   }
   if (cabinetId && record && !record.is_super_admin && (record.primary_position || record.role)) {
@@ -169,7 +185,12 @@ export function cacheVerifiedLicense(orgId, serverStatus, storage, nowMs = Date.
     primary_position: serverStatus.primary_position !== undefined ? serverStatus.primary_position : (prev?.primary_position ?? null),
     extra_positions: serverStatus.extra_positions !== undefined ? serverStatus.extra_positions : (prev?.extra_positions ?? []),
     role: serverStatus.role !== undefined ? serverStatus.role : (prev?.role ?? ''),
-    max_devices: serverStatus.max_devices !== undefined ? serverStatus.max_devices : (prev?.max_devices ?? 1),
+    max_devices: serverStatus.max_devices !== undefined ? serverStatus.max_devices : (prev?.max_devices ?? 2),
+    max_per_kind: serverStatus.max_per_kind !== undefined ? serverStatus.max_per_kind : (prev?.max_per_kind ?? 1),
+    active_devices: serverStatus.active_devices !== undefined ? serverStatus.active_devices : (prev?.active_devices ?? 0),
+    active_mobile: serverStatus.active_mobile !== undefined ? serverStatus.active_mobile : (prev?.active_mobile ?? 0),
+    active_desktop: serverStatus.active_desktop !== undefined ? serverStatus.active_desktop : (prev?.active_desktop ?? 0),
+    blocked_device_kind: serverStatus.blocked_device_kind !== undefined ? serverStatus.blocked_device_kind : (prev?.blocked_device_kind ?? ''),
     is_super_admin: serverStatus.is_super_admin !== undefined ? Boolean(serverStatus.is_super_admin) : Boolean(prev?.is_super_admin),
     deviceBlocked: serverStatus.deviceBlocked !== undefined ? Boolean(serverStatus.deviceBlocked) : false,
     accountDisabled: serverStatus.accountDisabled !== undefined ? Boolean(serverStatus.accountDisabled) : false,
@@ -211,10 +232,11 @@ export function clearCachedLicense(orgId, storage) {
   try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
 }
 
-export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment, isPrimaryPosition = true, primaryPosition = null } = {}) {
+export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment, onLoadDevices, onRevokeDevice, isPrimaryPosition = true, primaryPosition = null } = {}) {
   const lang = document.documentElement.lang === 'ru' ? 'ru' : 'tg';
   const tg = () => lang === 'tg';
   const t = k => copy[k][tg() ? 0 : 1];
+  const currentDevId = getOrCreateDeviceId(safeStorage(storage));
   const record = readCachedLicense(orgId, safeStorage(storage));
   const state = evaluateLicenseState(record, Date.now(), cabinetId);
   container.replaceChildren();
@@ -237,8 +259,12 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
     const p = document.createElement('p');
     if (state.reason === 'clock_tampered') p.textContent = t('lockClock');
     else if (state.reason === 'suspended') p.textContent = t('lockSuspended');
-    else if (state.reason === 'device_limit_reached') p.textContent = t('lockDeviceLimit');
-    else if (state.reason === 'account_disabled') p.textContent = t('lockDisabled');
+    else if (state.reason === 'device_limit_reached') {
+      const kindInfo = tg()
+        ? ` (Фаъол: 📱 ${state.activeMobile ?? 0}/${state.maxPerKind ?? 1} телефон · 🖥 ${state.activeDesktop ?? 0}/${state.maxPerKind ?? 1} компютер)`
+        : ` (Активно: 📱 ${state.activeMobile ?? 0}/${state.maxPerKind ?? 1} тел. · 🖥 ${state.activeDesktop ?? 0}/${state.maxPerKind ?? 1} комп.)`;
+      p.textContent = `${t('lockDeviceLimit')}${kindInfo}`;
+    } else if (state.reason === 'account_disabled') p.textContent = t('lockDisabled');
     else if (state.reason === 'trial_expired') p.textContent = t('lockTrialExpired');
     else if (state.reason === 'position_not_allowed') {
       const posLabel = state.primaryPosition ? ` (${t('allowedPositionPrefix')} ${formatPositionTitle(state.primaryPosition, lang)})` : '';
@@ -254,6 +280,46 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
       box.append(h, p, noteP);
     } else {
       box.append(h, p);
+    }
+    if (state.reason === 'device_limit_reached' && typeof onLoadDevices === 'function' && typeof onRevokeDevice === 'function') {
+      const devListWrap = document.createElement('div');
+      devListWrap.className = 'sm-lock-devices';
+      box.append(devListWrap);
+      void Promise.resolve(onLoadDevices()).then(rows => {
+        if (!Array.isArray(rows) || !rows.length) return;
+        const cap = document.createElement('p');
+        cap.className = 'small';
+        cap.style.fontWeight = '700';
+        cap.textContent = t('myDevicesHeading');
+        const ul = document.createElement('ul');
+        ul.className = 'sm-device-list';
+        for (const d of rows) {
+          const li = document.createElement('li');
+          li.className = 'sm-device-row';
+          const icon = d.device_kind === 'mobile' ? '📱' : '🖥';
+          const kindText = d.device_kind === 'mobile' ? t('mobileKind') : t('desktopKind');
+          const seen = (d.last_seen_at || '').replace('T', ' ').slice(0, 16);
+          const lbl = document.createElement('span');
+          lbl.textContent = `${icon} ${d.device_label || 'Web'} (${kindText})${d.device_id === currentDevId ? ` · ${t('currentDeviceBadge')}` : ''}${seen ? ` · ${seen}` : ''}`;
+          const unlinkBtn = document.createElement('button');
+          unlinkBtn.type = 'button';
+          unlinkBtn.className = 'button alt';
+          unlinkBtn.dataset.revokeDevice = d.device_id;
+          unlinkBtn.textContent = t('unlinkOldDevice');
+          unlinkBtn.addEventListener('click', async () => {
+            unlinkBtn.disabled = true;
+            try {
+              await onRevokeDevice(d.device_id, d.organization_id);
+              if (typeof onVerifyOnline === 'function') await onVerifyOnline();
+            } catch {
+              unlinkBtn.disabled = false;
+            }
+          });
+          li.append(lbl, unlinkBtn);
+          ul.append(li);
+        }
+        devListWrap.replaceChildren(cap, ul);
+      }).catch(() => {});
     }
     const row = document.createElement('div');
     row.className = 'control';

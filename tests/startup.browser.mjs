@@ -88,7 +88,8 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);
   assert.equal(await page.locator('#cabinetUpdateTrigger').isVisible(),true);
-  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),6);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),7);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2="smUsersPanel"]').count(),1);
   await page.locator('#workspaceSettingsToggle').click();
   assert.equal(await page.locator('#profFirst').inputValue(),'Нав');
   assert.equal(await page.locator('#profLast').inputValue(),'Озмоишӣ');
@@ -225,7 +226,8 @@ test('cloud registration fails closed when backend is unreachable with login cre
   assert.equal(await page.locator('#begin').isDisabled(),true);
 
   await page.locator('#toggleNewSchoolBtn').click();
-  await page.locator('#newSchoolRegion').selectOption('Вилояти Суғд');
+  await page.locator('#newSchoolRegion').selectOption('Суғд');
+  await page.locator('#newSchoolDistrictSelect').selectOption('__custom__');
   await page.locator('#newSchoolDistrict').fill('Исфара');
   await page.locator('#newSchoolName').fill('МТМУ № 88');
   await page.waitForFunction(()=>!document.getElementById('begin')?.disabled);
