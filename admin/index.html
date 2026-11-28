@@ -531,6 +531,13 @@
                 </select>
               </label>
               <label class="adm-field">
+                <span data-t="docTplFormat"></span>
+                <select id="docTplFormat">
+                  <option value="word" data-t="docFormatWord"></option>
+                  <option value="pdf" data-t="docFormatPdf"></option>
+                </select>
+              </label>
+              <label class="adm-field" id="docTplEditModeField">
                 <span data-t="docEditMode"></span>
                 <select id="docTplEditMode">
                   <option value="full" data-t="docEditFull"></option>
@@ -561,8 +568,15 @@
               <div class="adm-wide adm-docx-import-bar">
                 <label class="adm-field" style="flex:1">
                   <span data-t="docImportFileLabel"></span>
-                  <input id="docTplFileInput" type="file" accept=".docx,.txt">
+                  <input id="docTplFileInput" type="file" accept=".docx,.txt,.pdf,application/pdf">
                 </label>
+              </div>
+              <div class="adm-wide" id="docTplPdfBox" hidden style="padding:14px;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;color:#7f1d1d;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div>
+                  <strong id="docTplPdfStatus">📕 PDF / Скан</strong>
+                  <div id="docTplPdfMeta" style="font-size:0.84rem;opacity:.85;margin-top:3px"></div>
+                </div>
+                <button type="button" class="btn alt sm" id="docTplPdfPreviewBtn">👁️ Пешнамоиш / Просмотр</button>
               </div>
               <div class="adm-wide">
                 <div id="docTplEditorHost" class="adm-doc-editor-host"></div>

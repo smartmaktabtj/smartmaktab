@@ -35,7 +35,7 @@ function bytesToB64(bytes: Uint8Array): string {
 }
 
 function isSafeStoragePath(path: string): boolean {
-  return Boolean(path) && !path.includes('..') && !path.startsWith('/') && path.length <= 300;
+  return Boolean(path) && !path.includes('..') && !path.startsWith('/') && path.length <= 400;
 }
 
 Deno.serve(async (req) => {
@@ -91,6 +91,17 @@ Deno.serve(async (req) => {
       }
       if (!gzipB64 || gzipB64.length > 700000) {
         return json(400, { error: 'invalid_or_oversized_payload' });
+      }
+      const { data: tplCheck } = await adminClient
+        .from('document_templates')
+        .select('id, doc_format')
+        .eq('id', templateId)
+        .maybeSingle();
+      if (!tplCheck) {
+        return json(404, { error: 'template_not_found' });
+      }
+      if (tplCheck.doc_format === 'pdf') {
+        return json(400, { error: 'pdf_readonly_cannot_save_draft' });
       }
 
       // Verify ownership and quota before uploading to private bucket
@@ -237,15 +248,76 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, gzip_b64: bytesToB64(buf) });
     }
 
+    if (action === 'save_template_pdf') {
+      if (!isSuperAdmin) {
+        return json(403, { error: 'super_admin_required' });
+      }
+      const templateId = typeof body?.template_id === 'string' ? body.template_id.trim() : '';
+      const version = Math.max(1, Number(body?.version) || 1);
+      const pdfB64 = typeof body?.pdf_b64 === 'string' ? body.pdf_b64.trim() : '';
+      if (!UUID_RE.test(templateId) || !pdfB64) {
+        return json(400, { error: 'invalid_template_pdf' });
+      }
+      const bytes = b64ToBytes(pdfB64);
+      if (bytes.byteLength < 8 || bytes.byteLength > 15728640) {
+        return json(400, { error: 'pdf_exceeds_15mb_or_empty' });
+      }
+      const isPdfHeader =
+        bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+      if (!isPdfHeader) {
+        return json(400, { error: 'invalid_pdf_signature' });
+      }
+      const objectPath = `templates/${templateId}/v${version}.pdf`;
+      const { error } = await adminClient.storage
+        .from('doc-templates-private')
+        .upload(objectPath, bytes, { contentType: 'application/pdf', upsert: true });
+      if (error) {
+        return json(500, { error: error.message });
+      }
+      return json(200, { ok: true, pdf_storage_path: objectPath, size_bytes: bytes.byteLength });
+    }
+
+    if (action === 'load_template_pdf') {
+      const templateId = typeof body?.template_id === 'string' ? body.template_id.trim() : '';
+      if (!UUID_RE.test(templateId)) {
+        return json(400, { error: 'invalid_template_id' });
+      }
+      const { data: tpl, error: tplErr } = await userClient
+        .from('document_templates')
+        .select('id, pdf_storage_path, doc_format, status')
+        .eq('id', templateId)
+        .maybeSingle();
+      if (tplErr || !tpl) {
+        return json(404, { error: 'template_not_found' });
+      }
+      const pdfPath = typeof body?.pdf_storage_path === 'string' && isSafeStoragePath(body.pdf_storage_path.trim())
+        ? body.pdf_storage_path.trim()
+        : String(tpl.pdf_storage_path || '');
+      if (!pdfPath || (!isSuperAdmin && !pdfPath.startsWith(`templates/${templateId}/`))) {
+        return json(404, { error: 'template_pdf_not_found' });
+      }
+      const { data, error } = await adminClient.storage
+        .from('doc-templates-private')
+        .download(pdfPath);
+      if (error || !data) {
+        return json(404, { error: error?.message || 'template_pdf_missing' });
+      }
+      const buf = new Uint8Array(await data.arrayBuffer());
+      return json(200, { ok: true, pdf_b64: bytesToB64(buf), size_bytes: buf.byteLength });
+    }
+
     if (action === 'delete_template_blob') {
       if (!isSuperAdmin) {
         return json(403, { error: 'super_admin_required' });
       }
       const templateId = typeof body?.template_id === 'string' ? body.template_id.trim() : '';
       const storagePath = typeof body?.storage_path === 'string' ? body.storage_path.trim() : '';
-      if (isSafeStoragePath(storagePath)) {
-        await adminClient.storage.from('doc-templates-private').remove([storagePath]).catch(() => {});
-      } else if (UUID_RE.test(templateId)) {
+      const pdfStoragePath = typeof body?.pdf_storage_path === 'string' ? body.pdf_storage_path.trim() : '';
+      const explicitPaths = [storagePath, pdfStoragePath].filter((p) => isSafeStoragePath(p));
+      if (explicitPaths.length) {
+        await adminClient.storage.from('doc-templates-private').remove(explicitPaths).catch(() => {});
+      }
+      if (UUID_RE.test(templateId)) {
         const { data: list } = await adminClient.storage
           .from('doc-templates-private')
           .list(`templates/${templateId}`);

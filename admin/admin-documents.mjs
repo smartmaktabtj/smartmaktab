@@ -10,7 +10,36 @@ import {
   parseDocxBytesToDocModel,
   parsePlainTextToDocModel,
 } from '../shared/doc-template-engine.mjs';
-import { mountWordEditor } from '../shared/doc-word-editor.mjs';
+import { mountWordEditor, openPdfDocumentModal } from '../shared/doc-word-editor.mjs';
+import { smConfirm } from '../shared/sm-dialog.mjs';
+
+const MAX_PDF_BYTES = 15 * 1024 * 1024;
+
+function bytesToBase64(bytes) {
+  let bin = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+function base64ToBytes(b64) {
+  const clean = String(b64 || '').replace(/\s+/g, '');
+  const bin = atob(clean);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) {
+    out[i] = bin.charCodeAt(i);
+  }
+  return out;
+}
+
+function formatFileSize(bytes) {
+  const n = Number(bytes || 0);
+  if (!n) return '0 КБ';
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
+  return `${(n / (1024 * 1024)).toFixed(2)} МБ`;
+}
 
 export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
   const $ = (id) => document.getElementById(id);
@@ -18,6 +47,11 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
   let editingCatId = null;
   let editingSubId = null;
   let editingTplId = null;
+  let editingTplVersion = 1;
+  let pendingPdfBytes = null;
+  let pendingPdfFileName = '';
+  let existingPdfStoragePath = '';
+  let existingPdfSizeBytes = 0;
   let wordEditor = null;
 
   function ensureWordEditor() {
@@ -33,6 +67,45 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
       });
     }
     return wordEditor;
+  }
+
+  function syncDocFormatUi() {
+    const fmt = $('docTplFormat')?.value === 'pdf' ? 'pdf' : 'word';
+    const isPdf = fmt === 'pdf';
+    const lang = getLang();
+    const editorHost = $('docTplEditorHost');
+    const pdfBox = $('docTplPdfBox');
+    const editModeField = $('docTplEditModeField');
+    if (editorHost) editorHost.hidden = isPdf;
+    if (pdfBox) pdfBox.hidden = !isPdf;
+    if (editModeField) editModeField.hidden = isPdf;
+
+    if (isPdf) {
+      const statusEl = $('docTplPdfStatus');
+      const metaEl = $('docTplPdfMeta');
+      const prevBtn = $('docTplPdfPreviewBtn');
+      if (pendingPdfBytes) {
+        if (statusEl) statusEl.textContent = `📕 ${pendingPdfFileName || 'document.pdf'}`;
+        if (metaEl) metaEl.textContent = lang === 'ru'
+          ? `Готов к публикации · ${formatFileSize(pendingPdfBytes.byteLength)} · Только просмотр и печать`
+          : `Омода барои нашр · ${formatFileSize(pendingPdfBytes.byteLength)} · Танҳо хондан ва чоп`;
+        if (prevBtn) prevBtn.disabled = false;
+      } else if (existingPdfStoragePath) {
+        if (statusEl) statusEl.textContent = `📕 PDF (${existingPdfStoragePath.split('/').pop()})`;
+        if (metaEl) metaEl.textContent = lang === 'ru'
+          ? `Загружен · ${formatFileSize(existingPdfSizeBytes)} · Только просмотр и печать`
+          : `Боргузорӣ шудааст · ${formatFileSize(existingPdfSizeBytes)} · Танҳо хондан ва чоп`;
+        if (prevBtn) prevBtn.disabled = false;
+      } else {
+        if (statusEl) statusEl.textContent = lang === 'ru'
+          ? '📕 PDF / Скан ещё не выбран'
+          : '📕 Файли PDF / Скан ҳанӯз интихоб нашудааст';
+        if (metaEl) metaEl.textContent = lang === 'ru'
+          ? 'Выберите файл .pdf или скан (до 15 МБ) выше. Пользователи смогут только читать и печатать без редактирования и скачивания.'
+          : 'Файли .pdf ё сканро (то 15 МБ) дар боло интихоб кунед. Корбарон танҳо хонда ва чоп карда метавонанд (бе таҳрир ва боргирӣ).';
+        if (prevBtn) prevBtn.disabled = true;
+      }
+    }
   }
 
   function renderPositionChecks(containerId, prefix, defaultCheckedCodes = []) {
@@ -139,12 +212,18 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
 
   function resetTemplateForm() {
     editingTplId = null;
+    editingTplVersion = 1;
+    pendingPdfBytes = null;
+    pendingPdfFileName = '';
+    existingPdfStoragePath = '';
+    existingPdfSizeBytes = 0;
     $('docTplTitleTg').value = '';
     $('docTplTitleRu').value = '';
     $('docTplDescTg').value = '';
     $('docTplLang').value = 'both';
     $('docTplSchoolType').value = 'all';
     $('docTplShift').value = 'all';
+    if ($('docTplFormat')) $('docTplFormat').value = 'word';
     $('docTplEditMode').value = 'full';
     $('docTplStatus').value = 'published';
     $('docTplSort').value = '100';
@@ -157,6 +236,7 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
       ed.setPageSetup('portrait', DEFAULT_PAGE_MARGINS_MM);
       ed.setHtml('<p style="text-align:center"><strong>{{school.name}}</strong></p><p><br></p>');
     }
+    syncDocFormatUi();
   }
 
   function renderCatalogTree() {
@@ -225,7 +305,16 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
       delCatBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!window.confirm(lang === 'ru' ? 'Удалить категорию со всеми подкатегориями и шаблонами?' : 'Категория ва ҳамаи қолабҳои онро нест мекунед?')) return;
+        const ok = await smConfirm({
+          title: lang === 'ru' ? 'Удалить категорию?' : 'Нест кардани категория',
+          message: lang === 'ru'
+            ? 'Удалить категорию со всеми подкатегориями и шаблонами?'
+            : 'Категория ва ҳамаи қолабҳои онро нест мекунед?',
+          confirmLabel: lang === 'ru' ? 'Удалить' : 'Нест кардан',
+          cancelLabel: lang === 'ru' ? 'Отмена' : 'Бекор',
+          danger: true,
+        });
+        if (!ok) return;
         try {
           await client.adminDeleteDocumentCategory(cat.id);
           await refreshCatalog();
@@ -282,7 +371,14 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
         delSubBtn.className = 'btn danger sm';
         delSubBtn.textContent = '🗑️';
         delSubBtn.addEventListener('click', async () => {
-          if (!window.confirm(lang === 'ru' ? 'Удалить подкатегорию?' : 'Зеркатегорияро нест мекунед?')) return;
+          const ok = await smConfirm({
+            title: lang === 'ru' ? 'Удалить подкатегорию?' : 'Нест кардани зеркатегория',
+            message: lang === 'ru' ? 'Удалить подкатегорию и шаблоны внутри?' : 'Зеркатегорияро нест мекунед?',
+            confirmLabel: lang === 'ru' ? 'Удалить' : 'Нест кардан',
+            cancelLabel: lang === 'ru' ? 'Отмена' : 'Бекор',
+            danger: true,
+          });
+          if (!ok) return;
           try {
             await client.adminDeleteDocumentSubcategory(sub.id);
             await refreshCatalog();
@@ -300,15 +396,18 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
           const leaf = document.createElement('div');
           leaf.className = 'adm-tree-leaf';
           const tTitle = lang === 'ru' && tpl.title_ru ? tpl.title_ru : tpl.title_tg;
+          const isPdf = tpl.doc_format === 'pdf';
           const badges = [
-            `<span class="pill">${escapeHtml(tpl.page_orientation === 'landscape' ? 'A4-L' : 'A4-P')}</span>`,
-            `<span class="pill">${escapeHtml(tpl.edit_mode)}</span>`,
+            isPdf
+              ? `<span class="pill warn">📕 PDF · ${escapeHtml(formatFileSize(tpl.pdf_size_bytes))}</span>`
+              : `<span class="pill">${escapeHtml(tpl.page_orientation === 'landscape' ? 'A4-L' : 'A4-P')}</span>`,
+            isPdf ? '<span class="pill">read-only</span>' : `<span class="pill">${escapeHtml(tpl.edit_mode)}</span>`,
             tpl.strict_native_only ? '<span class="pill warn">🛡️ App-Only</span>' : '',
             tpl.status !== 'published' ? '<span class="pill warn">draft</span>' : '',
           ].filter(Boolean).join(' ');
 
           const info = document.createElement('span');
-          info.innerHTML = `📄 <strong>${escapeHtml(tTitle)}</strong> (v${tpl.version || 1}) ${badges}`;
+          info.innerHTML = `${isPdf ? '📕' : '📄'} <strong>${escapeHtml(tTitle)}</strong> (v${tpl.version || 1}) ${badges}`;
 
           const leafBtns = document.createElement('span');
           leafBtns.className = 'adm-row';
@@ -320,6 +419,12 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
           editTplBtn.textContent = '✏️';
           editTplBtn.addEventListener('click', async () => {
             editingTplId = tpl.id;
+            editingTplVersion = Number(tpl.version || 1);
+            pendingPdfBytes = null;
+            pendingPdfFileName = '';
+            existingPdfStoragePath = tpl.pdf_storage_path || '';
+            existingPdfSizeBytes = Number(tpl.pdf_size_bytes || 0);
+
             $('docTplCatSelect').value = tpl.category_id;
             syncTplSubcategorySelect();
             $('docTplSubSelect').value = tpl.subcategory_id;
@@ -329,6 +434,7 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
             $('docTplLang').value = tpl.lang || 'both';
             $('docTplSchoolType').value = tpl.school_type_filter || 'all';
             $('docTplShift').value = tpl.shift_filter || 'all';
+            if ($('docTplFormat')) $('docTplFormat').value = isPdf ? 'pdf' : 'word';
             $('docTplEditMode').value = tpl.edit_mode || 'full';
             $('docTplStatus').value = tpl.status || 'published';
             $('docTplSort').value = String(tpl.sort_order ?? 100);
@@ -336,22 +442,25 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
             setSelectedPositions('docTplPositionsBox', tpl.position_codes || []);
             $('docTplCancelBtn').hidden = false;
 
-            const ed = ensureWordEditor();
-            let html = tpl.content_json?.html || '';
-            if (!html && tpl.storage_path) {
-              try {
-                const res = await client.docStorage({
-                  action: 'load_template_blob',
-                  template_id: tpl.id,
-                  storage_path: tpl.storage_path,
-                });
-                if (res?.gzip_b64) html = decompressDocPayload(res.gzip_b64).html;
-              } catch {}
+            if (!isPdf) {
+              const ed = ensureWordEditor();
+              let html = tpl.content_json?.html || '';
+              if (!html && tpl.storage_path) {
+                try {
+                  const res = await client.docStorage({
+                    action: 'load_template_blob',
+                    template_id: tpl.id,
+                    storage_path: tpl.storage_path,
+                  });
+                  if (res?.gzip_b64) html = decompressDocPayload(res.gzip_b64).html;
+                } catch {}
+              }
+              if (ed) {
+                ed.setPageSetup(tpl.page_orientation || 'portrait', tpl.page_margins_mm || DEFAULT_PAGE_MARGINS_MM);
+                ed.setHtml(html || '<p><br></p>');
+              }
             }
-            if (ed) {
-              ed.setPageSetup(tpl.page_orientation || 'portrait', tpl.page_margins_mm || DEFAULT_PAGE_MARGINS_MM);
-              ed.setHtml(html || '<p><br></p>');
-            }
+            syncDocFormatUi();
             $('docTplForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
           });
 
@@ -360,10 +469,22 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
           delTplBtn.className = 'btn danger sm';
           delTplBtn.textContent = '🗑️';
           delTplBtn.addEventListener('click', async () => {
-            if (!window.confirm(lang === 'ru' ? 'Удалить шаблон?' : 'Қолабро нест мекунед?')) return;
+            const ok = await smConfirm({
+              title: lang === 'ru' ? 'Удалить шаблон?' : 'Нест кардани қолаб',
+              message: lang === 'ru' ? `Удалить «${tTitle}»?` : `«${tTitle}»-ро нест мекунед?`,
+              confirmLabel: lang === 'ru' ? 'Удалить' : 'Нест кардан',
+              cancelLabel: lang === 'ru' ? 'Отмена' : 'Бекор',
+              danger: true,
+            });
+            if (!ok) return;
             try {
-              if (tpl.storage_path) {
-                await client.docStorage({ action: 'delete_template_blob', template_id: tpl.id, storage_path: tpl.storage_path }).catch(() => {});
+              if (tpl.storage_path || tpl.pdf_storage_path) {
+                await client.docStorage({
+                  action: 'delete_template_blob',
+                  template_id: tpl.id,
+                  storage_path: tpl.storage_path || '',
+                  pdf_storage_path: tpl.pdf_storage_path || '',
+                }).catch(() => {});
               }
               await client.adminDeleteDocumentTemplate(tpl.id);
               await refreshCatalog();
@@ -404,7 +525,6 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
     }
   }
 
-  // Quick position pickers for Category
   $('docCatPickSchool')?.addEventListener('click', () => {
     setSelectedPositions('docCatPositionsBox', POSITION_CATALOG.filter((p) => p.group === 'school').map((p) => p.id));
   });
@@ -420,19 +540,73 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
   $('docSubCancelBtn')?.addEventListener('click', resetSubcategoryForm);
   $('docTplCancelBtn')?.addEventListener('click', resetTemplateForm);
   $('docTplCatSelect')?.addEventListener('change', syncTplSubcategorySelect);
+  $('docTplFormat')?.addEventListener('change', syncDocFormatUi);
   $('docCatalogPosFilter')?.addEventListener('change', renderCatalogTree);
   $('docCatalogSearch')?.addEventListener('input', renderCatalogTree);
   $('docCatalogRefreshBtn')?.addEventListener('click', refreshCatalog);
 
-  // Import .docx or .txt directly into the inline mini-Word editor
+  $('docTplPdfPreviewBtn')?.addEventListener('click', async () => {
+    const title = $('docTplTitleTg').value.trim() || pendingPdfFileName || 'PDF';
+    await openPdfDocumentModal({
+      title,
+      pdfBytes: pendingPdfBytes || undefined,
+      loadPdfBytes: (!pendingPdfBytes && editingTplId && existingPdfStoragePath) ? async () => {
+        const res = await client.docStorage({
+          action: 'load_template_pdf',
+          template_id: editingTplId,
+          pdf_storage_path: existingPdfStoragePath,
+        });
+        if (!res?.pdf_b64) throw new Error(res?.error || 'PDF missing');
+        return base64ToBytes(res.pdf_b64);
+      } : undefined,
+    });
+  });
+
+  // Import .docx, .txt, or .pdf (including scanned PDFs up to 15 MB)
   $('docTplFileInput')?.addEventListener('change', async (e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
+    const lang = getLang();
     try {
-      const ed = ensureWordEditor();
       const nameNoExt = file.name.replace(/\.[^.]+$/, '');
       if (!$('docTplTitleTg').value.trim()) $('docTplTitleTg').value = nameNoExt;
-      if (file.name.toLowerCase().endsWith('.docx')) {
+      const lowName = file.name.toLowerCase();
+
+      if (lowName.endsWith('.pdf') || file.type === 'application/pdf') {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (bytes.byteLength < 8 || bytes.byteLength > MAX_PDF_BYTES) {
+          setStatus(
+            lang === 'ru'
+              ? 'Размер PDF должен быть от 8 байт до 15 МБ'
+              : 'Андозаи PDF бояд то 15 МБ бошад',
+            'error',
+          );
+          e.target.value = '';
+          return;
+        }
+        const isPdfHeader = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+        if (!isPdfHeader) {
+          setStatus(
+            lang === 'ru' ? 'Выбранный файл не является корректным PDF' : 'Файли интихобшуда PDF-и дуруст нест',
+            'error',
+          );
+          e.target.value = '';
+          return;
+        }
+        pendingPdfBytes = bytes;
+        pendingPdfFileName = file.name;
+        if ($('docTplFormat')) $('docTplFormat').value = 'pdf';
+        syncDocFormatUi();
+        setStatus(lang === 'ru' ? `PDF «${file.name}» готов к публикации` : `PDF «${file.name}» барои нашр омода аст`);
+        return;
+      }
+
+      if ($('docTplFormat')) $('docTplFormat').value = 'word';
+      pendingPdfBytes = null;
+      pendingPdfFileName = '';
+      syncDocFormatUi();
+      const ed = ensureWordEditor();
+      if (lowName.endsWith('.docx')) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const model = parseDocxBytesToDocModel(bytes);
         ed?.setPageSetup(model.pageOrientation, model.pageMarginsMm);
@@ -443,9 +617,9 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
         ed?.setPageSetup(model.pageOrientation, model.pageMarginsMm);
         ed?.setHtml(model.html);
       }
-      setStatus(getLang() === 'ru' ? 'Файл загружен в редактор' : 'Файл ба редактор ворид шуд');
+      setStatus(lang === 'ru' ? 'Файл загружен в редактор' : 'Файл ба редактор ворид шуд');
     } catch (err) {
-      setStatus(err?.message || 'DOCX import error', 'error');
+      setStatus(err?.message || 'Import error', 'error');
     }
   });
 
@@ -495,11 +669,92 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
 
   $('docTplForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const lang = getLang();
+    const fmt = $('docTplFormat')?.value === 'pdf' ? 'pdf' : 'word';
+    const titleTg = $('docTplTitleTg').value.trim();
+    const posOverrides = getSelectedPositions('docTplPositionsBox');
+
+    if (fmt === 'pdf') {
+      if (!pendingPdfBytes && !existingPdfStoragePath) {
+        setStatus(
+          lang === 'ru' ? 'Выберите PDF или скан для публикации' : 'Барои нашр файли PDF ё сканро интихоб кунед',
+          'error',
+        );
+        return;
+      }
+      try {
+        const targetSize = pendingPdfBytes ? pendingPdfBytes.byteLength : existingPdfSizeBytes;
+        const tplId = await client.adminUpsertDocumentTemplate({
+          p_id: editingTplId,
+          p_category_id: $('docTplCatSelect').value,
+          p_subcategory_id: $('docTplSubSelect').value,
+          p_position_codes: posOverrides,
+          p_title_tg: titleTg,
+          p_title_ru: $('docTplTitleRu').value.trim(),
+          p_description_tg: $('docTplDescTg').value.trim(),
+          p_page_orientation: 'portrait',
+          p_page_margins_mm: DEFAULT_PAGE_MARGINS_MM,
+          p_lang: $('docTplLang').value,
+          p_school_type_filter: $('docTplSchoolType').value,
+          p_shift_filter: $('docTplShift').value,
+          p_edit_mode: 'fields_only',
+          p_strict_native_only: Boolean($('docTplStrictNative').checked),
+          p_status: $('docTplStatus').value,
+          p_sort_order: Number($('docTplSort').value || 100),
+          p_storage_path: '',
+          p_content_json: {},
+          p_doc_format: 'pdf',
+          p_pdf_storage_path: existingPdfStoragePath,
+          p_pdf_size_bytes: targetSize,
+        });
+
+        if (tplId && pendingPdfBytes) {
+          const uploadRes = await client.docStorage({
+            action: 'save_template_pdf',
+            template_id: tplId,
+            version: editingTplId ? editingTplVersion + 1 : 1,
+            pdf_b64: bytesToBase64(pendingPdfBytes),
+          });
+          if (!uploadRes?.pdf_storage_path) {
+            throw new Error(uploadRes?.error || 'PDF upload failed');
+          }
+          await client.adminUpsertDocumentTemplate({
+            p_id: tplId,
+            p_category_id: $('docTplCatSelect').value,
+            p_subcategory_id: $('docTplSubSelect').value,
+            p_position_codes: posOverrides,
+            p_title_tg: titleTg,
+            p_title_ru: $('docTplTitleRu').value.trim(),
+            p_description_tg: $('docTplDescTg').value.trim(),
+            p_page_orientation: 'portrait',
+            p_page_margins_mm: DEFAULT_PAGE_MARGINS_MM,
+            p_lang: $('docTplLang').value,
+            p_school_type_filter: $('docTplSchoolType').value,
+            p_shift_filter: $('docTplShift').value,
+            p_edit_mode: 'fields_only',
+            p_strict_native_only: Boolean($('docTplStrictNative').checked),
+            p_status: $('docTplStatus').value,
+            p_sort_order: Number($('docTplSort').value || 100),
+            p_storage_path: '',
+            p_content_json: {},
+            p_doc_format: 'pdf',
+            p_pdf_storage_path: uploadRes.pdf_storage_path,
+            p_pdf_size_bytes: uploadRes.size_bytes || targetSize,
+          });
+        }
+
+        resetTemplateForm();
+        await refreshCatalog();
+        setStatus(lang === 'ru' ? 'PDF-документ опубликован' : 'Ҳуҷҷати PDF нашр шуд');
+      } catch (err) {
+        setStatus(err?.message || 'PDF save error', 'error');
+      }
+      return;
+    }
+
     const ed = ensureWordEditor();
     const setup = ed?.getPageSetup() || { pageOrientation: 'portrait', pageMarginsMm: DEFAULT_PAGE_MARGINS_MM };
     const html = ed?.getHtml() || '<p><br></p>';
-    const titleTg = $('docTplTitleTg').value.trim();
-    const posOverrides = getSelectedPositions('docTplPositionsBox');
     try {
       const tplId = await client.adminUpsertDocumentTemplate({
         p_id: editingTplId,
@@ -520,9 +775,11 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
         p_sort_order: Number($('docTplSort').value || 100),
         p_storage_path: '',
         p_content_json: { html },
+        p_doc_format: 'word',
+        p_pdf_storage_path: '',
+        p_pdf_size_bytes: 0,
       });
 
-      // Mirror gzipped template to private Supabase Storage bucket
       if (tplId) {
         try {
           const gz = compressDocPayload({
@@ -557,6 +814,9 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
               p_sort_order: Number($('docTplSort').value || 100),
               p_storage_path: blobRes.storage_path,
               p_content_json: { html },
+              p_doc_format: 'word',
+              p_pdf_storage_path: '',
+              p_pdf_size_bytes: 0,
             });
           }
         } catch {
@@ -566,7 +826,7 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
 
       resetTemplateForm();
       await refreshCatalog();
-      setStatus(getLang() === 'ru' ? 'Шаблон сохранён' : 'Қолаб захира шуд');
+      setStatus(lang === 'ru' ? 'Шаблон сохранён' : 'Қолаб захира шуд');
     } catch (err) {
       setStatus(err.message, 'error');
     }
@@ -575,6 +835,7 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
   renderPositionChecks('docCatPositionsBox', 'cat');
   renderPositionChecks('docTplPositionsBox', 'tpl');
   ensureWordEditor();
+  syncDocFormatUi();
 
   return {
     refresh: refreshCatalog,
@@ -583,6 +844,7 @@ export function setupAdminDocumentsPanel({ client, getLang, setStatus }) {
       renderPositionChecks('docTplPositionsBox', 'tpl', getSelectedPositions('docTplPositionsBox'));
       renderCatalogFilterSelects();
       renderCatalogTree();
+      syncDocFormatUi();
     },
   };
 }

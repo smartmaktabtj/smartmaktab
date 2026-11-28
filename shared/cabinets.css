@@ -285,4 +285,6 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
 article[data-sm-locked="1"] > :not(#licenseGateBanner):not(#cloudWorkspacePanel){display:none!important}
 article[data-sm-locked="1"] #cloudWorkspacePanel:not(.sm-screen-current){display:none!important}
 article[data-sm-locked="1"]:has(#cloudWorkspacePanel.sm-screen-current) #licenseGateBanner{display:none!important}
+@page{size:A4;margin:0mm!important}
+@media print{html,body{margin:0!important;padding:0!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sm-app-layout .frame,.frame{padding:14mm 15mm 16mm 22mm!important}.print-card{padding:4mm!important}}
 

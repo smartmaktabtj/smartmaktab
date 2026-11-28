@@ -23,6 +23,7 @@ import {
 import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
+import { smConfirm } from './sm-dialog.mjs';
 import { canPositionManageUsers, canPositionVerifySchoolStaff, formatPositionTitle } from './position-catalog.mjs';
 import {
   parseStudentImportFile,
@@ -1411,7 +1412,14 @@ export function setupPhase2Panels(article, docs, school, views) {
             `Корбар «${targetName}»-ро аз муассиса комилан ҳазф мекунед?`,
             `Удалить пользователя «${targetName}» из организации?`,
           );
-          if (!globalThis.confirm(msg)) return;
+          const ok = await smConfirm({
+            title: txt('Тасдиқи ҳазф', 'Подтверждение удаления'),
+            message: msg,
+            confirmLabel: txt('Ҳазф', 'Удалить'),
+            cancelLabel: txt('Бекор', 'Отмена'),
+            danger: true,
+          });
+          if (!ok) return;
           btn.disabled = true;
           try {
             await cl.managerDeleteUser({ user_id: btn.dataset.usrDelete, org_id: btn.dataset.org });
