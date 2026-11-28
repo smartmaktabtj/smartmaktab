@@ -579,26 +579,64 @@ export function setupCloudWorkspace(article, group, school) {
       ? `${t('verifyTrigger')} (${pendingVerifQueue.length})`
       : t('verifyTrigger');
     if (blockedByVerif) {
-      const box = make('div', 'notice sm-verif-banner');
-      box.style.cssText = 'border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
-      const txtEl = make('span', 'small');
-      txtEl.style.cssText = 'font-size:13px;font-weight:500;color:#991b1b;';
-      const vStat = m.verification_status || 'unverified';
-      const isDir = m.primary_position === 'school-director';
-      if (vStat === 'rejected') {
-        txtEl.textContent = '⚠️ ' + (isDir ? t('verifRejectedDirector') : t('verifRejectedStaff'));
-      } else if (vStat === 'pending') {
-        txtEl.textContent = '⚠️ ' + t('verifPendingNote');
-      } else {
-        txtEl.textContent = '⚠️ ' + (isDir ? t('verifExplainDirector') : t('verifExplainStaff'));
+      if (!document.getElementById('smVerifWaveStyle')) {
+        const st = document.createElement('style');
+        st.id = 'smVerifWaveStyle';
+        st.textContent = `
+          @keyframes smVerifWave {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+          }
+          .sm-verif-wave-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid #dc2626;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            animation: smVerifWave 2s infinite;
+            transition: transform 0.15s ease, filter 0.15s ease;
+          }
+          .sm-verif-wave-btn:hover { filter: brightness(1.06); }
+          .sm-verif-wave-btn:active { transform: scale(0.99); }
+          .sm-verif-wave-btn .sm-verif-pill {
+            background: rgba(255,255,255,0.2);
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+        `;
+        document.head.append(st);
       }
-      const btn = make('button', 'button');
+      const btn = make('button', 'sm-verif-wave-btn');
       btn.type = 'button';
-      btn.style.cssText = 'background:#dc2626;border-color:#dc2626;color:#fff;padding:6px 14px;font-size:13px;flex-shrink:0;';
-      btn.textContent = t('verifyTrigger');
+      const vStat = m.verification_status || 'unverified';
+      const labelSpan = make('span');
+      labelSpan.style.cssText = 'line-height:1.35;';
+      if (vStat === 'rejected') {
+        labelSpan.textContent = '⚠️ ' + t('verifRejectedStaff').split('.')[0];
+      } else if (vStat === 'pending') {
+        labelSpan.textContent = '⚠️ ' + t('verifPendingNote').split('.')[0];
+      } else {
+        labelSpan.textContent = '⚠️ ' + t('verifyTrigger');
+      }
+      const pill = make('span', 'sm-verif-pill');
+      pill.textContent = t('verifyTrigger') + ' →';
+      btn.append(labelSpan, pill);
       btn.addEventListener('click', openCloudToVerification);
-      box.append(txtEl, btn);
-      verifBannerHost.append(box);
+      verifBannerHost.append(btn);
     }
 
     return state;
