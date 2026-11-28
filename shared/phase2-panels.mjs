@@ -110,19 +110,13 @@ export function setupPhase2Panels(article, docs, school, views) {
     const c = ctx();
     if (!c.hasCloudSession || c.verified) return '';
     const msg = c.verificationStatus === 'rejected'
-      ? txt(
-        'Дархости тасдиқи шумо рад ва нест карда шуд. Дастрасӣ ба пойгоҳи додаҳо маҳдуд аст — ба директор ё маориф муроҷиат намоед.',
-        'Ваша заявка отклонена и удалена. Доступ к базе данных закрыт — обратитесь к директору или в Маориф.',
-      )
-      : txt(
-        'Ҳисоби шумо ҳанӯз верификатсия нашудааст. То тасдиқ танҳо реҷаи маҳаллӣ/файлӣ кор мекунад, пойгоҳи додаҳо баста аст.',
-        'Аккаунт не верифицирован. До подтверждения работает только локальный режим с файлами, база данных закрыта.',
-      );
+      ? txt('Дархости тасдиқи шумо рад шуд', 'Ваша заявка отклонена')
+      : txt('Ҳисоби шумо верификатсия нашудааст', 'Аккаунт не верифицирован');
     return `
-      <div class="notice sm-db-verif-lock" role="status" style="border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <span style="font-size:13px;font-weight:500;">⚠️ ${esc(msg)}</span>
-        <button type="button" class="button" data-open-account-verif="1" style="background:#dc2626;border-color:#dc2626;color:#fff;padding:6px 14px;font-size:13px;flex-shrink:0;">${esc(txt('Верификатсия', 'Верификация'))}</button>
-      </div>
+      <button type="button" class="sm-verif-wave-btn" data-open-account-verif="1" style="margin-bottom:8px;">
+        <span style="line-height:1.35;">⚠️ ${esc(msg)}</span>
+        <span class="sm-verif-pill">${esc(txt('Верификатсия', 'Верификация'))} →</span>
+      </button>
     `;
   }
 
