@@ -580,18 +580,21 @@ export function setupCloudWorkspace(article, group, school) {
       : t('verifyTrigger');
     if (blockedByVerif) {
       const box = make('div', 'notice sm-verif-banner');
-      const txtEl = make('p', 'small');
+      box.style.cssText = 'border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
+      const txtEl = make('span', 'small');
+      txtEl.style.cssText = 'font-size:13px;font-weight:500;color:#991b1b;';
       const vStat = m.verification_status || 'unverified';
       const isDir = m.primary_position === 'school-director';
       if (vStat === 'rejected') {
-        txtEl.textContent = isDir ? t('verifRejectedDirector') : t('verifRejectedStaff');
+        txtEl.textContent = '⚠️ ' + (isDir ? t('verifRejectedDirector') : t('verifRejectedStaff'));
       } else if (vStat === 'pending') {
-        txtEl.textContent = t('verifPendingNote');
+        txtEl.textContent = '⚠️ ' + t('verifPendingNote');
       } else {
-        txtEl.textContent = isDir ? t('verifExplainDirector') : t('verifExplainStaff');
+        txtEl.textContent = '⚠️ ' + (isDir ? t('verifExplainDirector') : t('verifExplainStaff'));
       }
       const btn = make('button', 'button');
       btn.type = 'button';
+      btn.style.cssText = 'background:#dc2626;border-color:#dc2626;color:#fff;padding:6px 14px;font-size:13px;flex-shrink:0;';
       btn.textContent = t('verifyTrigger');
       btn.addEventListener('click', openCloudToVerification);
       box.append(txtEl, btn);
