@@ -302,7 +302,7 @@ export function setupWorkspace({configured,school}){
   const right=document.createElement('span');
   if(isPaid){
    right.style.cssText='color:#16a34a;font-weight:600;';
-   right.textContent=expStr?label(`Оплата действует до ${expStr}`,`Обуна фаъол то ${expStr}`):label('Оплата активна','Обуна фаъол');
+   right.textContent=expStr?label(`Активна · Следующая оплата: ${expStr}`,`Обуна фаъол · Пардохти навбатӣ: ${expStr}`):label('Оплата активна','Обуна фаъол');
    profSubBar.style.cursor='default';
    profSubBar.disabled=true;
   }else{
