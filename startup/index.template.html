@@ -89,6 +89,11 @@
 </style><style>
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear{display:none;}
+.pass-wrap{position:relative;display:flex;align-items:center}
+.pass-wrap input{width:100%;padding-right:42px}
+.pass-eye{position:absolute;right:8px;background:none;border:0;cursor:pointer;font-size:16px;padding:4px;line-height:1}
+.latin-warn{color:#b45309;font-size:.82rem;font-weight:650;margin:0}
+[data-theme="dark"] .latin-warn{color:#fbbf24}
 </style>
 </head><body><div class="shell" id="startupShell" data-screen="0">
 <header class="top"><a href="./index.html" class="brand"><img src="./shared/brand-icon.png" alt="" class="brand-logo" width="34" height="34">SmartMaktab</a>
@@ -105,7 +110,7 @@ input[type="password"]::-ms-clear{display:none;}
 <li data-mark="1" data-tg="Вазифаи асосӣ">Вазифаи асосӣ</li>
 <li data-mark="2" data-tg="Иловагӣ ва нарх">Иловагӣ ва нарх</li>
 <li data-mark="3" data-tg="Маълумот">Маълумот</li>
-<li data-mark="4" data-tg="Мактаб">Мактаб</li>
+<li data-mark="4" data-tg="Муассиса">Муассиса</li>
 </ol>
 
 <p id="viewerNotReady" class="note" style="padding:8px 18px" role="status" data-tg="Агар танҳо тасвир намоён бошад ва тугмаҳо кор накунанд, пешнамоиши кории SmartMaktab-ро кушоед.">Агар танҳо тасвир намоён бошад ва тугмаҳо кор накунанд, пешнамоиши кории SmartMaktab-ро кушоед.</p>
@@ -119,20 +124,22 @@ input[type="password"]::-ms-clear{display:none;}
 <h2 id="loginTitle" style="padding:0;margin-bottom:4px" data-tg="Воридшавӣ ба SmartMaktab">Воридшавӣ ба SmartMaktab</h2>
 <p id="loginSubtitle" class="small" data-tg="Логин, рақами телефон ё Email ва пароли худро ворид кунед.">Логин, рақами телефон ё Email ва пароли худро ворид кунед.</p>
 </div>
-<label class="field"><span data-tg="Логин, телефон ё Email">Логин, телефон ё Email</span><input id="loginIdentifier" type="text" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" placeholder="масалан: sharipov ё email"></label>
-<label class="field"><span data-tg="Парол (Рамз)">Парол (Рамз)</span><div style="position:relative;display:flex;align-items:center;"><input id="loginPassword" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="current-password" style="width:100%;padding-right:42px;"><button type="button" id="toggleLoginPassword" aria-label="Показать пароль" style="position:absolute;right:8px;background:none;border:0;cursor:pointer;font-size:16px;padding:4px;line-height:1;">👁️</button></div></label>
+<label class="field"><span data-tg="Логин, телефон ё Email">Логин, телефон ё Email</span><input id="loginIdentifier" type="text" lang="en" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" placeholder="масалан: sharipov, 907972295 ё email"></label>
+<label class="field"><span data-tg="Парол (Рамз)">Парол (Рамз)</span><div class="pass-wrap"><input id="loginPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="current-password"><button type="button" id="toggleLoginPassword" class="pass-eye" aria-label="Показать пароль">👁️</button></div></label>
+<p class="latin-warn" id="loginLatinWarn" hidden data-tg="⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.">⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
 <p class="error" id="loginError" role="status"></p>
 <div id="loginDeviceBlock" class="device-limit-box" hidden style="margin-top:10px;padding:12px;border:1px solid #fecaca;background:#fff5f5;border-radius:10px;">
  <div id="loginDeviceTitle" style="font-weight:600;font-size:14px;margin-bottom:8px;color:#991b1b;"></div>
  <div id="loginDeviceList" style="display:flex;flex-direction:column;gap:8px;"></div>
 </div>
 <button type="submit" id="loginSubmit" class="button full" data-tg="Ворид шудан">Ворид шудан</button>
+<p class="small" style="text-align:center;margin:0" data-tg="Рамзро фаромӯш кардед? Ба роҳбари муассиса (бахши «Корбарон») ё шуъбаи маориф муроҷиат намоед.">Рамзро фаромӯш кардед? Ба роҳбари муассиса (бахши «Корбарон») ё шуъбаи маориф муроҷиат намоед.</p>
 <div id="schoolAuthExtras">
 <div class="auth-divider"><span data-tg="ё">ё</span></div>
 <button type="button" id="goToRegister" class="button alt full" data-tg="Бақайдгирӣ">Бақайдгирӣ</button>
 <button type="button" id="goAuthorityLogin" class="button alt full" style="margin-top:8px" data-tg="Раёсат ва Маориф">Раёсат ва Маориф</button>
 </div>
-<button type="button" id="backAuthorityLogin" class="button alt full" hidden data-tg="← Бозгашт ба вуруди мактаб">← Бозгашт ба вуруди мактаб</button>
+<button type="button" id="backAuthorityLogin" class="button alt full" hidden data-tg="← Бозгашт барои дохил шудан ба мактаб">← Бозгашт барои дохил шудан ба мактаб</button>
 </form>
 </div>
 </section>
@@ -141,7 +148,7 @@ input[type="password"]::-ms-clear{display:none;}
 <section data-step="1" hidden>
 <h2 tabindex="-1" data-tg="Вазифаи асосиро интихоб кунед">Вазифаи асосиро интихоб кунед</h2>
 <div class="setup-step-body">
-<p class="intro" data-tg="Як вазифаи асосии мактабро интихоб кунед.">Як вазифаи асосии мактабро интихоб кунед.</p>
+<p class="intro" data-tg="Як вазифаи асосии муассисаро интихоб кунед.">Як вазифаи асосии муассисаро интихоб кунед.</p>
 <div id="primaryChoices" class="choices"></div>
 </div>
 <div class="foot">
@@ -150,7 +157,7 @@ input[type="password"]::-ms-clear{display:none;}
 </div>
 </section>
 
-<!-- STEP 2: COMPATIBLE EXTRA POSITIONS + ALIYA (+30) + TOTAL PRICE -->
+<!-- STEP 2: COMPATIBLE EXTRA POSITIONS + METHOD GROUPS (UP TO 5) + ALIYA (+30) + TOTAL PRICE -->
 <section data-step="2" hidden>
 <h2 tabindex="-1" data-tg="Вазифаҳои иловагӣ ва хидматҳо">Вазифаҳои иловагӣ ва хидматҳо</h2>
 <div class="setup-step-body">
@@ -161,6 +168,14 @@ input[type="password"]::-ms-clear{display:none;}
 </div>
 <p id="noExtras" class="note" hidden data-tg="Барои ин вазифа интихоби вазифаи иловагӣ дастрас нест.">Барои ин вазифа интихоби вазифаи иловагӣ дастрас нест.</p>
 <div id="extraChoices" class="choices"></div>
+<div id="methodGroupsSetupBox" class="row" hidden style="margin-top:12px;border-color:#2b825f">
+<div class="role-head">
+<h3 data-tg="Иттиҳодияҳои методии фаннӣ (аз 1 то 5 гурӯҳ)">Иттиҳодияҳои методии фаннӣ (аз 1 то 5 гурӯҳ)</h3>
+<button type="button" id="addMethodGroupBtn" class="button alt" data-tg="+ Иловаи гурӯҳ">+ Иловаи гурӯҳ</button>
+</div>
+<p class="small" style="margin-top:4px" data-tg="То 5 иттиҳодияи методиро созед ва барои ҳар кадомаш фанҳоро интихоб кунед.">То 5 иттиҳодияи методиро созед ва барои ҳар кадомаш фанҳоро интихоб кунед.</p>
+<div id="methodGroupsList"></div>
+</div>
 <div class="aliya-card">
 <label><input type="checkbox" id="aliyaAddonToggle"><div><strong data-tg="Функсияи Алия (ёрдамчии интеллектуалӣ)">Функсияи Алия (ёрдамчии интеллектуалӣ)</strong><span class="small" data-tg="Ихтиёрӣ барои ҳамаи вазифаҳо: кӯмак дар ҳуҷҷатҳо ва китобхона">Ихтиёрӣ барои ҳамаи вазифаҳо: кӯмак дар ҳуҷҷатҳо ва китобхона</span></div></label>
 <span class="price-pill">+30 сомонӣ</span>
@@ -173,6 +188,7 @@ input[type="password"]::-ms-clear{display:none;}
 <div class="foot">
 <button type="button" class="button alt" data-back="1" data-tg="Бозгашт">Бозгашт</button>
 <button type="button" class="button" id="toProfile" data-tg="Идома">Идома</button>
+<p class="error" role="status" id="step2Error"></p>
 </div>
 </section>
 
@@ -186,11 +202,13 @@ input[type="password"]::-ms-clear{display:none;}
 <label class="field"><span data-tg="Ном">Ном</span><input id="firstName" required maxlength="60"></label>
 <label class="field"><span data-tg="Насаб">Насаб</span><input id="lastName" required maxlength="60"></label>
 <label class="field"><span data-tg="Номи падар">Номи падар</span><input id="middleName" maxlength="60"></label>
-<label class="field"><span data-tg="Соли таваллуд">Соли таваллуд</span><input id="birthYear" type="number" min="1940" max="2015" required placeholder="1985"></label>
+<label class="field"><span data-tg="Санаи таваллуд (рр.мм.сссс)">Санаи таваллуд (рр.мм.сссс)</span><input id="birthYear" type="text" inputmode="numeric" maxlength="10" required placeholder="15.05.1985" autocomplete="bday"></label>
 <label class="field"><span data-tg="Ҷинс">Ҷинс</span><select id="genderSelect" required><option value="" data-tg="Интихоб кунед">Интихоб кунед</option><option value="female" data-tg="Зан">Зан</option><option value="male" data-tg="Мард">Мард</option></select></label>
 <label class="field"><span data-tg="Ихтисос (аз рӯи диплом)">Ихтисос (аз рӯи диплом)</span><input id="specialtyInput" required maxlength="100"></label>
 <label class="field"><span data-tg="Собиқаи кор дар соҳаи маориф (сол)">Собиқаи кор дар соҳаи маориф (сол)</span><input id="eduYearsInput" type="number" min="0" max="70" required placeholder="5"></label>
 <label class="field"><span data-tg="Маълумот (таҳсилот)">Маълумот (таҳсилот)</span><select id="educationSelect" required><option value="" data-tg="Интихоб кунед">Интихоб кунед</option><option value="higher" data-tg="Олӣ">Олӣ</option><option value="bachelor" data-tg="Бакалавр">Бакалавр</option><option value="specialist" data-tg="Мутахассис">Мутахассис</option><option value="master" data-tg="Магистр">Магистр</option><option value="vocational" data-tg="Миёнаи касбӣ">Миёнаи касбӣ</option><option value="other" data-tg="Дигар">Дигар</option></select></label>
+<label class="field"><span data-tg="Навъи муассиса">Навъи муассиса</span><select id="institutionTypeSelect" required><option value="" data-tg="Интихоб кунед">Интихоб кунед</option><option value="school" data-tg="Мактаби таҳсилоти умумӣ">Мактаби таҳсилоти умумӣ</option><option value="gymnasium" data-tg="Гимназия">Гимназия</option><option value="lyceum" data-tg="Литсей">Литсей</option><option value="boarding" data-tg="Мактаб-интернат">Мактаб-интернат</option><option value="preschool" data-tg="Муассисаи томактабӣ">Муассисаи томактабӣ</option><option value="vocational" data-tg="Литсейи касбӣ / Коллеҷ">Литсейи касбӣ / Коллеҷ</option></select></label>
+<label class="field"><span data-tg="Тартиби таҳсил (Баст)">Тартиби таҳсил (Баст)</span><select id="institutionShiftsSelect" required><option value="" data-tg="Интихоб кунед">Интихоб кунед</option><option value="one" data-tg="Як баст">Як баст</option><option value="two" data-tg="Ду баст">Ду баст</option><option value="three" data-tg="Се баст">Се баст</option></select></label>
 </div>
 <label class="field" id="customMethodWrap" hidden style="margin-top:10px"><span data-tg="Номи иттиҳодияи методии шумо">Номи иттиҳодияи методии шумо</span><input id="customMethodNameInput" maxlength="120" placeholder="Масалан: Иттиҳодияи методии фанҳои дақиқ"></label>
 <fieldset class="choice-set" style="margin-top:10px">
@@ -207,55 +225,53 @@ input[type="password"]::-ms-clear{display:none;}
 <label class="field" id="otherLangWrap" hidden style="margin-top:8px"><span data-tg="Забони дигар">Забони дигар</span><input id="otherLangInput" maxlength="60"></label>
 </fieldset>
 <div id="primaryRoleFields" class="profile-fields"></div>
-<div class="row" style="margin-top:12px;border-color:#72a78c">
-<h3 data-tg="Логин ва парол барои воридшавӣ (ҳатмӣ барои ҳисоб дар система)">Логин ва парол барои воридшавӣ (ҳатмӣ барои ҳисоб дар система)</h3>
-<p class="small" style="margin-top:4px" data-tg="Барои он ки баъдтар дар ҳамин дастгоҳ ё дастгоҳи дигар ворид шавед, логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.">Барои он ки баъдтар дар ҳамин дастгоҳ ё дастгоҳи дигар ворид шавед, логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.</p>
+<div id="regCredentialsBox" class="row" style="margin-top:12px;border-color:#72a78c">
+<h3 data-tg="Логин ва парол барои воридшавӣ (ҳатмӣ)">Логин ва парол барои воридшавӣ (ҳатмӣ)</h3>
+<p class="small" style="margin-top:4px" data-tg="Барои ворид шудан дар ҳамин дастгоҳ ё дастгоҳи дигар логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.">Барои ворид шудан дар ҳамин дастгоҳ ё дастгоҳи дигар логин (бо ҳуруфи лотинӣ a-z, рақами телефон ё Email) ва парол созед.</p>
 <div class="inputs">
-<label class="field"><span data-tg="Логин (лотинӣ), телефон ё Email *">Логин (лотинӣ), телефон ё Email *</span><input id="regLogin" maxlength="100" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="масалан: sharipov ё email"></label>
-<label class="field"><span data-tg="Парол (ҳадди ақал 6 аломат) *">Парол (ҳадди ақал 6 аломат) *</span><input id="regPassword" type="password" minlength="6" autocomplete="new-password"></label>
-<label class="field"><span data-tg="Тасдиқи парол *">Тасдиқи парол *</span><input id="regPassword2" type="password" minlength="6" autocomplete="new-password"></label>
+<label class="field"><span data-tg="Логин (лотинӣ), телефон ё Email *">Логин (лотинӣ), телефон ё Email *</span><input id="regLogin" required maxlength="100" lang="en" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="масалан: sharipov, 907972295 ё email"></label>
+<label class="field"><span data-tg="Парол (ҳадди ақал 6 аломат) *">Парол (ҳадди ақал 6 аломат) *</span><div class="pass-wrap"><input id="regPassword" type="password" required minlength="6" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password"><button type="button" id="toggleRegPassword" class="pass-eye" aria-label="Показать пароль">👁️</button></div></label>
+<label class="field"><span data-tg="Тасдиқи парол *">Тасдиқи парол *</span><div class="pass-wrap"><input id="regPassword2" type="password" required minlength="6" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password"><button type="button" id="toggleRegPassword2" class="pass-eye" aria-label="Показать пароль">👁️</button></div></label>
 </div>
+<p class="latin-warn" id="regLatinWarn" hidden style="margin-top:6px" data-tg="⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.">⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
 </div>
 <p class="note" style="margin-top:8px" data-tg="Барои вазифаҳои иловагӣ маълумоти вазифаи асосӣ худкор гузошта мешавад. Онҳоро баъдтар дар бахши «Профил» тағйир додан мумкин аст.">Барои вазифаҳои иловагӣ маълумоти вазифаи асосӣ худкор гузошта мешавад. Онҳоро баъдтар дар бахши «Профил» тағйир додан мумкин аст.</p>
 </form>
 </div>
 <div class="foot">
 <button type="button" class="button alt" data-back="2" data-tg="Бозгашт">Бозгашт</button>
-<button type="button" class="button" id="toSchoolStep" data-tg="Ба интихоби мактаб">Ба интихоби мактаб</button>
+<button type="button" class="button" id="toSchoolStep" data-tg="Ба интихоби муассиса">Ба интихоби муассиса</button>
 <p class="error" role="status" id="primaryError"></p>
 </div>
 </section>
 
 <!-- STEP 4: SCHOOL SELECTION -->
 <section data-step="4" hidden>
-<h2 tabindex="-1" data-tg="Мактабро интихоб кунед">Мактабро интихоб кунед</h2>
+<h2 tabindex="-1" data-tg="Муассисаро интихоб кунед">Муассисаро интихоб кунед</h2>
 <div class="setup-step-body">
-<p class="intro" data-tg="Мактабро аз рӯи рақам ё ном ҷустуҷӯ кунед.">Мактабро аз рӯи рақам ё ном ҷустуҷӯ кунед.</p>
+<p class="intro" data-tg="Муассисаро аз рӯи рақам ё ном ҷустуҷӯ кунед.">Муассисаро аз рӯи рақам ё ном ҷустуҷӯ кунед.</p>
 <div class="inputs">
-<label class="field"><span data-tg="Ҷустуҷӯи мактаб">Ҷустуҷӯи мактаб</span><input id="schoolSearch" type="search" maxlength="80" placeholder="МТМУ № 88" autocomplete="off"></label>
-<label class="field"><span data-tg="Мактаби асосӣ">Мактаби асосӣ</span><select id="schoolChoice"></select></label>
+<label class="field"><span data-tg="Ҷустуҷӯи муассиса">Ҷустуҷӯи муассиса</span><input id="schoolSearch" type="search" maxlength="80" placeholder="МТМУ № 88" autocomplete="off"></label>
+<label class="field"><span data-tg="Муассисаи асосӣ">Муассисаи асосӣ</span><select id="schoolChoice"></select></label>
 </div>
 <p id="schoolNotice" class="small" role="status" style="margin-top:6px"></p>
-<div style="margin-top:6px"><button type="button" class="button alt" id="retryBootstrapBtn" hidden data-tg="Аз нав бор кардани рӯйхати мактабҳо">Аз нав бор кардани рӯйхати мактабҳо</button></div>
-<p id="demoModeWarning" class="note" hidden role="status" style="margin-top:8px;padding:8px 10px;border:1px solid #d59b3c;border-radius:8px" data-tg="Диққат: логин ва парол ворид нашудаанд. Барнома танҳо дар реҷаи демои маҳаллӣ кушода мешавад ва ба пойгоҳи додаҳо сабт намешавад. Барои сохтани ҳисоб ба қадами «Маълумот» баргардед.">Диққат: логин ва парол ворид нашудаанд. Барнома танҳо дар реҷаи демои маҳаллӣ кушода мешавад ва ба пойгоҳи додаҳо сабт намешавад. Барои сохтани ҳисоб ба қадами «Маълумот» баргардед.</p>
+<div style="margin-top:6px"><button type="button" class="button alt" id="retryBootstrapBtn" hidden data-tg="Аз нав бор кардани рӯйхати муассисаҳо">Аз нав бор кардани рӯйхати муассисаҳо</button></div>
 <div style="margin-top:8px">
-<button type="button" class="button alt" id="toggleNewSchoolBtn" data-tg="Мактаби мо дар рӯйхат нест — Илова кардан">Мактаби мо дар рӯйхат нест — Илова кардан</button>
+<button type="button" class="button alt" id="toggleNewSchoolBtn" data-tg="Муассисаи мо дар рӯйхат нест — Илова кардан">Муассисаи мо дар рӯйхат нест — Илова кардан</button>
 </div>
 <div id="newSchoolForm" class="row" hidden style="margin-top:10px">
-<p class="small" data-tg="Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:">Вилоят, шаҳр/ноҳия, ҷамоат ва деҳаро интихоб карда, номи мактабатонро ворид кунед:</p>
+<p class="small" data-tg="Вилоят, шаҳр/ноҳия ва ҷамоатро интихоб карда, деҳа/маҳалла ва номи муассисаатонро ворид кунед:">Вилоят, шаҳр/ноҳия ва ҷамоатро интихоб карда, деҳа/маҳалла ва номи муассисаатонро ворид кунед:</p>
 <div class="inputs">
 <label class="field"><span data-tg="Вилоят / Шаҳр">Вилоят / Шаҳр</span><select id="newSchoolRegion"></select></label>
 <label class="field"><span data-tg="Шаҳр / Ноҳия (Маориф)">Шаҳр / Ноҳия (Маориф)</span><select id="newSchoolDistrictSelect"></select></label>
-<label class="field" id="newSchoolDistrictCustomWrap" hidden><span data-tg="Номи шаҳр / ноҳия (дастӣ)">Номи шаҳр / ноҳия (дастӣ)</span><input id="newSchoolDistrict" maxlength="120" placeholder="Хуҷанд / Данғара"></label>
 <label class="field"><span data-tg="Ҷамоат / Шаҳрак">Ҷамоат / Шаҳрак</span><select id="newSchoolJamoatSelect"></select></label>
-<label class="field" id="newSchoolJamoatCustomWrap" hidden><span data-tg="Номи ҷамоат (дастӣ)">Номи ҷамоат (дастӣ)</span><input id="newSchoolJamoatCustom" maxlength="120" placeholder="Ҷамоати ..."></label>
-<label class="field"><span data-tg="Деҳа / Маҳалла / Шаҳр">Деҳа / Маҳалла / Шаҳр</span><select id="newSchoolVillageSelect"></select></label>
-<label class="field" id="newSchoolVillageCustomWrap" hidden><span data-tg="Номи деҳа (дастӣ)">Номи деҳа (дастӣ)</span><input id="newSchoolVillageCustom" maxlength="120" placeholder="Деҳаи ..."></label>
-<label class="field"><span data-tg="Номи мактаб">Номи мактаб</span><input id="newSchoolName" maxlength="160" placeholder="МТМУ № 99"></label>
-<label class="field"><span data-tg="Рамзи мактаб (ихтиёрӣ)">Рамзи мактаб (ихтиёрӣ)</span><input id="newSchoolCode" maxlength="40" placeholder="SM-099"></label>
+<label class="field"><span data-tg="Деҳа / Маҳалла">Деҳа / Маҳалла</span><select id="newSchoolVillageSelect"></select></label>
+<label class="field" id="newSchoolVillageCustomWrap" hidden><span data-tg="Номи деҳа / маҳалла (дастӣ)">Номи деҳа / маҳалла (дастӣ)</span><input id="newSchoolVillageCustom" maxlength="120" placeholder="Деҳа / маҳаллаи ..."></label>
+<label class="field"><span data-tg="Номи муассиса">Номи муассиса</span><input id="newSchoolName" maxlength="160" placeholder="МТМУ № 99"></label>
+<label class="field"><span data-tg="Рамзи муассиса (ихтиёрӣ)">Рамзи муассиса (ихтиёрӣ)</span><input id="newSchoolCode" maxlength="40" placeholder="SM-099"></label>
 </div>
 </div>
-<details id="extraSchoolBlock" class="row" hidden><summary data-tg="Мактаби дигар барои вазифаи иловагӣ">Мактаби дигар барои вазифаи иловагӣ</summary><div id="extraSchools" class="inputs"></div></details>
+<details id="extraSchoolBlock" class="row" hidden><summary data-tg="Муассисаи дигар барои вазифаи иловагӣ">Муассисаи дигар барои вазифаи иловагӣ</summary><div id="extraSchools" class="inputs"></div></details>
 <div id="results"></div>
 </div>
 <div class="foot">

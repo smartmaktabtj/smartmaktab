@@ -1,7 +1,7 @@
 'use strict';
 try{
  const _q=new URLSearchParams(location.search);
- if(!_q.get('setup')&&!_q.get('register')&&localStorage.getItem('smartmaktab.active.cabinet.v1')){
+ if(!_q.get('setup')&&!_q.get('register')&&localStorage.getItem('smartmaktab.active-cabinet.v1')&&localStorage.getItem('smartmaktab.cloud.session.v1')){
   document.documentElement.style.visibility='hidden';
  }
 }catch{}
@@ -11,6 +11,7 @@ const wantsRegister=params.get('register')==='1';
 const activeCabinetKey='smartmaktab.active-cabinet.v1';
 const profileStorageKey='smartmaktab.profile.v1';
 const cloudSessionKey='smartmaktab.cloud.session.v1';
+const licenseCacheKey='smartmaktab.cloud.license.v1';
 const validResumeRoute=/^cabinets\/(?:[a-z-]+\/)*[a-z-]+\.html\?(?:school=[a-z0-9-]+&)?lang=(?:tg|ru)$/;
 
 function hydrateFromSqlite(){
@@ -25,23 +26,23 @@ function hydrateFromSqlite(){
   }
  }catch{}
 }
-function checkResumeRoute(){
- if(useFileViewer||openOfflineRoute||wantsSetup||wantsRegister)return '';
+function checkResumeCandidate(){
+ if(useFileViewer||openOfflineRoute||wantsSetup||wantsRegister)return null;
  hydrateFromSqlite();
  try{
   const rawActive=localStorage.getItem(activeCabinetKey)||globalThis.SmartMaktabSqlite?.getItem?.(activeCabinetKey)||'';
   const rawWorkspace=localStorage.getItem('smartmaktab.demo.workspace.v1')||globalThis.SmartMaktabSqlite?.getItem?.('smartmaktab.demo.workspace.v1')||'';
-  if(!rawActive||!rawWorkspace)return '';
+  const rawSession=localStorage.getItem(cloudSessionKey)||globalThis.SmartMaktabSqlite?.getItem?.(cloudSessionKey)||'';
+  if(!rawActive||!rawWorkspace||!rawSession)return null;
   const active=JSON.parse(rawActive);
   const workspace=JSON.parse(rawWorkspace);
-  if(!active||!workspace?.primary||!Array.isArray(workspace.roles))return '';
-  if(typeof active.route==='string'&&validResumeRoute.test(active.route))return active.route;
+  const session=JSON.parse(rawSession);
+  if(!active||!workspace?.primary||!Array.isArray(workspace.roles)||!session?.access_token)return null;
+  if(typeof active.route==='string'&&validResumeRoute.test(active.route)){
+   return {active,workspace,session};
+  }
  }catch{}
- return '';
-}
-const resumeTarget=checkResumeRoute();
-if(resumeTarget){
- location.replace('./'+resumeTarget);
+ return null;
 }
 
 const $=id=>document.getElementById(id);
@@ -54,15 +55,19 @@ const empty=()=>({
  extras:[],
  includeAliya:false,
  customMethodName:'',
+ methodGroups:[{id:'mg-1',name:'',subjects:[]}],
  person:{
   first:'',
   last:'',
   middle:'',
+  birthDate:'',
   birthYear:'',
   gender:'',
   specialty:'',
   eduYears:'',
   education:'',
+  institutionType:'',
+  institutionShifts:'',
   languages:['tg'],
   otherLanguage:'',
  },
@@ -94,7 +99,8 @@ const copy={
  totalPrefix:['Итого:','Ҳамагӣ:'],
  aliyaYes:['+ Алия (30 сомони)','+ Алия (30 сомонӣ)'],
  selectedMain:['Основная должность: ','Вазифаи асосӣ: '],
- invalidProfile:['Заполните все обязательные поля анкеты (ФИО, год рождения, пол, специальность, стаж, образование).','Ҳамаи майдонҳои ҳатмии варақаро пур кунед (Ном, насаб, соли таваллуд, ҷинс, ихтисос, собиқа, маълумот).'],
+ invalidProfile:['Заполните все обязательные поля анкеты (ФИО, дата рождения ДД.ММ.ГГГГ, пол, специальность, стаж, образование, тип учреждения и смены).','Ҳамаи майдонҳои ҳатмии варақаро пур кунед (Ном, насаб, санаи таваллуд рр.мм.сссс, ҷинс, ихтисос, собиқа, маълумот, навъи муассиса ва баст).'],
+ invalidMethodGroups:['Укажите название и хотя бы один предмет для каждого методического объединения (от 1 до 5 групп).','Номи ҳар як иттиҳодияи методӣ ва ҳадди ақал як фанни онро интихоб кунед (аз 1 то 5 гурӯҳ).'],
  invalidMethodName:['Укажите название вашего методического объединения.','Номи иттиҳодияи методии худро ворид кунед.'],
  invalidOtherLang:['Укажите другой язык.','Забони дигарро нависед.'],
  invalidCreds:['Введите логин латиницей (a-z, 0-9, минимум 3 символа), номер телефона или Email и пароль не менее 6 символов, совпадающий в обоих полях.','Логинро бо ҳуруфи лотинӣ (a-z, 0-9, на кам аз 3 аломат), рақами телефон ё Email ва пароли на кам аз 6-аломатаро дар ҳар ду майдон якхела ворид кунед.'],
@@ -111,8 +117,8 @@ const copy={
  regBusy:['Создание аккаунта на сервере…','Сохтани ҳисоб дар сервер…'],
  regFileViewerErr:['Нельзя создать аккаунт в системе при открытии локального HTML-файла. Откройте сайт SmartMaktab или установленное приложение с интернетом.','Ҳангоми кушодани файли маҳаллии HTML сохтани ҳисоб дар система имконнопазир аст. Сомонаи SmartMaktab ё барномаи насбшударо бо интернет кушоед.'],
  regOfflineErr:['Нет подключения к интернету. Чтобы сохранить аккаунт в базе и входить с других устройств, подключитесь к интернету.','Пайвасти интернет нест. Барои сабти ҳисоб дар пойгоҳи додаҳо ва воридшавӣ аз дастгоҳҳои дигар интернетро фаъол кунед.'],
- regSchoolsUnavailable:['Не удалось загрузить список школ с сервера — аккаунт не создан. Проверьте интернет и нажмите «Повторить» либо добавьте школу вручную.','Рӯйхати мактабҳо аз сервер бор нашуд — ҳисоб сохта нашуд. Интернетро санҷида «Аз нав бор кардан»-ро пахш кунед ё мактабро дастӣ илова намоед.'],
- regSchoolPickCloud:['Список школ обновлён с сервера. Выберите вашу школу в списке и нажмите «Оғоз».','Рӯйхати мактабҳо аз сервер нав шуд. Мактаби худро аз рӯйхат интихоб карда, «Оғоз»-ро пахш кунед.'],
+ regSchoolsUnavailable:['Не удалось загрузить список учреждений с сервера — аккаунт не создан. Проверьте интернет и нажмите «Повторить» либо добавьте учреждение вручную.','Рӯйхати муассисаҳо аз сервер бор нашуд — ҳисоб сохта нашуд. Интернетро санҷида «Аз нав бор кардан»-ро пахш кунед ё муассисаро дастӣ илова намоед.'],
+ regSchoolPickCloud:['Список учреждений обновлён с сервера. Выберите ваше учреждение в списке и нажмите «Оғоз».','Рӯйхати муассисаҳо аз сервер нав шуд. Муассисаи худро аз рӯйхат интихоб карда, «Оғоз»-ро пахш кунед.'],
  regNetworkFail:['Не удалось связаться с сервером регистрации — аккаунт НЕ создан. Проверьте интернет и попробуйте снова.','Бо сервери бақайдгирӣ пайваст шуда нашуд — ҳисоб сохта НАШУД. Интернетро санҷида боз кӯшиш кунед.'],
  regSessionMissing:['Аккаунт создан, но не удалось подтвердить вход. Попробуйте войти на стартовом экране с этим логином и паролем.','Ҳисоб сохта шуд, вале воридшавӣ тасдиқ нашуд. Дар саҳифаи асосӣ бо ҳамин логин ва парол ворид шавед.'],
  duplicateLogin:['Этот логин или телефон уже зарегистрирован. Нажмите «Войти» на стартовом экране.','Ин логин ё телефон аллакай ба қайд гирифта шудааст. Дар саҳифаи асосӣ «Ворид шудан»-ро пахш кунед.'],
@@ -126,6 +132,25 @@ const copy={
 const t=key=>copy[key][lang==='tg'?1:0];
 const el=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
 const clean=value=>String(value||'').trim();
+const hasCyrillic=value=>/[\u0400-\u04FF]/.test(String(value||''));
+
+function parseBirthDateValue(raw){
+ const s=clean(raw);
+ const m=s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+ if(!m)return {valid:false};
+ const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]);
+ if(y<1940||y>2015||mo<1||mo>12||d<1||d>31)return {valid:false};
+ const dt=new Date(y,mo-1,d);
+ if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return {valid:false};
+ return {valid:true,birthDate:`${m[1]}.${m[2]}.${m[3]}`,birthYear:m[3]};
+}
+
+function updateLatinWarnings(){
+ const lw=$('loginLatinWarn');
+ if(lw)lw.hidden=!(hasCyrillic($('loginIdentifier')?.value)||hasCyrillic($('loginPassword')?.value));
+ const rw=$('regLatinWarn');
+ if(rw)rw.hidden=!(hasCyrillic($('regLogin')?.value)||hasCyrillic($('regPassword')?.value)||hasCyrillic($('regPassword2')?.value));
+}
 
 function writeStoreItem(k,v){
  try{localStorage.setItem(k,v);}catch{}
@@ -252,6 +277,72 @@ function setStep(n){
  }
 }
 
+function hasMethodGroupsRole(){
+ return state.primary==='school-five-method-groups'||state.extras.includes('school-five-method-groups');
+}
+
+function renderMethodGroups(){
+ const box=$('methodGroupsSetupBox'),list=$('methodGroupsList'),addBtn=$('addMethodGroupBtn');
+ if(!box||!list)return;
+ const active=hasMethodGroupsRole();
+ box.hidden=!active;
+ if(!active)return;
+ if(!Array.isArray(state.methodGroups)||!state.methodGroups.length){
+  state.methodGroups=[{id:'mg-1',name:'',subjects:[]}];
+ }
+ const subs=typeof subjectLabels!=='undefined'?Object.entries(subjectLabels):[];
+ const cards=state.methodGroups.map((g,idx)=>{
+  const card=el('div',undefined,'row');
+  card.style.marginTop='10px';
+  const head=el('div',undefined,'role-head');
+  head.append(el('strong',`Гурӯҳи ${idx+1}`));
+  if(state.methodGroups.length>1){
+   const rm=el('button','✕','button alt');
+   rm.type='button';
+   rm.style.padding='4px 9px';
+   rm.addEventListener('click',()=>{
+    state.methodGroups.splice(idx,1);
+    renderMethodGroups();
+   });
+   head.append(rm);
+  }
+  const nameField=el('label',undefined,'field');
+  nameField.style.marginTop='6px';
+  const nameInp=el('input');
+  nameInp.type='text';
+  nameInp.maxLength=120;
+  nameInp.placeholder='Масалан: Иттиҳодияи методии фанҳои дақиқ';
+  nameInp.value=g.name||'';
+  nameInp.addEventListener('input',()=>{
+   g.name=nameInp.value;
+   if($('step2Error'))$('step2Error').textContent='';
+  });
+  nameField.append(el('span','Номи иттиҳодияи методӣ *'),nameInp);
+
+  const subSet=new Set(Array.isArray(g.subjects)?g.subjects:[]);
+  const subBox=el('div',undefined,'checkboxes');
+  subBox.style.marginTop='8px';
+  for(const [k,label] of subs){
+   const lbl=el('label');
+   const cb=el('input');
+   cb.type='checkbox';
+   cb.value=k;
+   cb.checked=subSet.has(k);
+   cb.addEventListener('change',()=>{
+    if(cb.checked)subSet.add(k);else subSet.delete(k);
+    g.subjects=[...subSet];
+    if($('step2Error'))$('step2Error').textContent='';
+   });
+   lbl.append(cb,el('span',label));
+   subBox.append(lbl);
+  }
+  card.append(head,nameField,el('p','Фанҳои гурӯҳ *','small'),subBox);
+  return card;
+ });
+ list.replaceChildren(...cards);
+ if(addBtn)addBtn.disabled=state.methodGroups.length>=5;
+}
+
 function renderPrimaryAndExtraChoices(){
  const primaryTarget=$('primaryChoices');
  const extraTarget=$('extraChoices');
@@ -289,34 +380,47 @@ function renderPrimaryAndExtraChoices(){
  $('extraCount').textContent=`${state.extras.length}`;
  $('toExtras').disabled=!state.primary;
  $('aliyaAddonToggle').checked=Boolean(state.includeAliya);
+ if($('step2Error'))$('step2Error').textContent='';
+ renderMethodGroups();
  updateTotalBar();
 }
 
 function renderProfileStep(){
- const chosen=[state.primary,...state.extras];
- const needsMethodName=chosen.includes('school-five-method-groups');
+ const needsMethodName=hasMethodGroupsRole();
  $('customMethodWrap').hidden=!needsMethodName;
  $('customMethodNameInput').required=needsMethodName;
+ if(needsMethodName&&!clean(state.customMethodName)&&Array.isArray(state.methodGroups)){
+  const joined=state.methodGroups.map(g=>clean(g.name)).filter(Boolean).join(', ');
+  if(joined)state.customMethodName=joined;
+ }
  $('customMethodNameInput').value=state.customMethodName||'';
 
  $('firstName').value=state.person.first||'';
  $('lastName').value=state.person.last||'';
  $('middleName').value=state.person.middle||'';
- $('birthYear').value=state.person.birthYear||'';
+ $('birthYear').value=state.person.birthDate||state.person.birthYear||'';
  $('genderSelect').value=state.person.gender||'';
  $('specialtyInput').value=state.person.specialty||'';
  $('eduYearsInput').value=state.person.eduYears||'';
  $('educationSelect').value=state.person.education||'';
+ $('institutionTypeSelect').value=state.person.institutionType||'';
+ $('institutionShiftsSelect').value=state.person.institutionShifts||'';
  $('otherLangInput').value=state.person.otherLanguage||'';
  const langSet=new Set(Array.isArray(state.person.languages)?state.person.languages:['tg']);
  for(const cb of $('langChoices').querySelectorAll('input[type=checkbox]')){
   cb.checked=langSet.has(cb.value);
  }
  $('otherLangWrap').hidden=!langSet.has('other');
+ const credBox=$('regCredentialsBox');
+ if(credBox)credBox.hidden=Boolean(useFileViewer);
+ $('regLogin').required=!useFileViewer;
+ $('regPassword').required=!useFileViewer;
+ $('regPassword2').required=!useFileViewer;
  $('regLogin').value=state.credentials.login||'';
  $('regPassword').value=state.credentials.password||'';
  $('regPassword2').value=state.credentials.password2||'';
  $('primaryError').textContent='';
+ updateLatinWarnings();
  mountRoleFields(state.primary,$('primaryRoleFields'));
 }
 
@@ -485,9 +589,19 @@ $('backAuthorityLogin')?.addEventListener('click',()=>{
 });
 
 function getOrCreateDeviceId(){
- const key='smartmaktab.device_id.v1';
+ const key='smartmaktab.device.id.v1';
+ const legacyKey='smartmaktab.device_id.v1';
  let id='';
- try{id=localStorage.getItem(key)||'';}catch{}
+ try{
+  id=localStorage.getItem(key)||'';
+  if(!id){
+   const legacy=localStorage.getItem(legacyKey)||'';
+   if(legacy&&legacy.length>=12){
+    id=legacy;
+    localStorage.setItem(key,id);
+   }
+  }
+ }catch{}
  if(!id||id.length<12){
   const rnd=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():('dev-'+Date.now()+'-'+Math.random().toString(36).slice(2,12));
   id=rnd;
@@ -563,13 +677,20 @@ async function showLoginDeviceLimit(accessToken,orgId){
  }catch{box.hidden=true;}
 }
 
-$('toggleLoginPassword')?.addEventListener('click',()=>{
- const inp=$('loginPassword');
- if(!inp)return;
- const show=inp.type==='password';
- inp.type=show?'text':'password';
- $('toggleLoginPassword').textContent=show?'🙈':'👁️';
-});
+function wirePasswordToggle(btnId,inputId){
+ $(btnId)?.addEventListener('click',()=>{
+  const inp=$(inputId);
+  if(!inp)return;
+  const show=inp.type==='password';
+  inp.type=show?'text':'password';
+  $(btnId).textContent=show?'🙈':'👁️';
+ });
+}
+wirePasswordToggle('toggleLoginPassword','loginPassword');
+wirePasswordToggle('toggleRegPassword','regPassword');
+wirePasswordToggle('toggleRegPassword2','regPassword2');
+$('loginIdentifier')?.addEventListener('input',updateLatinWarnings);
+$('loginPassword')?.addEventListener('input',updateLatinWarnings);
 
 $('loginForm')?.addEventListener('submit',async ev=>{
  ev.preventDefault();
@@ -612,6 +733,10 @@ $('loginForm')?.addEventListener('submit',async ev=>{
    }
   }
   if(primaryMem){
+   if(primaryMem.account_active===false){
+    $('loginError').textContent=t('deviceDisabledErr');
+    return;
+   }
    const claimRes=await fetch(`${cloudCfg.url}/rest/v1/rpc/claim_device_session`,{
     method:'POST',
     headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${authJson.access_token}`,'Content-Type':'application/json'},
@@ -623,17 +748,19 @@ $('loginForm')?.addEventListener('submit',async ev=>{
      p_device_kind:detectDeviceKind(),
     }),
    });
-   if(claimRes.ok){
-    const claim=await claimRes.json().catch(()=>null);
-    if(claim&&claim.allowed===false){
-     if(claim.reason==='account_disabled'){
-      $('loginError').textContent=t('deviceDisabledErr');
-      return;
-     }
-     $('loginError').textContent=t('deviceLimitErr');
-     await showLoginDeviceLimit(authJson.access_token,primaryMem.organization_id);
+   if(!claimRes.ok){
+    $('loginError').textContent=t('loginNetworkFail');
+    return;
+   }
+   const claim=await claimRes.json().catch(()=>null);
+   if(claim&&claim.allowed===false){
+    if(claim.reason==='account_disabled'){
+     $('loginError').textContent=t('deviceDisabledErr');
      return;
     }
+    $('loginError').textContent=t('deviceLimitErr');
+    await showLoginDeviceLimit(authJson.access_token,primaryMem.organization_id);
+    return;
    }
   }
   writeStoreItem(cloudSessionKey,JSON.stringify(authJson));
@@ -658,14 +785,18 @@ $('loginForm')?.addEventListener('submit',async ev=>{
      first:profDetails.first||ctx?.profile?.full_name?.split(' ')?.[0]||'',
      last:profDetails.last||ctx?.profile?.full_name?.split(' ')?.[1]||'',
      middle:profDetails.middle||'',
+     birthDate:profDetails.birthDate||profDetails.birthYear||'',
      birthYear:profDetails.birthYear||'',
      gender:profDetails.gender||'',
      specialty:profDetails.specialty||'',
      eduYears:profDetails.eduYears||'',
      education:profDetails.education||'',
+     institutionType:profDetails.institutionType||'',
+     institutionShifts:profDetails.institutionShifts||'',
      languages:Array.isArray(profDetails.languages)?profDetails.languages:['tg'],
      otherLanguage:profDetails.otherLanguage||'',
     },
+    methodGroups:Array.isArray(profDetails.methodGroups)?profDetails.methodGroups:[],
     customMethodName:primaryMem.custom_method_name||'',
     includeAliya:Boolean(primaryMem.aliya_enabled),
     positions:primaryMem.position_profiles||{},
@@ -712,7 +843,15 @@ $('extraChoices').addEventListener('change',ev=>{
  if(ev.target.checked&&!state.extras.includes(id))state.extras.push(id);
  if(!ev.target.checked)state.extras=state.extras.filter(x=>x!==id);
  $('extraCount').textContent=`${state.extras.length}`;
+ renderMethodGroups();
  updateTotalBar();
+});
+
+$('addMethodGroupBtn')?.addEventListener('click',()=>{
+ if(!Array.isArray(state.methodGroups))state.methodGroups=[];
+ if(state.methodGroups.length>=5)return;
+ state.methodGroups.push({id:`mg-${Date.now()}-${state.methodGroups.length+1}`,name:'',subjects:[]});
+ renderMethodGroups();
 });
 
 $('aliyaAddonToggle').addEventListener('change',ev=>{
@@ -721,7 +860,20 @@ $('aliyaAddonToggle').addEventListener('change',ev=>{
 });
 
 $('toExtras').addEventListener('click',()=>{if(state.primary)setStep(2);});
-$('toProfile').addEventListener('click',()=>{if(state.primary)setStep(3);});
+$('toProfile').addEventListener('click',()=>{
+ if(!state.primary)return;
+ if(hasMethodGroupsRole()){
+  const groups=Array.isArray(state.methodGroups)?state.methodGroups:[];
+  const validGroups=groups.length>=1&&groups.length<=5&&groups.every(g=>clean(g.name).length>=2&&Array.isArray(g.subjects)&&g.subjects.length>=1);
+  if(!validGroups){
+   if($('step2Error'))$('step2Error').textContent=t('invalidMethodGroups');
+   return;
+  }
+  state.customMethodName=groups.map(g=>clean(g.name)).filter(Boolean).join(', ');
+ }
+ if($('step2Error'))$('step2Error').textContent='';
+ setStep(3);
+});
 
 // Step 3 form sync & validation
 $('primaryForm').inert=false;
@@ -730,16 +882,28 @@ const bindChange=(id,fn)=>$(id)?.addEventListener('change',ev=>fn(ev.target.valu
 bindInput('firstName',v=>{state.person.first=v;});
 bindInput('lastName',v=>{state.person.last=v;});
 bindInput('middleName',v=>{state.person.middle=v;});
-bindInput('birthYear',v=>{state.person.birthYear=v;});
+$('birthYear')?.addEventListener('input',ev=>{
+ const elInp=ev.target;
+ const raw=elInp.value;
+ if(ev.inputType!=='deleteContentBackward'&&/^\d{1,8}$/.test(raw)){
+  if(raw.length>=3&&raw.length<=4)elInp.value=`${raw.slice(0,2)}.${raw.slice(2)}`;
+  else if(raw.length>=5)elInp.value=`${raw.slice(0,2)}.${raw.slice(2,4)}.${raw.slice(4,8)}`;
+ }
+ state.person.birthDate=elInp.value;
+ const parsed=parseBirthDateValue(elInp.value);
+ if(parsed.valid)state.person.birthYear=parsed.birthYear;
+});
 bindChange('genderSelect',v=>{state.person.gender=v;});
 bindInput('specialtyInput',v=>{state.person.specialty=v;});
 bindInput('eduYearsInput',v=>{state.person.eduYears=v;});
 bindChange('educationSelect',v=>{state.person.education=v;});
+bindChange('institutionTypeSelect',v=>{state.person.institutionType=v;});
+bindChange('institutionShiftsSelect',v=>{state.person.institutionShifts=v;});
 bindInput('customMethodNameInput',v=>{state.customMethodName=v;});
 bindInput('otherLangInput',v=>{state.person.otherLanguage=v;});
-bindInput('regLogin',v=>{state.credentials.login=v;});
-bindInput('regPassword',v=>{state.credentials.password=v;});
-bindInput('regPassword2',v=>{state.credentials.password2=v;});
+bindInput('regLogin',v=>{state.credentials.login=v;updateLatinWarnings();});
+bindInput('regPassword',v=>{state.credentials.password=v;updateLatinWarnings();});
+bindInput('regPassword2',v=>{state.credentials.password2=v;updateLatinWarnings();});
 
 $('langChoices').addEventListener('change',()=>{
  const checked=[...$('langChoices').querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value);
@@ -752,21 +916,24 @@ $('toSchoolStep').addEventListener('click',()=>{
  p.first=clean($('firstName').value);
  p.last=clean($('lastName').value);
  p.middle=clean($('middleName').value);
- p.birthYear=clean($('birthYear').value);
+ const birthRaw=clean($('birthYear').value);
+ const birthParsed=parseBirthDateValue(birthRaw);
  p.gender=$('genderSelect').value;
  p.specialty=clean($('specialtyInput').value);
  p.eduYears=clean($('eduYearsInput').value);
  p.education=$('educationSelect').value;
+ p.institutionType=$('institutionTypeSelect').value;
+ p.institutionShifts=$('institutionShiftsSelect').value;
  state.customMethodName=clean($('customMethodNameInput').value);
  p.otherLanguage=clean($('otherLangInput').value);
 
- const yr=Number(p.birthYear);
  const exp=Number(p.eduYears);
- if(!p.first||!p.last||!p.gender||!p.specialty||!p.education||!Number.isFinite(yr)||yr<1940||yr>2015||!Number.isFinite(exp)||exp<0||exp>70){
+ if(!p.first||!p.last||!birthParsed.valid||!p.gender||!p.specialty||!p.education||!p.institutionType||!p.institutionShifts||!Number.isFinite(exp)||exp<0||exp>70){
   $('primaryError').textContent=t('invalidProfile');return;
  }
- const chosen=[state.primary,...state.extras];
- if(chosen.includes('school-five-method-groups')&&!state.customMethodName){
+ p.birthDate=birthParsed.birthDate;
+ p.birthYear=birthParsed.birthYear;
+ if(hasMethodGroupsRole()&&!state.customMethodName){
   $('primaryError').textContent=t('invalidMethodName');$('customMethodNameInput').focus();return;
  }
  if(p.languages.includes('other')&&!p.otherLanguage){
@@ -775,9 +942,9 @@ $('toSchoolStep').addEventListener('click',()=>{
  const loginVal=clean($('regLogin').value);
  const pass1=$('regPassword').value;
  const pass2=$('regPassword2').value;
- if(loginVal||pass1||pass2){
+ if(!useFileViewer){
   const parsed=normalizeLoginIdentifier(loginVal);
-  if(!parsed.valid||pass1.length<6||pass1!==pass2){
+  if(!loginVal||!parsed.valid||pass1.length<6||pass1!==pass2){
    $('primaryError').textContent=t('invalidCreds');return;
   }
   state.credentials={login:loginVal,password:pass1,password2:pass2};
@@ -821,29 +988,12 @@ $('newSchoolRegion')?.addEventListener('change',ev=>{
  state.newSchool.jamoat_name='';
  state.newSchool.village_name='';
  if($('newSchoolDistrictSelect'))$('newSchoolDistrictSelect').value='';
- if($('newSchoolDistrict'))$('newSchoolDistrict').value='';
  if($('newSchoolJamoatSelect'))$('newSchoolJamoatSelect').value='';
  if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
  populateNewSchoolTerritory();
  $('begin').disabled=!canSubmitStep4();
 });
 $('newSchoolDistrictSelect')?.addEventListener('change',ev=>{
- const v=ev.target.value;
- if(v==='__custom__'){
-  if($('newSchoolDistrictCustomWrap'))$('newSchoolDistrictCustomWrap').hidden=false;
-  state.newSchool.district_name=clean($('newSchoolDistrict')?.value);
- }else{
-  if($('newSchoolDistrictCustomWrap'))$('newSchoolDistrictCustomWrap').hidden=true;
-  state.newSchool.district_name=clean(v);
- }
- state.newSchool.jamoat_name='';
- state.newSchool.village_name='';
- if($('newSchoolJamoatSelect'))$('newSchoolJamoatSelect').value='';
- if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
- populateNewSchoolTerritory();
- $('begin').disabled=!canSubmitStep4();
-});
-$('newSchoolDistrict')?.addEventListener('input',ev=>{
  state.newSchool.district_name=clean(ev.target.value);
  state.newSchool.jamoat_name='';
  state.newSchool.village_name='';
@@ -853,20 +1003,10 @@ $('newSchoolDistrict')?.addEventListener('input',ev=>{
  $('begin').disabled=!canSubmitStep4();
 });
 $('newSchoolJamoatSelect')?.addEventListener('change',ev=>{
- const v=ev.target.value;
- if(v==='__custom__'){
-  if($('newSchoolJamoatCustomWrap'))$('newSchoolJamoatCustomWrap').hidden=false;
-  state.newSchool.jamoat_name=clean($('newSchoolJamoatCustom')?.value);
- }else{
-  if($('newSchoolJamoatCustomWrap'))$('newSchoolJamoatCustomWrap').hidden=true;
-  state.newSchool.jamoat_name=clean(v);
- }
+ state.newSchool.jamoat_name=clean(ev.target.value);
  state.newSchool.village_name='';
  if($('newSchoolVillageSelect'))$('newSchoolVillageSelect').value='';
  populateNewSchoolTerritory();
-});
-$('newSchoolJamoatCustom')?.addEventListener('input',ev=>{
- state.newSchool.jamoat_name=clean(ev.target.value);
 });
 $('newSchoolVillageSelect')?.addEventListener('change',ev=>{
  const v=ev.target.value;
@@ -899,7 +1039,13 @@ $('begin').addEventListener('click',async()=>{
  try{
   const loginVal=clean(state.credentials.login);
   const password=state.credentials.password;
+  if(!useFileViewer&&(!loginVal||!password||password.length<6)){
+   $('beginError').textContent=t('invalidCreds');
+   return;
+  }
   const fullName=[state.person.last,state.person.first,state.person.middle].filter(Boolean).join(' ').trim();
+  const methodGroups=hasMethodGroupsRole()?(state.methodGroups||[]):[];
+  const profileDetails={...state.person,methodGroups};
   const positionProfiles=Object.fromEntries(
    state.extras.map(id=>[id,{usePrimary:true,...state.person}])
   );
@@ -907,9 +1053,7 @@ $('begin').addEventListener('click',async()=>{
   let targetSchoolId=state.creatingNewSchool?'':state.school;
   let newSchoolPayload=null;
   if(state.creatingNewSchool){
-   const distVal=$('newSchoolDistrictSelect')?.value==='__custom__'
-    ? clean($('newSchoolDistrict')?.value)
-    : clean($('newSchoolDistrictSelect')?.value||state.newSchool.district_name);
+   const distVal=clean($('newSchoolDistrictSelect')?.value||state.newSchool.district_name);
    const regVal=canonicalRegionName(state.newSchool.region_name);
    const normDist=s=>clean(s).toLocaleLowerCase().replace(/^(?:ш\.|н\.|шаҳри|ноҳияи|г\.|р-н)\s+/i,'').replace(/\s+/g,' ');
    const distLower=normDist(distVal);
@@ -923,9 +1067,7 @@ $('begin').addEventListener('click',async()=>{
        return distHit&&(!canonReg||aReg===canonReg);
       })
     : null;
-   const jamVal=$('newSchoolJamoatSelect')?.value==='__custom__'
-    ? clean($('newSchoolJamoatCustom')?.value)
-    : clean($('newSchoolJamoatSelect')?.value||state.newSchool.jamoat_name);
+   const jamVal=clean($('newSchoolJamoatSelect')?.value||state.newSchool.jamoat_name);
    const vilVal=$('newSchoolVillageSelect')?.value==='__custom__'
     ? clean($('newSchoolVillageCustom')?.value)
     : clean($('newSchoolVillageSelect')?.value||state.newSchool.village_name);
@@ -940,13 +1082,7 @@ $('begin').addEventListener('click',async()=>{
    };
   }
 
-  // Whenever user created login+password, cloud registration MUST succeed before entering cabinet (fail-closed)
-  const wantsCloudAccount=Boolean(loginVal&&password);
-  if(wantsCloudAccount){
-   if(useFileViewer){
-    $('beginError').textContent=t('regFileViewerErr');
-    return;
-   }
+  if(!useFileViewer){
    if(navigator.onLine===false){
     $('beginError').textContent=t('regOfflineErr');
     return;
@@ -987,7 +1123,7 @@ $('begin').addEventListener('click',async()=>{
       custom_method_name:state.customMethodName,
       full_name:fullName,
       preferred_lang:lang,
-      profile_details:state.person,
+      profile_details:profileDetails,
       position_profiles:positionProfiles,
      }),
     });
@@ -1028,24 +1164,31 @@ $('begin').addEventListener('click',async()=>{
     $('beginError').textContent=t('regSessionMissing');
     return;
    }
+   if(targetSchoolId){
+    try{
+     const claimRes=await fetch(`${cloudCfg.url}/rest/v1/rpc/claim_device_session`,{
+      method:'POST',
+      headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${sessionObj.access_token}`,'Content-Type':'application/json'},
+      body:JSON.stringify({
+       p_org_id:targetSchoolId,
+       p_device_id:getOrCreateDeviceId(),
+       p_device_label:detectDeviceLabel(),
+       p_cabinet_id:state.primary||null,
+       p_device_kind:detectDeviceKind(),
+      }),
+     });
+     if(claimRes.ok){
+      const claim=await claimRes.json().catch(()=>null);
+      if(claim&&claim.allowed===false){
+       $('beginError').textContent=claim.reason==='account_disabled'?t('deviceDisabledErr'):t('deviceLimitErr');
+       return;
+      }
+     }
+    }catch{}
+   }
    writeStoreItem(cloudSessionKey,JSON.stringify(sessionObj));
    writeStoreItem('smartmaktab.cloud.last_org.v1',targetSchoolId);
-   if(targetSchoolId){
-    fetch(`${cloudCfg.url}/rest/v1/rpc/claim_device_session`,{
-     method:'POST',
-     headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${sessionObj.access_token}`,'Content-Type':'application/json'},
-     body:JSON.stringify({
-      p_org_id:targetSchoolId,
-      p_device_id:getOrCreateDeviceId(),
-      p_device_label:detectDeviceLabel(),
-      p_cabinet_id:state.primary||null,
-      p_device_kind:detectDeviceKind(),
-     }),
-    }).catch(()=>{});
-   }
-  }
-
-  if(!targetSchoolId&&newSchoolPayload){
+  }else if(!targetSchoolId&&newSchoolPayload){
    const slugId='custom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6);
    const localEntry={id:slugId,...newSchoolPayload};
    const existingCustoms=readLocalCustomSchools();
@@ -1072,16 +1215,17 @@ $('begin').addEventListener('click',async()=>{
   };
   const schools=Object.fromEntries(roles.map(role=>[role.id,resolveExtraSchool(role.id)]));
   const workspace={primary:state.primary,schools,roles};
-   const unifiedProfile={
+  const unifiedProfile={
    fullName,
    loginName:loginVal,
    person:{...state.person},
+   methodGroups,
    customMethodName:state.customMethodName,
    includeAliya:state.includeAliya,
    positions:positionProfiles,
    organizationId:targetSchoolId,
    organizationName:resolveSchoolTitle(targetSchoolId),
-   verificationStatus:wantsCloudAccount?'unverified':'offline',
+   verificationStatus:useFileViewer?'offline':'unverified',
    primaryPosition:state.primary,
   };
 
@@ -1095,11 +1239,9 @@ $('begin').addEventListener('click',async()=>{
    Object.assign(payload,buildRolePayload(role,schools[role.id],dataForRole(role.id),allowName?pForRole:{first:'',last:''}));
   }
 
-  const nativeOrigin=location.protocol==='smapp:'||location.hostname==='appassets.androidplatform.net';
-  const embeddedOnly=useFileViewer||(!nativeOrigin&&navigator.onLine===false&&!finalIsUuid&&!newSchoolPayload);
   const activeSchoolName=resolveSchoolTitle(schools[row.id]);
   const intro=brandSplash.play('school',{school:activeSchoolName,role:roles[0].title,lang});
-  if(embeddedOnly)void getPack().catch(()=>{});
+  if(useFileViewer)void getPack().catch(()=>{});
   await intro;
 
   const isHandoff=key=>key.startsWith('smartmaktab.demo.role-name.v2.')||key.startsWith('smartmaktab.demo.role-setup.v3.')||key.startsWith('smartmaktab.demo.saved-setup.v3.')||key.startsWith('smartmaktab.demo.saved-name.v2.')||key==='smartmaktab.demo.director-handoff.v1';
@@ -1110,18 +1252,19 @@ $('begin').addEventListener('click',async()=>{
   const activeRoute=`${row.path}?${qs.toString()}`;
   const activePayload={role:state.primary,school:activeSchool,lang,route:activeRoute,savedAt:Date.now()};
 
-  if(!embeddedOnly)try{
-   for(const key of Object.keys(localStorage))if(isHandoff(key))removeStoreItem(key);
-   localStorage.removeItem('smartmaktab.wizard.state');
-   for(const [key,value] of Object.entries(payload))writeStoreItem(key,value);
-   writeStoreItem(activeCabinetKey,JSON.stringify(activePayload));
-   try{globalThis.SmartMaktabSqlite?.saveResumeSession?.(state.primary,activeSchool,lang,activeRoute);}catch{}
-   location.assign('./'+activeRoute);$('beginError').textContent='';return;
-  }catch{}
+  if(useFileViewer){
+   for(const key of Object.keys(embeddedStore))if(isHandoff(key))delete embeddedStore[key];
+   Object.assign(embeddedStore,payload);
+   $('beginError').textContent=await openEmbedded(row.path,{lang,title:roles[0].title,school:activeSchool})?'':t('blocked');
+   return;
+  }
 
-  for(const key of Object.keys(embeddedStore))if(isHandoff(key))delete embeddedStore[key];
-  Object.assign(embeddedStore,payload);
-  $('beginError').textContent=await openEmbedded(row.path,{lang,title:roles[0].title,school:activeSchool})?'':t('blocked');
+  for(const key of Object.keys(localStorage))if(isHandoff(key))removeStoreItem(key);
+  localStorage.removeItem('smartmaktab.wizard.state');
+  for(const [key,value] of Object.entries(payload))writeStoreItem(key,value);
+  writeStoreItem(activeCabinetKey,JSON.stringify(activePayload));
+  try{globalThis.SmartMaktabSqlite?.saveResumeSession?.(state.primary,activeSchool,lang,activeRoute);}catch{}
+  location.assign('./'+activeRoute);$('beginError').textContent='';return;
  }catch{
   $('beginError').textContent=t('blocked');
  }finally{
@@ -1130,18 +1273,121 @@ $('begin').addEventListener('click',async()=>{
  }
 });
 
+function hasValidOfflineLicense(orgId){
+ try{
+  const raw=localStorage.getItem(licenseCacheKey)||globalThis.SmartMaktabSqlite?.getItem?.(licenseCacheKey)||'';
+  if(!raw)return false;
+  const cached=JSON.parse(raw);
+  if(!cached||typeof cached!=='object')return false;
+  if(orgId&&cached.orgId&&cached.orgId!==orgId)return false;
+  return Number(cached.expiresAt)>Date.now()&&cached.blocked!==true;
+ }catch{return false;}
+}
+
+function clearResumeSession(){
+ removeStoreItem(activeCabinetKey);
+ removeStoreItem(cloudSessionKey);
+}
+
+async function validateResumeAndNavigate(candidate){
+ try{
+  const {active,session}=candidate;
+  const orgId=active.school||'';
+  if(navigator.onLine===false){
+   if(hasValidOfflineLicense(orgId)){
+    location.replace('./'+active.route);
+    return;
+   }
+   document.documentElement.style.visibility='';
+   return;
+  }
+  const ctrl=typeof AbortController==='function'?new AbortController():null;
+  const timer=ctrl?setTimeout(()=>ctrl.abort(),10000):0;
+  try{
+   const ctxRes=await fetch(`${cloudCfg.url}/rest/v1/rpc/get_my_workspace_context`,{
+    method:'POST',
+    headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+    body:'{}',
+    ...(ctrl?{signal:ctrl.signal}:{}),
+   });
+   if(ctxRes.status===401||ctxRes.status===403){
+    clearResumeSession();
+    document.documentElement.style.visibility='';
+    return;
+   }
+   if(!ctxRes.ok){
+    if(hasValidOfflineLicense(orgId)){location.replace('./'+active.route);return;}
+    document.documentElement.style.visibility='';
+    return;
+   }
+   const ctx=await ctxRes.json().catch(()=>null);
+   const memberships=Array.isArray(ctx?.memberships)?ctx.memberships:[];
+   const mem=(orgId?memberships.find(m=>m.organization_id===orgId):null)||memberships[0]||null;
+   if(!mem&&!ctx?.is_super_admin){
+    clearResumeSession();
+    document.documentElement.style.visibility='';
+    return;
+   }
+   if(mem&&mem.account_active===false){
+    clearResumeSession();
+    document.documentElement.style.visibility='';
+    $('loginError').textContent=t('deviceDisabledErr');
+    return;
+   }
+   if(mem){
+    const claimRes=await fetch(`${cloudCfg.url}/rest/v1/rpc/claim_device_session`,{
+     method:'POST',
+     headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},
+     body:JSON.stringify({
+      p_org_id:mem.organization_id,
+      p_device_id:getOrCreateDeviceId(),
+      p_device_label:detectDeviceLabel(),
+      p_cabinet_id:active.role||mem.primary_position||null,
+      p_device_kind:detectDeviceKind(),
+     }),
+     ...(ctrl?{signal:ctrl.signal}:{}),
+    });
+    if(claimRes.ok){
+     const claim=await claimRes.json().catch(()=>null);
+     if(claim&&claim.allowed===false){
+      clearResumeSession();
+      document.documentElement.style.visibility='';
+      $('loginError').textContent=claim.reason==='account_disabled'?t('deviceDisabledErr'):t('deviceLimitErr');
+      return;
+     }
+    }
+   }
+   location.replace('./'+active.route);
+  }catch{
+   if(hasValidOfflineLicense(orgId)){
+    location.replace('./'+active.route);
+    return;
+   }
+   document.documentElement.style.visibility='';
+  }finally{
+   if(timer)clearTimeout(timer);
+  }
+ }catch{
+  document.documentElement.style.visibility='';
+ }
+}
+
 render();
 $('wizard').inert=false;
 $('viewerNotReady').hidden=true;
 
-if(resumeTarget){
- // Navigating directly to the saved cabinet; skip launch splash.
-}else if(!useFileViewer&&openOfflineRoute&&rows.some(row=>row.path===openOfflineRoute)){
- const row=rows.find(row=>row.path===openOfflineRoute);
- try{for(const key of Object.keys(localStorage))if(key.startsWith('smartmaktab.demo.')||key===profileStorageKey)embeddedStore[key]=localStorage.getItem(key);}catch{}
- openEmbedded(row.path,{school:params.get('school'),lang,title:row.title});
+const resumeCandidate=checkResumeCandidate();
+if(resumeCandidate){
+ void validateResumeAndNavigate(resumeCandidate);
 }else{
- brandSplash.play('launch',{lang});
+ document.documentElement.style.visibility='';
+ if(!useFileViewer&&openOfflineRoute&&rows.some(row=>row.path===openOfflineRoute)){
+  const row=rows.find(row=>row.path===openOfflineRoute);
+  try{for(const key of Object.keys(localStorage))if(key.startsWith('smartmaktab.demo.')||key===profileStorageKey)embeddedStore[key]=localStorage.getItem(key);}catch{}
+  openEmbedded(row.path,{school:params.get('school'),lang,title:row.title});
+ }else{
+  brandSplash.play('launch',{lang});
+ }
 }
 
 if(!useFileViewer&&location.protocol!=='smapp:'&&location.hostname!=='appassets.androidplatform.net'){

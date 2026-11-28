@@ -55,6 +55,7 @@ const copy = {
   ],
   verifyBtn: ['Тафтиши онлайн', 'Проверить онлайн'],
   receiptBtn: ['Обуна ва пардохт', 'Тариф и оплата'],
+  signOutBtn: ['Баромадан', 'Выйти'],
 };
 
 export function detectDeviceKind(userAgent = globalThis.navigator?.userAgent || '') {
@@ -232,7 +233,7 @@ export function clearCachedLicense(orgId, storage) {
   try { store?.setItem?.(CACHE_KEY, JSON.stringify(all)); } catch {}
 }
 
-export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment, onLoadDevices, onRevokeDevice, isPrimaryPosition = true, primaryPosition = null } = {}) {
+export function mountLicenseGate(container, { orgId, cabinetId = '', storage, onVerifyOnline, onOpenPayment, onLoadDevices, onRevokeDevice, onSignOut, isPrimaryPosition = true, primaryPosition = null } = {}) {
   const lang = document.documentElement.lang === 'ru' ? 'ru' : 'tg';
   const tg = () => lang === 'tg';
   const t = k => copy[k][tg() ? 0 : 1];
@@ -338,6 +339,14 @@ export function mountLicenseGate(container, { orgId, cabinetId = '', storage, on
       pay.textContent = t('receiptBtn');
       pay.addEventListener('click', onOpenPayment);
       row.append(pay);
+    }
+    if (typeof onSignOut === 'function') {
+      const out = document.createElement('button');
+      out.type = 'button';
+      out.className = 'button alt';
+      out.textContent = t('signOutBtn');
+      out.addEventListener('click', onSignOut);
+      row.append(out);
     }
     box.append(row);
     container.append(box);

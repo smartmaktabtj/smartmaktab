@@ -7,8 +7,9 @@ import {viewerContext,offlineViewer,tabStorage,persistentStore,saveActiveResume,
 const $ = id => document.getElementById(id);
 export {schoolNames as demoSchoolNames,findDemoSchools} from './schools.mjs';
 export const teacherWorkplacesKey='smartmaktab.demo.teacher-workplaces.v1';
+function isUuid(v){return typeof v==='string'&&/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|custom-[a-z0-9-]+)$/i.test(v);}
 export function readTeacherWorkplaces(){
-  try{ const value=JSON.parse(tabStorage.getItem(teacherWorkplacesKey));return Array.isArray(value)?[...new Set(value.filter(id=>validSchools.has(id)))]:[]; }catch{return [];}
+  try{ const value=JSON.parse(tabStorage.getItem(teacherWorkplacesKey));return Array.isArray(value)?[...new Set(value.filter(id=>validSchools.has(id)||isUuid(id)))]:[]; }catch{return [];}
 }
 const searchParams=cabinetPageURL.searchParams;
 let lang='tg';
@@ -30,7 +31,6 @@ const profileKey='smartmaktab.profile.v1';
 function readSavedProfile(){
   try{const raw=persistentStore.getItem(profileKey)||tabStorage.getItem(profileKey);return raw?JSON.parse(raw):null;}catch{return null;}
 }
-function isUuid(v){return typeof v==='string'&&/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|custom-[a-z0-9-]+)$/i.test(v);}
 const urlSchool=searchParams.get('school')||'';
 const savedProf=readSavedProfile();
 let fromURL=validSchools.has(urlSchool)?urlSchool:(isUuid(urlSchool)?urlSchool:(isUuid(savedProf?.organizationId)?savedProf.organizationId:''));

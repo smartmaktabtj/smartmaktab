@@ -1,6 +1,7 @@
 import { createCloudClient } from '../shared/cloud-client.mjs';
 import { getCloudConfig } from '../shared/cloud-config.mjs';
 import { evaluateLicenseState } from '../shared/license-guard.mjs';
+import { FALLBACK_TAJIKISTAN_LOCATIONS } from '../shared/tajikistan-locations.mjs';
 import {
   POSITION_CATALOG,
   SUBSCRIPTION_PERIOD_PACKAGES,
@@ -762,17 +763,18 @@ async function refreshAll() {
 }
 
 function renderDatalists() {
-  const locArg = locations.length ? locations : undefined;
+  const mergedLocs = [...FALLBACK_TAJIKISTAN_LOCATIONS, ...(Array.isArray(locations) ? locations : [])]
+    .filter(row => !/маркази\s+ш\.\s*душанбе/i.test(String(row?.district_name || '')));
   const curReg = $('orgRegion')?.value?.trim() || '';
   const curDist = normalizeDistrictInput($('orgDistrict')?.value || '');
   const curJam = $('orgJamoat')?.value?.trim() || '';
-  const regions = uniqueSorted([...orgs.map(o => o.region_name), ...getRegionNames(locArg)]);
+  const regions = uniqueSorted([...orgs.map(o => o.region_name), ...getRegionNames(mergedLocs)]);
   const districts = uniqueSorted([
     ...orgs.map(o => o.district_name),
-    ...(curReg ? getDistrictNames(curReg, locArg) : getRegionNames(locArg).flatMap(r => getDistrictNames(r, locArg))),
-  ]);
-  const jamoats = (curReg && curDist) ? getJamoatsForDistrict(curReg, curDist, locArg) : [];
-  const villages = (curReg && curDist && curJam) ? getVillagesForJamoat(curReg, curDist, curJam, locArg) : [];
+    ...(curReg ? getDistrictNames(curReg, mergedLocs) : getRegionNames(mergedLocs).flatMap(r => getDistrictNames(r, mergedLocs))),
+  ]).filter(d => !/маркази\s+ш\.\s*душанбе/i.test(d));
+  const jamoats = (curReg && curDist) ? getJamoatsForDistrict(curReg, curDist, mergedLocs) : [];
+  const villages = (curReg && curDist && curJam) ? getVillagesForJamoat(curReg, curDist, curJam, mergedLocs) : [];
   $('regionDatalist').replaceChildren(...regions.map(r => Object.assign(document.createElement('option'), { value: r })));
   $('districtDatalist').replaceChildren(...districts.map(d => Object.assign(document.createElement('option'), { value: d })));
   $('jamoatDatalist')?.replaceChildren(...jamoats.map(j => Object.assign(document.createElement('option'), { value: j })));
@@ -1875,6 +1877,32 @@ $('planForm').addEventListener('submit', async e => {
     await client.signOut();
   }
 })();
+
+const hasCyrillic = v => /[\u0400-\u04FF]/.test(String(v || ''));
+function wirePassEye(btnId, inpId) {
+  $(btnId)?.addEventListener('click', () => {
+    const inp = $(inpId);
+    if (!inp) return;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    $(btnId).textContent = show ? '🙈' : '👁️';
+  });
+}
+wirePassEye('toggleAdmLoginPassword', 'loginPassword');
+wirePassEye('toggleAdmNewPassword', 'newPasswordInput');
+wirePassEye('toggleRoleTempPassword', 'roleTempPassword');
+const syncAdmLoginWarn = () => {
+  const w = $('admLoginLatinWarn');
+  if (w) w.hidden = !(hasCyrillic($('loginEmail')?.value) || hasCyrillic($('loginPassword')?.value));
+};
+const syncAdmRoleWarn = () => {
+  const w = $('admRoleLatinWarn');
+  if (w) w.hidden = !(hasCyrillic($('roleUserId')?.value) || hasCyrillic($('roleTempPassword')?.value));
+};
+$('loginEmail')?.addEventListener('input', syncAdmLoginWarn);
+$('loginPassword')?.addEventListener('input', syncAdmLoginWarn);
+$('roleUserId')?.addEventListener('input', syncAdmRoleWarn);
+$('roleTempPassword')?.addEventListener('input', syncAdmRoleWarn);
 
 applyTranslations();
 showTab('orgs');

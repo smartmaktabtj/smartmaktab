@@ -1,4 +1,4 @@
-import { persistentStore } from './cabinet-runtime.mjs';
+import { appRoot, clearActiveResume, openCabinetView, persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
 import { cacheVerifiedLicense, clearCachedLicense, detectDeviceKind, getOrCreateDeviceId, mountLicenseGate } from './license-guard.mjs';
@@ -37,7 +37,7 @@ const roleLabels = {
 };
 
 const copy = {
-  trigger: ['Облако ва обуна', 'Облако и подписка'],
+  trigger: ['Система ва обуна', 'Система и подписка'],
   verifyTrigger: ['Верификатсия', 'Верификация'],
   heading: ['Ҳамоҳангсозии система, верификатсия ва обуна', 'Синхронизация с системой, верификация и подписка'],
   note: [
@@ -511,6 +511,7 @@ export function setupCloudWorkspace(article, group, school) {
   let pendingVerifQueue = [];
   let myDeviceSessions = [];
   let lastDeviceStats = { maxTotal: 2, maxPerKind: 1, activeTotal: 1, activeMobile: 0, activeDesktop: 0 };
+  let panelFocusMode = 'all';
 
   function activeOrg() {
     return (ctx?.memberships || []).find(m => m.organization_id === selectedOrgId) || null;
@@ -589,12 +590,25 @@ export function setupCloudWorkspace(article, group, school) {
   }
 
   function openCloudToVerification() {
+    panelFocusMode = 'verify';
     panel.hidden = false;
-    verifBox.hidden = false;
-    receiptForm.hidden = true;
     renderLabels();
     openWorkspaceView(panel.id, verifyQuickBtn.hidden ? trigger : verifyQuickBtn);
     try { verifBox.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+  }
+
+  async function performFullSignOut() {
+    const prevOrg = selectedOrgId;
+    clearActiveResume();
+    try { await client.signOut(); } catch {}
+    clearCachedLicense(prevOrg, persistentStore);
+    safeWriteKey(persistentStore, LAST_ORG_KEY, '');
+    persistentStore.removeItem('smartmaktab.demo.workspace.v1');
+    persistentStore.removeItem('smartmaktab.profile.v1');
+    const dest = new URL('index.html', appRoot);
+    dest.searchParams.set('setup', '1');
+    dest.searchParams.set('lang', 'tg');
+    openCabinetView(dest);
   }
 
   function refreshGate() {
@@ -617,8 +631,11 @@ export function setupCloudWorkspace(article, group, school) {
           await loadMyDevices();
         }
         : undefined,
+      onSignOut: performFullSignOut,
       onOpenPayment: isPrimary ? () => {
+        panelFocusMode = 'payment';
         panel.hidden = false;
+        renderLabels();
         openWorkspaceView(panel.id, trigger);
         try { receiptForm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
       } : undefined,
@@ -628,6 +645,12 @@ export function setupCloudWorkspace(article, group, school) {
     const verified = isAccountVerified();
     const blockedByLic = !state.allowed;
     const blockedByVerif = signedIn && !verified;
+    if (blockedByLic) article.dataset.smLocked = '1';
+    else delete article.dataset.smLocked;
+    const settingsBtn = document.getElementById('workspaceSettingsToggle');
+    const switchBtn = document.getElementById('workspaceSwitch');
+    if (settingsBtn) settingsBtn.disabled = blockedByLic;
+    if (switchBtn) switchBtn.disabled = blockedByLic;
     syncUpBtn.disabled = blockedByLic || blockedByVerif;
     syncDownBtn.disabled = blockedByLic || blockedByVerif;
 
@@ -679,6 +702,7 @@ export function setupCloudWorkspace(article, group, school) {
         `;
         document.head.append(st);
       }
+      const wrap = make('div', 'sm-verif-banner');
       const btn = make('button', 'sm-verif-wave-btn');
       btn.type = 'button';
       const vStat = m.verification_status || 'unverified';
@@ -695,7 +719,8 @@ export function setupCloudWorkspace(article, group, school) {
       pill.textContent = t('verifyTrigger') + ' →';
       btn.append(labelSpan, pill);
       btn.addEventListener('click', openCloudToVerification);
-      verifBannerHost.append(btn);
+      wrap.append(btn);
+      verifBannerHost.append(wrap);
     }
 
     return state;
@@ -792,7 +817,7 @@ export function setupCloudWorkspace(article, group, school) {
 
   function renderVerificationSection() {
     const m = activeOrg();
-    if (!m) {
+    if (!m || panelFocusMode === 'payment') {
       verifBox.hidden = true;
       return;
     }
@@ -800,11 +825,17 @@ export function setupCloudWorkspace(article, group, school) {
     const vStat = ctx?.is_super_admin ? 'verified' : (m.verification_status || 'unverified');
     const isDir = m.primary_position === 'school-director';
     const prof = ctx?.profile || {};
-    if (!vNameInp.value && (prof.full_name || m.verification_full_name)) {
-      vNameInp.value = m.verification_full_name || prof.full_name || '';
+    let localProf = null;
+    try { localProf = JSON.parse(safeReadKey(persistentStore, 'smartmaktab.profile.v1') || 'null'); } catch {}
+    if (!vNameInp.value && (prof.full_name || m.verification_full_name || localProf?.fullName)) {
+      vNameInp.value = m.verification_full_name || prof.full_name || localProf?.fullName || '';
     }
-    if (!vBirthInp.value && m.verification_birth_date) vBirthInp.value = m.verification_birth_date;
-    if (!vPhoneInp.value && m.verification_phone) vPhoneInp.value = m.verification_phone;
+    if (!vBirthInp.value && (m.verification_birth_date || prof.profile_details?.birthDate || localProf?.person?.birthDate)) {
+      vBirthInp.value = m.verification_birth_date || prof.profile_details?.birthDate || localProf?.person?.birthDate || '';
+    }
+    if (!vPhoneInp.value && (m.verification_phone || prof.profile_details?.phone || localProf?.person?.phone)) {
+      vPhoneInp.value = m.verification_phone || prof.profile_details?.phone || localProf?.person?.phone || '';
+    }
     if (!vPassInp.value && m.verification_passport_number) vPassInp.value = m.verification_passport_number;
 
     const statusMap = {
@@ -914,6 +945,11 @@ export function setupCloudWorkspace(article, group, school) {
 
   function updatePaymentVisibility() {
     const m = activeOrg();
+    if (panelFocusMode === 'verify') {
+      receiptForm.hidden = true;
+      payNoticeBox.hidden = true;
+      return;
+    }
     const isPrimary = isCurrentCabinetPrimary();
     receiptForm.hidden = !isPrimary;
     payNoticeBox.hidden = isPrimary || !m;
@@ -1058,6 +1094,7 @@ export function setupCloudWorkspace(article, group, school) {
       if (isBlockedDevice) statusMessage = t('deviceBlockedMsg');
       else if (isDisallowedPos) statusMessage = t('posBlockedMsg');
       await loadMyDevices();
+      emitCloudContextChange();
       renderLabels();
     } catch (err) {
       statusMessage = err.message;
@@ -1232,9 +1269,11 @@ export function setupCloudWorkspace(article, group, school) {
       });
       const m = activeOrg();
       if (m) m.verification_status = 'pending';
+      panelFocusMode = 'all';
       verifForm.hidden = true;
-      vSubmitBtn.textContent = txt('Дархост фиристода шуд', 'Заявка отправлена');
-      statusMessage = txt('Дархост фиристода шуд', 'Заявка отправлена');
+      const sentLabel = tg() ? 'Дархост фиристода шуд' : 'Заявка отправлена';
+      vSubmitBtn.textContent = sentLabel;
+      statusMessage = sentLabel;
       await applySignedInContext();
     } catch (err) {
       statusMessage = err?.message || t('authError');
@@ -1251,6 +1290,7 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   trigger.addEventListener('click', () => {
+    panelFocusMode = 'all';
     panel.hidden = false;
     renderLabels();
     openWorkspaceView(panel.id, trigger);
@@ -1389,14 +1429,14 @@ export function setupCloudWorkspace(article, group, school) {
         months: Number(periodSelect.value || 1),
       });
       const declaredAmt = amtInput.value ? Number(amtInput.value) : null;
-      const calc = calculateTariffTotal({
+      const calc = computePositionTariffTotal({
         primaryPosition: posSelect.value || cabinetId || 'school-teacher',
         extraPositions: [...selectedExtras],
+        tariffs: roleTariffs,
         includeAliya: Boolean(aliyaToggle.checked),
-        months: Number(periodSelect.value || 1),
-        catalog: roleTariffs,
       });
-      const expectedTotal = Number(calc?.totalTjs || 0);
+      const pkgCalc = computeSubscriptionPackagePrice(calc.totalTjs, Number(periodSelect.value || 1));
+      const expectedTotal = Number(pkgCalc?.totalTjs || 0);
       const overpaid = declaredAmt && expectedTotal > 0 && declaredAmt > expectedTotal
         ? Math.round((declaredAmt - expectedTotal) * 100) / 100
         : 0;
@@ -1424,30 +1464,16 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   signOutBtn.addEventListener('click', async () => {
-    const prevOrg = selectedOrgId;
-    await client.signOut();
-    clearCachedLicense(prevOrg, persistentStore);
-    safeWriteKey(persistentStore, LAST_ORG_KEY, '');
-    ctx = null;
-    selectedOrgId = '';
-    pendingVerifQueue = [];
-    myDeviceSessions = [];
-    loginForm.hidden = false;
-    sessionBox.hidden = true;
-    cloudList.replaceChildren();
-    statusMessage = t('signedOut');
-    emitCloudContextChange();
-    renderLabels();
+    await performFullSignOut();
   });
 
   document.addEventListener('sm:open-account-verification', openCloudToVerification);
   document.addEventListener('sm:open-payment-wizard', () => {
+    panelFocusMode = 'payment';
     panel.hidden = false;
-    verifBox.hidden = true;
-    receiptForm.hidden = false;
     renderLabels();
     openWorkspaceView(panel.id, trigger);
-    try { receiptForm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+    try { (receiptForm.hidden ? payNoticeBox : receiptForm).scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
   });
   document.addEventListener('cabinet:language', () => {
     rebuildPositionSelectors();
@@ -1456,8 +1482,10 @@ export function setupCloudWorkspace(article, group, school) {
   rebuildPositionSelectors();
   renderLabels();
   if (client.session?.access_token) {
-    void applySignedInContext().catch(async () => {
-      await client.signOut();
+    void applySignedInContext().catch(async err => {
+      if (err?.status === 401 || err?.status === 403 || /invalid|expired|jwt/i.test(String(err?.message || ''))) {
+        await client.signOut();
+      }
       renderLabels();
     });
   }
