@@ -228,10 +228,14 @@ function populateNewSchoolTerritory(){
  const curReg=regSel.value;
  const canonReg=canonicalRegionName(curReg);
 
- const districts=[...new Set([
+ const isDushanbeRegion=canonReg==='ш. душанбе'||canonReg==='душанбе';
+ const dushanbeDistricts=['н. Исмоили Сомонӣ','н. Сино','н. Фирдавсӣ','н. Шоҳмансур'];
+ const rawDistricts=[
   ...getDistrictNames(curReg,locs||undefined),
   ...auths.filter(a=>a.authority_tier==='maorif'&&(!canonReg||canonicalRegionName(a.region_name)===canonReg)).map(a=>String(a.district_name||'').trim()).filter(Boolean),
- ])].sort((a,b)=>a.localeCompare(b,'tg'));
+  ...(isDushanbeRegion?dushanbeDistricts:[]),
+ ].filter(d=>!(isDushanbeRegion&&/маркази\s+ш\.\s*душанбе/i.test(d)));
+ const districts=[...new Set(rawDistricts)].sort((a,b)=>a.localeCompare(b,'tg'));
  const otherLbl=lang==='tg'?'Дигар (дастӣ ворид кардан)':'Другой (ввести вручную)';
  const pickDistLbl=fp('pick');
  const distPrev=distSel.value;
@@ -254,7 +258,10 @@ function populateNewSchoolTerritory(){
  if(!isCustomDist&&curDist)state.newSchool.district_name=curDist;
  if(!jamSel||!vilSel)return;
  const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
- const pickOptLbl=lang==='tg'?'Интихоб кунед (ихтиёрӣ)':'Выберите (необязательно)';
+ const isCityDist=isDushanbeRegion||/^ш\.\s*/i.test(curDist);
+ const pickOptLbl=(isCityDist&&!jamoats.length)
+  ?(lang==='tg'?'Барои шаҳр лозим нест (ихтиёрӣ)':'Для города не требуется (необязательно)')
+  :(lang==='tg'?'Интихоб кунед (ихтиёрӣ)':'Выберите (необязательно)');
  const jamPrev=jamSel.value;
  jamSel.replaceChildren(
   new Option(pickOptLbl,''),

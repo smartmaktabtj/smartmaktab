@@ -118,6 +118,10 @@
 <label class="field"><span data-tg="Логин, телефон ё Email">Логин, телефон ё Email</span><input id="loginIdentifier" type="text" autocomplete="username" placeholder="alijon, 927001122 ё email"></label>
 <label class="field"><span data-tg="Парол">Парол</span><input id="loginPassword" type="password" autocomplete="current-password"></label>
 <p class="error" id="loginError" role="status"></p>
+<div id="loginDeviceBlock" class="device-limit-box" hidden style="margin-top:10px;padding:12px;border:1px solid #fecaca;background:#fff5f5;border-radius:10px;">
+ <div id="loginDeviceTitle" style="font-weight:600;font-size:14px;margin-bottom:8px;color:#991b1b;"></div>
+ <div id="loginDeviceList" style="display:flex;flex-direction:column;gap:8px;"></div>
+</div>
 <button type="submit" id="loginSubmit" class="button full" data-tg="Ворид шудан">Ворид шудан</button>
 <div id="schoolAuthExtras">
 <div class="auth-divider"><span data-tg="ё">ё</span></div>
