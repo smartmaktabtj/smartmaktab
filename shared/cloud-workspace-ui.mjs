@@ -1427,6 +1427,11 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   document.addEventListener('sm:open-account-verification', openCloudToVerification);
+  document.addEventListener('sm:open-payment-wizard', () => {
+    panel.hidden = false;
+    panel.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    receiptForm.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  });
   document.addEventListener('cabinet:language', () => {
     rebuildPositionSelectors();
     renderLabels();
