@@ -257,8 +257,51 @@ export function setupWorkspace({configured,school}){
  const tg=()=>document.documentElement.lang==='tg';
  const label=(ru,tj)=>tg()?tj:ru;
 
+ const profTopBar=document.createElement('div');
+ profTopBar.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin:8px 0;border-radius:10px;border:1px solid var(--line,#d1d5db);background:rgba(255,255,255,0.03);';
+ const profNameEl=document.createElement('strong');
+ profNameEl.style.fontSize='15px';
+ const profVerifEl=document.createElement('span');
+ function syncProfTopBar(){
+  let p=null;
+  try{p=JSON.parse(persistentStore.getItem('smartmaktab.profile.v1')||'null');}catch{}
+  profNameEl.textContent=(p?.fullName||[p?.person?.first,p?.person?.last].filter(Boolean).join(' ')||label('Пользователь','Корбар')).trim();
+  const isVer=p?.verificationStatus==='verified';
+  profVerifEl.replaceChildren();
+  if(isVer){
+   const ok=document.createElement('span');
+   ok.textContent=label('✓ Подтверждён','✓ Тасдиқшуда');
+   ok.style.cssText='color:#16a34a;font-weight:600;font-size:13px;';
+   profVerifEl.append(ok);
+  }else{
+   const vb=document.createElement('button');
+   vb.type='button';
+   vb.className='button';
+   vb.textContent=label('Верификация','Верификатсия');
+   vb.style.cssText='background:#dc2626;border-color:#dc2626;color:#fff;padding:5px 12px;font-size:13px;';
+   vb.addEventListener('click',()=>document.dispatchEvent(new CustomEvent('sm:open-account-verification')));
+   profVerifEl.append(vb);
+  }
+ }
+ profTopBar.append(profNameEl,profVerifEl);
+ drawer.append(profTopBar);
+
  const profCard=createProfileManager(cabinetId,tg,label);
- drawer.append(wrapAccordion(profCard.card));
+ function wrapAccordion(el,customTitle){
+  if(!el)return null;
+  const det=document.createElement('details');
+  det.className='sm-prof-accordion';
+  det.style.cssText='margin:8px 0;border:1px solid var(--line,#d1d5db);border-radius:10px;padding:8px 12px;';
+  const titleEl=el.querySelector('h2,h3,h4,.eyebrow');
+  const sum=document.createElement('summary');
+  sum.style.cssText='cursor:pointer;font-weight:600;font-size:14px;list-style:none;display:flex;align-items:center;justify-content:space-between;';
+  sum.textContent=(customTitle||titleEl?.textContent||el.id).trim();
+  const arrow=document.createElement('span');arrow.textContent='▾';arrow.style.opacity='0.6';
+  sum.append(arrow);
+  det.append(sum,el);
+  return det;
+ }
+ drawer.append(wrapAccordion(profCard.card,label('Личные данные и профиль','Маълумоти шахсӣ ва профил')));
 
  function wrapAccordion(el){
   if(!el)return null;
@@ -274,7 +317,7 @@ export function setupWorkspace({configured,school}){
   det.append(sum,el);
   return det;
  }
- const ids=['roleIntake','directorPersonnel','institutionPicker','directorInstitution','directorCourses','directorProfilePanel','teacherWorkplaceScope','teacherWorkplaces','teacherProfilePanel','libraryWorkplaceScope','libraryProfilePanel'];
+ const ids=['directorPersonnel','institutionPicker','directorInstitution','directorCourses','directorProfilePanel','teacherWorkplaces','teacherProfilePanel','libraryProfilePanel'];
  for(const id of ids){const element=$(id);if(element)drawer.append(wrapAccordion(element));}
  const mainModules=document.createElement('section');mainModules.id='smMainModules';mainModules.className='sm-module-grid no-print';
  const formsBar=document.createElement('section');formsBar.id='roleFormsBar';formsBar.className='role-forms-bar no-print';
@@ -311,6 +354,7 @@ export function setupWorkspace({configured,school}){
   const badge=$('workspaceSchool');
   if(badge)badge.textContent=school()?.name??label('Не выбрано','Интихоб нашудааст');
   profCard.syncLabels();
+  syncProfTopBar();
   views.refresh();
  }
  function setSettings(open){if(open)views.open('workspaceSettings',toggle);else views.close('workspaceSettings');sync();}
