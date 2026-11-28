@@ -1,4 +1,10 @@
 'use strict';
+try{
+ const _q=new URLSearchParams(location.search);
+ if(!_q.get('setup')&&!_q.get('register')&&localStorage.getItem('smartmaktab.active.cabinet.v1')){
+  document.documentElement.style.visibility='hidden';
+ }
+}catch{}
 const params=new URLSearchParams(location.search);
 const wantsSetup=params.get('setup')==='1'||params.get('changeRole')==='1';
 const wantsRegister=params.get('register')==='1';
@@ -96,9 +102,14 @@ const copy={
  loginFail:['Неверный логин или пароль. Убедитесь, что учётная запись создана при подключённом интернете.','Логин ё парол нодуруст аст. Боварӣ ҳосил кунед, ки ҳисоб ҳангоми пайваст будани интернет сохта шудааст.'],
  loginNetworkFail:['Сервер входа недоступен. Проверьте подключение к интернету и попробуйте снова.','Сервери воридшавӣ дастрас нест. Пайвасти интернетро санҷед ва боз кӯшиш кунед.'],
  authorityDenied:['Этот аккаунт не относится к Мудири маориф или Сардори раёсат.','Ин ҳисоб ба Мудири маориф ё Сардори раёсат тааллуқ надорад.'],
+ deviceLimitErr:['Достигнут лимит активных устройств для этого аккаунта. Отвяжите одно из устройств ниже, чтобы войти.','Шумораи ниҳоии дастгоҳҳои фаъол барои ин ҳисоб пур шуд. Барои ворид шудан яке аз дастгоҳҳои поёниро ҷудо кунед.'],
+ deviceDisabledErr:['Доступ для этого аккаунта временно отключён. Обратитесь к руководителю или администратору.','Дастрасӣ барои ин ҳисоб муваққатан қатъ шудааст. Ба роҳбар ё маъмур муроҷиат кунед.'],
+ deviceListTitle:['Активные устройства:','Дастгоҳҳои фаъол:'],
+ deviceUnlinkBtn:['Отвязать','Ҷудо кардан'],
+ deviceUnlinkedOk:['Устройство отвязано. Нажмите «Войти» снова.','Дастгоҳ ҷудо карда шуд. Тугмаи «Ворид шудан»-ро аз нав пахш кунед.'],
  loginBusy:['Выполняется вход…','Воридшавӣ иҷро мешавад…'],
  regBusy:['Создание аккаунта на сервере…','Сохтани ҳисоб дар сервер…'],
- regFileViewerErr:['Нельзя создать облачный аккаунт при открытии локального HTML-файла. Откройте сайт SmartMaktab или установленное приложение с интернетом.','Ҳангоми кушодани файли маҳаллии HTML сохтани ҳисоби абрӣ имконнопазир аст. Сомонаи SmartMaktab ё барномаи насбшударо бо интернет кушоед.'],
+ regFileViewerErr:['Нельзя создать аккаунт в системе при открытии локального HTML-файла. Откройте сайт SmartMaktab или установленное приложение с интернетом.','Ҳангоми кушодани файли маҳаллии HTML сохтани ҳисоб дар система имконнопазир аст. Сомонаи SmartMaktab ё барномаи насбшударо бо интернет кушоед.'],
  regOfflineErr:['Нет подключения к интернету. Чтобы сохранить аккаунт в базе и входить с других устройств, подключитесь к интернету.','Пайвасти интернет нест. Барои сабти ҳисоб дар пойгоҳи додаҳо ва воридшавӣ аз дастгоҳҳои дигар интернетро фаъол кунед.'],
  regSchoolsUnavailable:['Не удалось загрузить список школ с сервера — аккаунт не создан. Проверьте интернет и нажмите «Повторить» либо добавьте школу вручную.','Рӯйхати мактабҳо аз сервер бор нашуд — ҳисоб сохта нашуд. Интернетро санҷида «Аз нав бор кардан»-ро пахш кунед ё мактабро дастӣ илова намоед.'],
  regSchoolPickCloud:['Список школ обновлён с сервера. Выберите вашу школу в списке и нажмите «Оғоз».','Рӯйхати мактабҳо аз сервер нав шуд. Мактаби худро аз рӯйхат интихоб карда, «Оғоз»-ро пахш кунед.'],
@@ -109,7 +120,7 @@ const copy={
  opening:['Открываем кабинет…','Утоқи корӣ кушода мешавад…'],
  authTitleSchool:['Вход в SmartMaktab','Воридшавӣ ба SmartMaktab'],
  authSubSchool:['Введите логин, номер телефона или Email и пароль.','Логин, рақами телефон ё Email ва пароли худро ворид кунед.'],
- authTitleAuthority:['Вход: Мудири маориф / Сардори раёсат','Вуруд: Мудири маориф / Сардори раёсат'],
+ authTitleAuthority:['Вход: Мудири маориф / Сардори раёсат / Коргаргузор','Вуруд: Мудири маориф / Сардори раёсат / Коргаргузор'],
  authSubAuthority:['Введите логин и пароль, выданные администратором.','Логин ва пароли аз ҷониби маъмур додашударо ворид кунед.'],
 };
 const t=key=>copy[key][lang==='tg'?1:0];
@@ -473,8 +484,96 @@ $('backAuthorityLogin')?.addEventListener('click',()=>{
  render();
 });
 
+function getOrCreateDeviceId(){
+ const key='smartmaktab.device_id.v1';
+ let id='';
+ try{id=localStorage.getItem(key)||'';}catch{}
+ if(!id||id.length<12){
+  const rnd=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():('dev-'+Date.now()+'-'+Math.random().toString(36).slice(2,12));
+  id=rnd;
+  try{localStorage.setItem(key,id);}catch{}
+ }
+ return id;
+}
+function detectDeviceKind(){
+ if(typeof window!=='undefined'&&window.SmartMaktabAndroid)return 'mobile';
+ if(typeof navigator!=='undefined'&&/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||''))return 'mobile';
+ return 'desktop';
+}
+function detectDeviceLabel(){
+ if(typeof window!=='undefined'&&window.SmartMaktabAndroid)return 'Android App';
+ const ua=typeof navigator!=='undefined'?(navigator.userAgent||''):'';
+ if(/Android/i.test(ua))return 'Android Browser';
+ if(/iPhone|iPad|iPod/i.test(ua))return 'iOS Browser';
+ if(/Windows/i.test(ua))return 'Windows Browser';
+ if(/Mac OS/i.test(ua))return 'macOS Browser';
+ if(/Linux/i.test(ua))return 'Linux Browser';
+ return 'Web Browser';
+}
+function clearLoginDeviceBlock(){
+ const box=$('loginDeviceBlock');
+ if(box)box.hidden=true;
+ const list=$('loginDeviceList');
+ if(list)list.replaceChildren();
+}
+async function showLoginDeviceLimit(accessToken,orgId){
+ const box=$('loginDeviceBlock'),title=$('loginDeviceTitle'),list=$('loginDeviceList');
+ if(!box||!list)return;
+ if(title)title.textContent=t('deviceListTitle');
+ list.replaceChildren();
+ box.hidden=false;
+ try{
+  const res=await fetch(`${cloudCfg.url}/rest/v1/rpc/get_my_device_sessions`,{
+   method:'POST',
+   headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},
+   body:JSON.stringify({p_org_id:orgId}),
+  });
+  const rows=res.ok?await res.json().catch(()=>[]):[];
+  if(!Array.isArray(rows)||!rows.length){box.hidden=true;return;}
+  for(const d of rows){
+   const row=document.createElement('div');
+   row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#fff;border:1px solid #fecaca;border-radius:8px;font-size:13px;';
+   const info=document.createElement('div');
+   const kindTag=d.device_kind==='mobile'?'📱':'💻';
+   const lbl=d.device_label||d.device_id||'Device';
+   const dt=d.last_seen_at?new Date(d.last_seen_at).toLocaleDateString():'';
+   info.textContent=`${kindTag} ${lbl}${dt?' · '+dt:''}`;
+   const btn=document.createElement('button');
+   btn.type='button';
+   btn.textContent=t('deviceUnlinkBtn');
+   btn.style.cssText='padding:4px 10px;border-radius:6px;border:1px solid #dc2626;background:#dc2626;color:#fff;font-size:12px;cursor:pointer;flex-shrink:0;';
+   btn.addEventListener('click',async()=>{
+    btn.disabled=true;
+    try{
+     const r=await fetch(`${cloudCfg.url}/rest/v1/rpc/revoke_my_device_session`,{
+      method:'POST',
+      headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},
+      body:JSON.stringify({p_device_id:d.device_id,p_org_id:orgId}),
+     });
+     if(r.ok){
+      row.remove();
+      $('loginError').textContent=t('deviceUnlinkedOk');
+      if(!list.children.length)box.hidden=true;
+     }else{btn.disabled=false;}
+    }catch{btn.disabled=false;}
+   });
+   row.append(info,btn);
+   list.append(row);
+  }
+ }catch{box.hidden=true;}
+}
+
+$('toggleLoginPassword')?.addEventListener('click',()=>{
+ const inp=$('loginPassword');
+ if(!inp)return;
+ const show=inp.type==='password';
+ inp.type=show?'text':'password';
+ $('toggleLoginPassword').textContent=show?'🙈':'👁️';
+});
+
 $('loginForm')?.addEventListener('submit',async ev=>{
  ev.preventDefault();
+ clearLoginDeviceBlock();
  const rawId=clean($('loginIdentifier').value);
  const pass=$('loginPassword').value;
  if(!rawId||!pass){$('loginError').textContent=t('invalidLoginCreds');return;}
@@ -510,6 +609,31 @@ $('loginForm')?.addEventListener('submit',async ev=>{
    if(!isAuth){
     $('loginError').textContent=t('authorityDenied');
     return;
+   }
+  }
+  if(primaryMem){
+   const claimRes=await fetch(`${cloudCfg.url}/rest/v1/rpc/claim_device_session`,{
+    method:'POST',
+    headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${authJson.access_token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({
+     p_org_id:primaryMem.organization_id,
+     p_device_id:getOrCreateDeviceId(),
+     p_device_label:detectDeviceLabel(),
+     p_cabinet_id:primaryMem.primary_position||null,
+     p_device_kind:detectDeviceKind(),
+    }),
+   });
+   if(claimRes.ok){
+    const claim=await claimRes.json().catch(()=>null);
+    if(claim&&claim.allowed===false){
+     if(claim.reason==='account_disabled'){
+      $('loginError').textContent=t('deviceDisabledErr');
+      return;
+     }
+     $('loginError').textContent=t('deviceLimitErr');
+     await showLoginDeviceLimit(authJson.access_token,primaryMem.organization_id);
+     return;
+    }
    }
   }
   writeStoreItem(cloudSessionKey,JSON.stringify(authJson));
@@ -906,6 +1030,19 @@ $('begin').addEventListener('click',async()=>{
    }
    writeStoreItem(cloudSessionKey,JSON.stringify(sessionObj));
    writeStoreItem('smartmaktab.cloud.last_org.v1',targetSchoolId);
+   if(targetSchoolId){
+    fetch(`${cloudCfg.url}/rest/v1/rpc/claim_device_session`,{
+     method:'POST',
+     headers:{apikey:cloudCfg.publishableKey,Authorization:`Bearer ${sessionObj.access_token}`,'Content-Type':'application/json'},
+     body:JSON.stringify({
+      p_org_id:targetSchoolId,
+      p_device_id:getOrCreateDeviceId(),
+      p_device_label:detectDeviceLabel(),
+      p_cabinet_id:state.primary||null,
+      p_device_kind:detectDeviceKind(),
+     }),
+    }).catch(()=>{});
+   }
   }
 
   if(!targetSchoolId&&newSchoolPayload){

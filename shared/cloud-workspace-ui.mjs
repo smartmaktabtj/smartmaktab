@@ -39,7 +39,7 @@ const roleLabels = {
 const copy = {
   trigger: ['Облако ва обуна', 'Облако и подписка'],
   verifyTrigger: ['Верификатсия', 'Верификация'],
-  heading: ['Ҳамоҳангсозии абрӣ, верификатсия ва обуна', 'Облачная синхронизация, верификация и подписка'],
+  heading: ['Ҳамоҳангсозии система, верификатсия ва обуна', 'Синхронизация с системой, верификация и подписка'],
   note: [
     'Барои ҳамоҳангсозии маълумот бо пойгоҳи додаҳо, тасдиқи ҳисоб ва обуна ворид шавед.',
     'Войдите для синхронизации с базой данных, верификации аккаунта и управления подпиской.',
@@ -50,17 +50,17 @@ const copy = {
   signOut: ['Баромадан', 'Выйти'],
   close: ['Пӯшидан', 'Закрыть'],
   signedOut: ['Шумо дар реҷаи офлайн ҳастед.', 'Вы работаете в офлайн-режиме.'],
-  signedIn: ['Пайваст ба абр фаъол аст.', 'Облачное подключение активно.'],
-  orgSelect: ['Муассисаи фаъол дар абр', 'Активная организация в облаке'],
+  signedIn: ['Пайваст ба система фаъол аст.', 'Подключение к системе активно.'],
+  orgSelect: ['Муассисаи фаъол дар система', 'Активная организация в системе'],
   noOrg: ['Ягон муассиса ба ин ҳисоб вобаста нашудааст.', 'К этому аккаунту не привязана организация.'],
   checkLicense: ['Тафтиши иҷозатнома', 'Проверить лицензию'],
   licenseLine: ['Ҳолати иҷозатнома', 'Статус лицензии'],
   accessLine: ['Дастрасии шумо', 'Ваш доступ'],
   verifStatusLine: ['Ҳолати верификатсия', 'Статус верификации'],
-  syncUp: ['Ҳамоҳангсозӣ бо абр', 'Сохранить данные кабинета в облако'],
-  syncDown: ['Навсозӣ аз абр', 'Загрузить записи из облака'],
+  syncUp: ['Ҳамоҳангсозӣ бо система', 'Сохранить данные кабинета в систему'],
+  syncDown: ['Навсозӣ аз система', 'Загрузить записи из системы'],
   restoreLocal: ['Барқарор дар ин дастгоҳ', 'Восстановить на устройство'],
-  restoredLocal: ['Маълумот аз абр барқарор шуд.', 'Данные из облака восстановлены локально.'],
+  restoredLocal: ['Маълумот аз система барқарор шуд.', 'Данные из системы восстановлены локально.'],
   verifHeading: ['Верификатсияи ҳисоб (барои дастрасӣ ба пойгоҳи додаҳо)', 'Верификация аккаунта (для доступа к базе данных)'],
   verifExplainDirector: [
     'Маълумоти худро фиристед. Дархости шуморо шуъбаи маориф ё раёсат тасдиқ мекунад. То тасдиқ танҳо бо файлҳои маҳаллӣ кор кардан мумкин аст.',
@@ -118,8 +118,8 @@ const copy = {
   sendReceipt: ['Ирсоли чек барои тафтиш', 'Отправить чек на проверку'],
   receiptSent: ['Чек барои тасдиқ бо муваффақият ирсол шуд.', 'Чек успешно отправлен на проверку.'],
   receiptDup: ['Ин чек ё рақами амалиёт аллакай қаблан ирсол шудааст.', 'Этот чек или номер операции уже был отправлен ранее.'],
-  savedCloud: ['Сабт ба абр ирсол шуд.', 'Запись сохранена в облако.'],
-  recordsEmpty: ['Сабтҳои абрӣ ёфт нашуданд.', 'Облачные записи не найдены.'],
+  savedCloud: ['Сабт ба система ирсол шуд.', 'Запись сохранена в систему.'],
+  recordsEmpty: ['Сабтҳои система ёфт нашуданд.', 'Записи в системе не найдены.'],
   authError: ['Хатои воридшавӣ ё шабака.', 'Ошибка входа или сети.'],
   deviceBlockedMsg: [
     'Огоҳӣ: Лимити дастгоҳҳои ин намуд пур шудааст. Дастгоҳи кӯҳнаро дар зер ҷудо кунед ё ба роҳбари муассиса муроҷиат намоед.',
@@ -357,14 +357,18 @@ export function setupCloudWorkspace(article, group, school) {
 
   const extraWrap = make('div', 'field school-field-wide');
   const extraLbl = make('span');
-  const extraListBox = make('div', 'control');
-  const aliyaLabel = make('label', 'small');
+  const extraListBox = make('div');
+  extraListBox.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin:8px 0;';
+  const aliyaLabel = make('label');
+  aliyaLabel.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line,#d1d5db);border-radius:10px;cursor:pointer;margin:6px 0;font-size:13px;font-weight:600;';
   const aliyaToggle = make('input');
   aliyaToggle.type = 'checkbox';
   aliyaToggle.id = 'cloudAliyaAddonToggle';
+  aliyaToggle.style.cssText = 'width:18px;height:18px;flex-shrink:0;cursor:pointer;';
   const aliyaTxt = make('span');
   aliyaLabel.append(aliyaToggle, aliyaTxt);
-  const tariffCalcLine = make('small', 'small');
+  const tariffCalcLine = make('div', 'notice');
+  tariffCalcLine.style.cssText = 'margin-top:8px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700;';
   extraWrap.append(extraLbl, extraListBox, aliyaLabel, tariffCalcLine);
 
   const fileWrap = make('label', 'field');
@@ -398,20 +402,73 @@ export function setupCloudWorkspace(article, group, school) {
   const ocrParsedLine = make('small', 'small');
   ocrWrap.append(ocrLbl, ocrInput, ocrParsedLine);
 
+  provWrap.hidden = true;
+  amtWrap.hidden = true;
+  ocrWrap.hidden = true;
+
+  reqBox.style.cssText = 'border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:12px 14px;border-radius:10px;display:grid;gap:8px;';
+  reqTitle.style.color = '#991b1b';
+  reqDetail.style.cssText = 'color:#991b1b;font-size:13px;font-weight:500;margin:0;';
+
+  let payStep = 1;
+  const step1Nav = make('div', 'control school-field-wide');
+  const payNext1Btn = make('button', 'button');
+  payNext1Btn.type = 'button';
+  payNext1Btn.textContent = !tg() ? 'Далее: доп. должности →' : 'Идома: вазифаҳои иловагӣ →';
+  step1Nav.append(payNext1Btn);
+
+  const step2Nav = make('div', 'control school-field-wide');
+  const payBack2Btn = make('button', 'button alt');
+  payBack2Btn.type = 'button';
+  payBack2Btn.textContent = !tg() ? '← Назад' : '← Бозгашт';
+  const paySkip2Btn = make('button', 'button alt');
+  paySkip2Btn.type = 'button';
+  paySkip2Btn.textContent = !tg() ? 'Пропустить →' : 'Гузаштан →';
+  const payNext2Btn = make('button', 'button');
+  payNext2Btn.type = 'button';
+  payNext2Btn.textContent = !tg() ? 'Перейти к оплате →' : 'Гузаштан ба пардохт →';
+  step2Nav.append(payBack2Btn, paySkip2Btn, payNext2Btn);
+
+  const step3Nav = make('div', 'control school-field-wide');
+  const payBack3Btn = make('button', 'button alt');
+  payBack3Btn.type = 'button';
+  payBack3Btn.textContent = !tg() ? '← Назад' : '← Бозгашт';
+
   const sendReceiptBtn = make('button', 'button');
   sendReceiptBtn.type = 'submit';
   sendReceiptBtn.id = 'cloudSubmitReceiptBtn';
+  step3Nav.append(payBack3Btn, sendReceiptBtn);
+
+  function syncPayWizardStep() {
+    posWrap.hidden = payStep !== 1;
+    periodWrap.hidden = payStep !== 1;
+    step1Nav.hidden = payStep !== 1;
+    extraWrap.hidden = payStep !== 2;
+    step2Nav.hidden = payStep !== 2;
+    reqBox.hidden = payStep !== 3;
+    fileWrap.hidden = payStep !== 3;
+    step3Nav.hidden = payStep !== 3;
+  }
+  payNext1Btn.addEventListener('click', () => { payStep = 2; syncPayWizardStep(); });
+  payBack2Btn.addEventListener('click', () => { payStep = 1; syncPayWizardStep(); });
+  paySkip2Btn.addEventListener('click', () => { selectedExtras.clear(); rebuildPositionSelectors(); payStep = 3; syncPayWizardStep(); });
+  payNext2Btn.addEventListener('click', () => { payStep = 3; syncPayWizardStep(); });
+  payBack3Btn.addEventListener('click', () => { payStep = 2; syncPayWizardStep(); });
+  syncPayWizardStep();
+
   receiptForm.append(
     recTitle,
-    reqBox,
     posWrap,
     periodWrap,
+    step1Nav,
     extraWrap,
+    step2Nav,
+    reqBox,
     fileWrap,
     provWrap,
     amtWrap,
     ocrWrap,
-    sendReceiptBtn,
+    step3Nav,
   );
 
   sessionBox.append(
@@ -533,6 +590,8 @@ export function setupCloudWorkspace(article, group, school) {
 
   function openCloudToVerification() {
     panel.hidden = false;
+    verifBox.hidden = false;
+    receiptForm.hidden = true;
     renderLabels();
     openWorkspaceView(panel.id, verifyQuickBtn.hidden ? trigger : verifyQuickBtn);
     try { verifBox.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
@@ -579,23 +638,64 @@ export function setupCloudWorkspace(article, group, school) {
       ? `${t('verifyTrigger')} (${pendingVerifQueue.length})`
       : t('verifyTrigger');
     if (blockedByVerif) {
-      const box = make('div', 'notice sm-verif-banner');
-      const txtEl = make('p', 'small');
-      const vStat = m.verification_status || 'unverified';
-      const isDir = m.primary_position === 'school-director';
-      if (vStat === 'rejected') {
-        txtEl.textContent = isDir ? t('verifRejectedDirector') : t('verifRejectedStaff');
-      } else if (vStat === 'pending') {
-        txtEl.textContent = t('verifPendingNote');
-      } else {
-        txtEl.textContent = isDir ? t('verifExplainDirector') : t('verifExplainStaff');
+      if (!document.getElementById('smVerifWaveStyle')) {
+        const st = document.createElement('style');
+        st.id = 'smVerifWaveStyle';
+        st.textContent = `
+          @keyframes smVerifWave {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+          }
+          .sm-verif-wave-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid #dc2626;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            animation: smVerifWave 2s infinite;
+            transition: transform 0.15s ease, filter 0.15s ease;
+          }
+          .sm-verif-wave-btn:hover { filter: brightness(1.06); }
+          .sm-verif-wave-btn:active { transform: scale(0.99); }
+          .sm-verif-wave-btn .sm-verif-pill {
+            background: rgba(255,255,255,0.2);
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+        `;
+        document.head.append(st);
       }
-      const btn = make('button', 'button');
+      const btn = make('button', 'sm-verif-wave-btn');
       btn.type = 'button';
-      btn.textContent = t('verifyTrigger');
+      const vStat = m.verification_status || 'unverified';
+      const labelSpan = make('span');
+      labelSpan.style.cssText = 'line-height:1.35;';
+      if (vStat === 'rejected') {
+        labelSpan.textContent = '⚠️ ' + t('verifRejectedStaff').split('.')[0];
+      } else if (vStat === 'pending') {
+        labelSpan.textContent = '⚠️ ' + t('verifPendingNote').split('.')[0];
+      } else {
+        labelSpan.textContent = '⚠️ ' + t('verifyTrigger');
+      }
+      const pill = make('span', 'sm-verif-pill');
+      pill.textContent = t('verifyTrigger') + ' →';
+      btn.append(labelSpan, pill);
       btn.addEventListener('click', openCloudToVerification);
-      box.append(txtEl, btn);
-      verifBannerHost.append(box);
+      verifBannerHost.append(btn);
     }
 
     return state;
@@ -636,19 +736,27 @@ export function setupCloudWorkspace(article, group, school) {
       if (!compatibleIds.has(oldExtra)) selectedExtras.delete(oldExtra);
     }
     const nodes = compatible.map(r => {
-      const lbl = make('label', 'small');
+      const lbl = make('label');
+      lbl.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border:1px solid var(--line,#d1d5db);border-radius:10px;cursor:pointer;font-size:13px;background:rgba(255,255,255,0.02);';
+      const left = make('span');
+      left.style.cssText = 'display:flex;align-items:center;gap:8px;';
       const cb = make('input');
       cb.type = 'checkbox';
       cb.value = r.position_code;
       cb.checked = selectedExtras.has(r.position_code);
+      cb.style.cssText = 'width:17px;height:17px;flex-shrink:0;cursor:pointer;';
       cb.addEventListener('change', () => {
         if (cb.checked) selectedExtras.add(r.position_code);
         else selectedExtras.delete(r.position_code);
         updateTariffSummary();
       });
-      const txt = make('span');
-      txt.textContent = ` ${lang === 'ru' ? r.title_ru : r.title_tg} (+${Number(r.extra_price_tjs ?? r.base_price_tjs ?? 10).toFixed(2)} TJS)`;
-      lbl.append(cb, txt);
+      const titleEl = make('span');
+      titleEl.textContent = lang === 'ru' ? r.title_ru : r.title_tg;
+      left.append(cb, titleEl);
+      const priceEl = make('strong');
+      priceEl.style.cssText = 'font-size:12px;white-space:nowrap;opacity:0.85;';
+      priceEl.textContent = `+${Number(r.extra_price_tjs ?? r.base_price_tjs ?? 10).toFixed(0)} TJS`;
+      lbl.append(left, priceEl);
       extraCheckboxes.push(cb);
       return lbl;
     });
@@ -1070,10 +1178,12 @@ export function setupCloudWorkspace(article, group, school) {
     vPassLbl.textContent = t('verifPassport');
     vSubmitBtn.textContent = t('verifSubmit');
     recTitle.textContent = t('receiptHeading');
-    reqTitle.textContent = t('payRequisites');
+    reqTitle.textContent = tg()
+      ? `⚠️ Пардохт ба рақами: ${activePlan.recipient_phone}`
+      : `⚠️ Оплата на номер: ${activePlan.recipient_phone}`;
     reqDetail.textContent = tg()
-      ? `Рақам / Ҳамён: ${activePlan.recipient_phone}`
-      : `Номер / Кошелёк: ${activePlan.recipient_phone}`;
+      ? `Барои пардохти хизматрасонӣ ба рақамҳои ${activePlan.recipient_phone} (Душанбе Сити ё Амонатбонк) пардохт намоед, баъдан чеки худро ба мо фиристед. Агар чекро нафиристед, ҳарчанде ки пардохт намудед, система пардохти шуморо намебинад.`
+      : `Для оплаты услуги переведите средства на номер ${activePlan.recipient_phone} (Душанбе Сити или Амонатбонк), затем отправьте нам чек. Если не отправить чек, даже при оплате система не увидит ваш платёж.`;
     copyPhoneBtn.textContent = t('copyPhone');
     posLbl.textContent = t('primaryPosLbl');
     periodLbl.textContent = t('periodLbl');
@@ -1120,7 +1230,11 @@ export function setupCloudWorkspace(article, group, school) {
         p_phone: vPhoneInp.value.trim(),
         p_passport_number: vPassInp.value.trim(),
       });
-      statusMessage = t('verifSent');
+      const m = activeOrg();
+      if (m) m.verification_status = 'pending';
+      verifForm.hidden = true;
+      vSubmitBtn.textContent = txt('Дархост фиристода шуд', 'Заявка отправлена');
+      statusMessage = txt('Дархост фиристода шуд', 'Заявка отправлена');
       await applySignedInContext();
     } catch (err) {
       statusMessage = err?.message || t('authError');
@@ -1274,8 +1388,26 @@ export function setupCloudWorkspace(article, group, school) {
         includeAliya: Boolean(aliyaToggle.checked),
         months: Number(periodSelect.value || 1),
       });
-      statusMessage = t('receiptSent');
+      const declaredAmt = amtInput.value ? Number(amtInput.value) : null;
+      const calc = calculateTariffTotal({
+        primaryPosition: posSelect.value || cabinetId || 'school-teacher',
+        extraPositions: [...selectedExtras],
+        includeAliya: Boolean(aliyaToggle.checked),
+        months: Number(periodSelect.value || 1),
+        catalog: roleTariffs,
+      });
+      const expectedTotal = Number(calc?.totalTjs || 0);
+      const overpaid = declaredAmt && expectedTotal > 0 && declaredAmt > expectedTotal
+        ? Math.round((declaredAmt - expectedTotal) * 100) / 100
+        : 0;
+      statusMessage = overpaid > 0
+        ? (!tg()
+          ? `${t('receiptSent')} Вы отправили на ${overpaid} сомони больше. Если хотите вернуть лишние деньги, пожалуйста, позвоните по номеру ${activePlan.recipient_phone}.`
+          : `${t('receiptSent')} Шумо ${overpaid} сомонӣ зиёд пардохт кардед. Агар хоҳед маблағи зиёдатиро баргардонед, лутфан ба рақами ${activePlan.recipient_phone} занг занед.`)
+        : t('receiptSent');
       receiptForm.reset();
+      payStep = 1;
+      syncPayWizardStep();
       manualAmountOverride = false;
       selectedExtras.clear();
       rebuildPositionSelectors();
@@ -1309,6 +1441,14 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   document.addEventListener('sm:open-account-verification', openCloudToVerification);
+  document.addEventListener('sm:open-payment-wizard', () => {
+    panel.hidden = false;
+    verifBox.hidden = true;
+    receiptForm.hidden = false;
+    renderLabels();
+    openWorkspaceView(panel.id, trigger);
+    try { receiptForm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+  });
   document.addEventListener('cabinet:language', () => {
     rebuildPositionSelectors();
     renderLabels();

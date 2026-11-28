@@ -228,47 +228,48 @@ function populateNewSchoolTerritory(){
  const curReg=regSel.value;
  const canonReg=canonicalRegionName(curReg);
 
- const districts=[...new Set([
+ const isDushanbeRegion=canonReg==='ш. душанбе'||canonReg==='душанбе';
+ const dushanbeDistricts=['н. Исмоили Сомонӣ','н. Сино','н. Фирдавсӣ','н. Шоҳмансур'];
+ const rawDistricts=[
   ...getDistrictNames(curReg,locs||undefined),
   ...auths.filter(a=>a.authority_tier==='maorif'&&(!canonReg||canonicalRegionName(a.region_name)===canonReg)).map(a=>String(a.district_name||'').trim()).filter(Boolean),
- ])].sort((a,b)=>a.localeCompare(b,'tg'));
+  ...(isDushanbeRegion?dushanbeDistricts:[]),
+ ].filter(d=>!(isDushanbeRegion&&/маркази\s+ш\.\s*душанбе/i.test(d)));
+ const districts=[...new Set(rawDistricts)].sort((a,b)=>a.localeCompare(b,'tg'));
  const otherLbl=lang==='tg'?'Дигар (дастӣ ворид кардан)':'Другой (ввести вручную)';
  const pickDistLbl=fp('pick');
  const distPrev=distSel.value;
  distSel.replaceChildren(
   new Option(pickDistLbl,''),
   ...districts.map(d=>new Option(d,d)),
-  new Option(otherLbl,'__custom__'),
  );
- if(distPrev&&(distPrev==='__custom__'||districts.includes(distPrev)))distSel.value=distPrev;
+ if(distPrev&&districts.includes(distPrev))distSel.value=distPrev;
  else if(state.newSchool?.district_name&&districts.includes(state.newSchool.district_name))distSel.value=state.newSchool.district_name;
  else if(state.newSchool?.district_name&&distSel.value===''){
   const matchedDist=districts.find(d=>stripDistrictPrefix(d)===stripDistrictPrefix(state.newSchool.district_name));
   if(matchedDist)distSel.value=matchedDist;
-  else distSel.value='__custom__';
  }
- const isCustomDist=distSel.value==='__custom__';
- if(distCustomWrap)distCustomWrap.hidden=!isCustomDist;
+ if(distCustomWrap)distCustomWrap.hidden=true;
 
- const curDist=isCustomDist?clean($('newSchoolDistrict')?.value):clean(distSel.value||state.newSchool?.district_name||'');
- if(!isCustomDist&&curDist)state.newSchool.district_name=curDist;
+ const curDist=clean(distSel.value||state.newSchool?.district_name||'');
+ if(curDist)state.newSchool.district_name=curDist;
  if(!jamSel||!vilSel)return;
  const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
- const pickOptLbl=lang==='tg'?'Интихоб кунед (ихтиёрӣ)':'Выберите (необязательно)';
+ const isCityDist=isDushanbeRegion||/^ш\.\s*/i.test(curDist);
+ const pickOptLbl=(isCityDist&&!jamoats.length)
+  ?(lang==='tg'?'Барои шаҳр лозим нест (ихтиёрӣ)':'Для города не требуется (необязательно)')
+  :(lang==='tg'?'Интихоб кунед (ихтиёрӣ)':'Выберите (необязательно)');
  const jamPrev=jamSel.value;
  jamSel.replaceChildren(
   new Option(pickOptLbl,''),
   ...jamoats.map(j=>new Option(j,j)),
-  new Option(otherLbl,'__custom__'),
  );
- if(jamPrev&&(jamPrev==='__custom__'||jamoats.includes(jamPrev)))jamSel.value=jamPrev;
+ if(jamPrev&&jamoats.includes(jamPrev))jamSel.value=jamPrev;
  else if(state.newSchool?.jamoat_name&&jamoats.includes(state.newSchool.jamoat_name))jamSel.value=state.newSchool.jamoat_name;
- else if(state.newSchool?.jamoat_name&&jamSel.value==='')jamSel.value='__custom__';
- const isCustomJam=jamSel.value==='__custom__';
- if(jamCustomWrap)jamCustomWrap.hidden=!isCustomJam;
+ if(jamCustomWrap)jamCustomWrap.hidden=true;
 
- const curJam=isCustomJam?clean($('newSchoolJamoatCustom')?.value):jamSel.value;
- const villages=(curDist&&curJam&&!isCustomJam)?getVillagesForJamoat(curReg,curDist,curJam,locs||undefined):[];
+ const curJam=jamSel.value;
+ const villages=(curDist&&curJam)?getVillagesForJamoat(curReg,curDist,curJam,locs||undefined):[];
  const vilPrev=vilSel.value;
  vilSel.replaceChildren(
   new Option(pickOptLbl,''),

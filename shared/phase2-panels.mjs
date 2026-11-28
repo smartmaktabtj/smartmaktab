@@ -110,19 +110,13 @@ export function setupPhase2Panels(article, docs, school, views) {
     const c = ctx();
     if (!c.hasCloudSession || c.verified) return '';
     const msg = c.verificationStatus === 'rejected'
-      ? txt(
-        'Дархости тасдиқи шумо рад ва нест карда шуд. Дастрасӣ ба пойгоҳи додаҳо маҳдуд аст — ба директор ё маориф муроҷиат намоед.',
-        'Ваша заявка отклонена и удалена. Доступ к базе данных закрыт — обратитесь к директору или в Маориф.',
-      )
-      : txt(
-        'Ҳисоби шумо ҳанӯз верификатсия нашудааст. То тасдиқ танҳо реҷаи маҳаллӣ/файлӣ кор мекунад, пойгоҳи додаҳо баста аст.',
-        'Аккаунт не верифицирован. До подтверждения работает только локальный режим с файлами, база данных закрыта.',
-      );
+      ? txt('Дархости тасдиқи шумо рад шуд', 'Ваша заявка отклонена')
+      : txt('Ҳисоби шумо верификатсия нашудааст', 'Аккаунт не верифицирован');
     return `
-      <div class="notice sm-db-verif-lock" role="status">
-        <p class="small">${esc(msg)}</p>
-        <button type="button" class="button alt" data-open-account-verif="1">${esc(txt('Верификатсия', 'Верификация'))}</button>
-      </div>
+      <button type="button" class="sm-verif-wave-btn" data-open-account-verif="1" style="margin-bottom:8px;">
+        <span style="line-height:1.35;">⚠️ ${esc(msg)}</span>
+        <span class="sm-verif-pill">${esc(txt('Верификатсия', 'Верификация'))} →</span>
+      </button>
     `;
   }
 
@@ -1070,8 +1064,8 @@ export function setupPhase2Panels(article, docs, school, views) {
         panel.innerHTML = `
           <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
           <div class="notice">
-            <p class="small">${esc(txt('Барои дидан ва идоракунии корбарон, дастгоҳҳо ва бозсозии рамз аввал бо ҳисоби абрии худ ворид шавед.', 'Для управления сотрудниками, отвязки устройств и сброса паролей сначала войдите в облачный аккаунт.'))}</p>
-            <button type="button" class="button" id="smUsrOpenCloudBtn">${esc(txt('Ворид шудан ба абр', 'Войти в облако'))}</button>
+            <p class="small">${esc(txt('Барои дидан ва идоракунии корбарон, дастгоҳҳо ва бозсозии рамз аввал бо ҳисоби системавии худ ворид шавед.', 'Для управления сотрудниками, отвязки устройств и сброса паролей сначала войдите в аккаунт системы.'))}</p>
+            <button type="button" class="button" id="smUsrOpenCloudBtn">${esc(txt('Ворид шудан ба система', 'Войти в систему'))}</button>
           </div>
         `;
         panel.querySelector('#smUsrOpenCloudBtn')?.addEventListener('click', () => {
@@ -1376,6 +1370,397 @@ export function setupPhase2Panels(article, docs, school, views) {
     };
   }
 
+  // ============================================================================
+  // PANEL 8: ROLE-SPECIFIC WORKSPACE (COVERING ALL 24 CABINETS)
+  // ============================================================================
+  const ROLE_WORKSPACE_CONFIGS = {
+    'school-academic-deputy': {
+      icon: '📋',
+      tg: 'Назорати дохилимактабӣ ва иштирок дар дарсҳо',
+      ru: 'Внутришкольный контроль и посещение уроков',
+      descTg: 'Сабти санҷишҳо, дарсҳои кушод ва тавсияҳо',
+      descRu: 'Учёт проверок, открытых уроков и рекомендаций',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синф / Омӯзгор', ru: 'Класс / Учитель', type: 'text' },
+        { key: 'topic', tg: 'Фан ва мавзӯъ', ru: 'Предмет и тема', type: 'text' },
+        { key: 'note', tg: 'Хулоса / Тавсия', ru: 'Вывод / Рекомендация', type: 'text' },
+      ],
+    },
+    'school-primary-deputy': {
+      icon: '🎒',
+      tg: 'Назорати синфҳои ибтидоӣ (1–4)',
+      ru: 'Контроль начальных классов (1–4)',
+      descTg: 'Ташхиси хониш, хат ва иштирок дар дарсҳо',
+      descRu: 'Техника чтения, письма и посещение уроков',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синф / Омӯзгор', ru: 'Класс / Учитель', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯи санҷиш', ru: 'Тема проверки', type: 'text' },
+        { key: 'note', tg: 'Натиҷа', ru: 'Результат', type: 'text' },
+      ],
+    },
+    'school-education-quality': {
+      icon: '🎯',
+      tg: 'Мониторинги сифати таҳсилот',
+      ru: 'Мониторинг качества образования',
+      descTg: 'Таҳлили тестҳо, корҳои хаттӣ ва олимпиадаҳо',
+      descRu: 'Анализ срезов, контрольных работ и олимпиад',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синф / Фан', ru: 'Класс / Предмет', type: 'text' },
+        { key: 'topic', tg: 'Навъи санҷиш', ru: 'Вид среза', type: 'text' },
+        { key: 'note', tg: 'Сифат (%) / Эзоҳ', ru: 'Качество (%) / Прим.', type: 'text' },
+      ],
+    },
+    'school-upbringing-deputy': {
+      icon: '🌱',
+      tg: 'Дафтари корҳои тарбиявӣ',
+      ru: 'Журнал воспитательной работы',
+      descTg: 'Чорабиниҳо, вохӯриҳо ва пешгирии қонуншиканӣ',
+      descRu: 'Мероприятия, встречи и профилактика',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синфҳо / Фарогирӣ', ru: 'Классы / Охват', type: 'text' },
+        { key: 'topic', tg: 'Номи чорабинӣ', ru: 'Название мероприятия', type: 'text' },
+        { key: 'note', tg: 'Масъул / Натиҷа', ru: 'Ответственный / Итог', type: 'text' },
+      ],
+    },
+    'school-sozmon': {
+      icon: '🚩',
+      tg: 'Фаъолияти Созмони талабагон',
+      ru: 'Работа ученической организации (Созмон)',
+      descTg: 'Ҷаласаҳо, ташаббусҳо ва чорабиниҳои талабагон',
+      descRu: 'Собрания, инициативы и мероприятия учащихся',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Зина / Синфҳо', ru: 'Ступень / Классы', type: 'text' },
+        { key: 'topic', tg: 'Чорабинӣ / Ташаббус', ru: 'Мероприятие / Инициатива', type: 'text' },
+        { key: 'note', tg: 'Иштирокчиён', ru: 'Участники', type: 'text' },
+      ],
+    },
+    'school-military-preparation-deputy': {
+      icon: '🛡️',
+      tg: 'Омодагии дифои ҳарбӣ (ОДҲ)',
+      ru: 'Начальная военная подготовка (НВП)',
+      descTg: 'Тамринҳо, мусобиқаҳо ва қайди даъватшавандагон',
+      descRu: 'Строевая подготовка, сборы и учёт допризывников',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синф / Гурӯҳ', ru: 'Класс / Группа', type: 'text' },
+        { key: 'topic', tg: 'Машғулият / Мусобиқа', ru: 'Занятие / Соревнование', type: 'text' },
+        { key: 'note', tg: 'Натиҷа / Эзоҳ', ru: 'Результат / Прим.', type: 'text' },
+      ],
+    },
+    'school-girls-council-chair': {
+      icon: '🌸',
+      tg: 'Шӯрои духтарон ва кор бо хонандагон',
+      ru: 'Совет девушек и профилактическая работа',
+      descTg: 'Вохӯриҳо, маҳфилҳо ва корҳои фаҳмондадиҳӣ',
+      descRu: 'Встречи, кружки и разъяснительная работа',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синфҳо / Шумора', ru: 'Классы / Кол-во', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯи вохӯрӣ', ru: 'Тема встречи', type: 'text' },
+        { key: 'note', tg: 'Натиҷа', ru: 'Результат', type: 'text' },
+      ],
+    },
+    'school-psychologist': {
+      icon: '🧠',
+      tg: 'Дафтари машваратҳои психологӣ',
+      ru: 'Журнал психологических консультаций',
+      descTg: 'Муроҷиатҳо, ташхис ва тавсияҳои инфиродӣ',
+      descRu: 'Обращения, диагностика и индивидуальные рекомендации',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синф / Муроҷиаткунанда', ru: 'Класс / Обратившийся', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯъ / Сабаб', ru: 'Тема / Запрос', type: 'text' },
+        { key: 'note', tg: 'Тавсия', ru: 'Рекомендации', type: 'text' },
+      ],
+    },
+    'school-facilities-head': {
+      icon: '🔧',
+      tg: 'Баҳисобгирии амвол ва дархостҳои таъмир',
+      ru: 'Инвентарный учёт и заявки на ремонт',
+      descTg: 'Назорати синфхонаҳо, таҷҳизот ва таъмири ҷорӣ',
+      descRu: 'Контроль помещений, инвентаря и текущего ремонта',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Утоқ / Объект', ru: 'Кабинет / Объект', type: 'text' },
+        { key: 'topic', tg: 'Амвол / Мушкилот', ru: 'Инвентарь / Проблема', type: 'text' },
+        { key: 'note', tg: 'Миқдор / Ҳолат', ru: 'Кол-во / Состояние', type: 'text' },
+      ],
+    },
+    'school-canteen-head': {
+      icon: '🍽️',
+      tg: 'Таомномаи рӯзона ва назорати ошхона',
+      ru: 'Ежедневное меню и контроль столовой',
+      descTg: 'Бақайдгирии ғизои гарм, фарогирӣ ва санитария',
+      descRu: 'Учёт горячего питания, охвата и санитарии',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Баст / Синфҳо', ru: 'Смена / Классы', type: 'text' },
+        { key: 'topic', tg: 'Таомнома', ru: 'Меню / Блюда', type: 'text' },
+        { key: 'note', tg: 'Шумораи хӯрокхӯрон', ru: 'Охват учащихся', type: 'text' },
+      ],
+    },
+    'school-records-clerk': {
+      icon: '🗂️',
+      tg: 'Дафтари мукотибот ва фармонҳо',
+      ru: 'Журнал корреспонденции и приказов',
+      descTg: 'Қайди ҳуҷҷатҳои воридотӣ, содиротӣ ва фармонҳо',
+      descRu: 'Регистрация входящих, исходящих и приказов',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Рақам / Навъ', ru: '№ / Тип (Вх/Исх/Приказ)', type: 'text' },
+        { key: 'topic', tg: 'Мазмуни мухтасар', ru: 'Краткое содержание', type: 'text' },
+        { key: 'note', tg: 'Иҷрокунанда', ru: 'Исполнитель', type: 'text' },
+      ],
+    },
+    'school-upper-class-method-group': {
+      icon: '📐',
+      tg: 'Кори иттиҳодияи методии синфҳои болоӣ',
+      ru: 'Работа МО старших классов',
+      descTg: 'Ҷаласаҳо, дарсҳои кушод ва табодули таҷриба',
+      descRu: 'Заседания, открытые уроки и обмен опытом',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Иштирокчиён', ru: 'Участники', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯи ҷаласа / дарс', ru: 'Тема заседания / урока', type: 'text' },
+        { key: 'note', tg: 'Қарор', ru: 'Решение', type: 'text' },
+      ],
+    },
+    'school-lower-class-method-group': {
+      icon: '✏️',
+      tg: 'Кори иттиҳодияи методии синфҳои ибтидоӣ',
+      ru: 'Работа МО начальных классов',
+      descTg: 'Методикаи таълим, дарсҳои кушод ва нақшаҳо',
+      descRu: 'Методика обучения, открытые уроки и планы',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Иштирокчиён', ru: 'Участники', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯи ҷаласа / дарс', ru: 'Тема заседания / урока', type: 'text' },
+        { key: 'note', tg: 'Қарор', ru: 'Решение', type: 'text' },
+      ],
+    },
+    'school-five-method-groups': {
+      icon: '🔬',
+      tg: 'Кори иттиҳодияи методии фаннӣ',
+      ru: 'Работа предметного методического объединения',
+      descTg: 'Нақшаи фаннӣ, олимпиадаҳо ва маҳорати омӯзгорон',
+      descRu: 'Предметный план, олимпиады и мастерство педагогов',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Фан / Омӯзгорон', ru: 'Предмет / Педагоги', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯъ', ru: 'Тема', type: 'text' },
+        { key: 'note', tg: 'Қарор / Натиҷа', ru: 'Решение / Итог', type: 'text' },
+      ],
+    },
+    'school-subject-room-head': {
+      icon: '🖥️',
+      tg: 'Шиноснома ва таҷҳизоти кабинети фаннӣ',
+      ru: 'Паспорт и оснащение предметного кабинета',
+      descTg: 'Таҷҳизот, воситаҳои аёнӣ ва бехатарӣ',
+      descRu: 'Оборудование, наглядные пособия и безопасность',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Таҷҳизот / Восита', ru: 'Оборудование / Пособие', type: 'text' },
+        { key: 'topic', tg: 'Миқдор / Вазъият', ru: 'Количество / Состояние', type: 'text' },
+        { key: 'note', tg: 'Эзоҳ', ru: 'Примечание', type: 'text' },
+      ],
+    },
+    'school-class-teacher': {
+      icon: '📓',
+      tg: 'Дафтари роҳбари синф',
+      ru: 'Журнал классного руководителя',
+      descTg: 'Соатҳои тарбиявӣ, кор бо волидайн ва давомот',
+      descRu: 'Классные часы, работа с родителями и посещаемость',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Синф / Волидайн', ru: 'Класс / Родители', type: 'text' },
+        { key: 'topic', tg: 'Мавзӯъ / Ҳодиса', ru: 'Тема / Событие', type: 'text' },
+        { key: 'note', tg: 'Натиҷа', ru: 'Результат', type: 'text' },
+      ],
+    },
+    'office-head': {
+      icon: '🏛️',
+      tg: 'Назорати супоришҳо ва муассисаҳо (Маориф)',
+      ru: 'Контроль поручений и учреждений (Маориф)',
+      descTg: 'Иҷрои супоришҳо, санҷиши мактабҳо ва маҷлисҳо',
+      descRu: 'Исполнение поручений, проверки школ и совещания',
+      fields: [
+        { key: 'date', tg: 'Муҳлат', ru: 'Срок', type: 'date' },
+        { key: 'target', tg: 'Муассиса / Масъул', ru: 'Учреждение / Ответственный', type: 'text' },
+        { key: 'topic', tg: 'Супориш / Санҷиш', ru: 'Поручение / Проверка', type: 'text' },
+        { key: 'note', tg: 'Натиҷа', ru: 'Результат', type: 'text' },
+      ],
+    },
+    'office-clerk': {
+      icon: '📑',
+      tg: 'Коргузории шуъбаи маориф',
+      ru: 'Делопроизводство отдела образования',
+      descTg: 'Қайди мактубҳо, фармонҳо ва назорати иҷро',
+      descRu: 'Регистрация писем, приказов и контроль исполнения',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Рақам / Мактаб', ru: '№ / Школа', type: 'text' },
+        { key: 'topic', tg: 'Мазмуни ҳуҷҷат', ru: 'Содержание документа', type: 'text' },
+        { key: 'note', tg: 'Иҷрокунанда', ru: 'Исполнитель', type: 'text' },
+      ],
+    },
+    'raesat-head': {
+      icon: '🏢',
+      tg: 'Идоракунии минтақавӣ ва назорати Раёсат',
+      ru: 'Региональное управление и контроль Раёсата',
+      descTg: 'Супоришҳо ба шуъбаҳои маориф ва мониторинги вилоят',
+      descRu: 'Поручения отделам образования и мониторинг региона',
+      fields: [
+        { key: 'date', tg: 'Муҳлат', ru: 'Срок', type: 'date' },
+        { key: 'target', tg: 'Ноҳия / Шуъба', ru: 'Район / Отдел', type: 'text' },
+        { key: 'topic', tg: 'Супориш / Масъала', ru: 'Поручение / Вопрос', type: 'text' },
+        { key: 'note', tg: 'Иҷро', ru: 'Исполнение', type: 'text' },
+      ],
+    },
+    'raesat-clerk': {
+      icon: '🗃️',
+      tg: 'Коргузорӣ ва бойгонии Раёсат',
+      ru: 'Делопроизводство и архив Раёсата',
+      descTg: 'Мукотибот бо шаҳру ноҳияҳо ва назорати муҳлатҳо',
+      descRu: 'Корреспонденция с районами и контроль сроков',
+      fields: [
+        { key: 'date', tg: 'Сана', ru: 'Дата', type: 'date' },
+        { key: 'target', tg: 'Рақам / Ноҳия', ru: '№ / Район', type: 'text' },
+        { key: 'topic', tg: 'Мазмун', ru: 'Содержание', type: 'text' },
+        { key: 'note', tg: 'Масъул', ru: 'Ответственный', type: 'text' },
+      ],
+    },
+  };
+
+  const roleCfg = ROLE_WORKSPACE_CONFIGS[cabinetId] || null;
+  let renderRoleWorkspace = () => {};
+  if (roleCfg) {
+    registerModule('smRoleWorkspacePanel', roleCfg.icon, roleCfg.tg, roleCfg.ru, roleCfg.descTg, roleCfg.descRu);
+    const rwPanel = createPanel(article, 'smRoleWorkspacePanel');
+    const rwStorageKey = () => `smartmaktab.rw.v1.${cabinetId}.${ctx().organizationId || 'local'}`;
+    const readRwRows = () => {
+      try {
+        const raw = persistentStore.getItem(rwStorageKey());
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    };
+    const writeRwRows = (rows) => {
+      try { persistentStore.setItem(rwStorageKey(), JSON.stringify(rows)); } catch {}
+    };
+
+    renderRoleWorkspace = () => {
+      const rows = readRwRows();
+      const today = new Date().toISOString().slice(0, 10);
+      rwPanel.innerHTML = `
+        <div class="sm-card-head">
+          <h3>${esc(roleCfg.icon)} ${esc(txt(roleCfg.tg, roleCfg.ru))}</h3>
+          <p class="small">${esc(txt(roleCfg.descTg, roleCfg.descRu))}</p>
+        </div>
+        <form class="sm-grid-form" id="smRwForm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px;">
+          ${roleCfg.fields.map((f) => `
+            <label class="sm-field">
+              <span>${esc(txt(f.tg, f.ru))}</span>
+              <input type="${f.type === 'date' ? 'date' : 'text'}" name="${esc(f.key)}" value="${f.type === 'date' ? today : ''}" required />
+            </label>
+          `).join('')}
+          <label class="sm-field">
+            <span>${esc(txt('Ҳолат', 'Статус'))}</span>
+            <select name="status">
+              <option value="planned">${esc(txt('Дар нақша', 'Запланировано'))}</option>
+              <option value="done">${esc(txt('Иҷро шуд', 'Выполнено'))}</option>
+            </select>
+          </label>
+          <div style="display:flex;align-items:end;gap:8px;">
+            <button type="submit" class="button">${esc(txt('Илова кардан', 'Добавить'))}</button>
+            <button type="button" class="button alt" id="smRwExportCsv">${esc(txt('CSV', 'CSV'))}</button>
+          </div>
+        </form>
+        <div class="sm-table-wrap" style="overflow-x:auto;">
+          <table class="sm-table" style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                ${roleCfg.fields.map((f) => `<th>${esc(txt(f.tg, f.ru))}</th>`).join('')}
+                <th>${esc(txt('Ҳолат', 'Статус'))}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length ? rows.map((r, idx) => `
+                <tr>
+                  ${roleCfg.fields.map((f) => `<td>${esc(r[f.key] || '')}</td>`).join('')}
+                  <td>
+                    <button type="button" class="button alt sm-rw-toggle" data-idx="${idx}" style="padding:3px 8px;font-size:12px;">
+                      ${esc(r.status === 'done' ? txt('Иҷро шуд', 'Выполнено') : txt('Дар нақша', 'Запланировано'))}
+                    </button>
+                  </td>
+                  <td>
+                    <button type="button" class="button alt sm-rw-del" data-idx="${idx}" style="padding:3px 8px;font-size:12px;">✕</button>
+                  </td>
+                </tr>
+              `).join('') : `<tr><td colspan="${roleCfg.fields.length + 2}" class="small">${esc(txt('Ҳанӯз сабт нест.', 'Записей пока нет.'))}</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      rwPanel.querySelector('#smRwForm')?.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(ev.currentTarget);
+        const entry = { status: String(fd.get('status') || 'planned') };
+        for (const f of roleCfg.fields) entry[f.key] = String(fd.get(f.key) || '').trim();
+        const next = [entry, ...readRwRows()];
+        writeRwRows(next);
+        renderRoleWorkspace();
+      });
+
+      rwPanel.querySelectorAll('.sm-rw-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const i = Number(btn.dataset.idx);
+          const list = readRwRows();
+          if (list[i]) {
+            list[i].status = list[i].status === 'done' ? 'planned' : 'done';
+            writeRwRows(list);
+            renderRoleWorkspace();
+          }
+        });
+      });
+
+      rwPanel.querySelectorAll('.sm-rw-del').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const i = Number(btn.dataset.idx);
+          const list = readRwRows().filter((_, idx) => idx !== i);
+          writeRwRows(list);
+          renderRoleWorkspace();
+        });
+      });
+
+      rwPanel.querySelector('#smRwExportCsv')?.addEventListener('click', () => {
+        const list = readRwRows();
+        const headers = [...roleCfg.fields.map((f) => txt(f.tg, f.ru)), txt('Ҳолат', 'Статус')];
+        const csvLines = [
+          headers.join(';'),
+          ...list.map((r) => [
+            ...roleCfg.fields.map((f) => `"${String(r[f.key] || '').replace(/"/g, '""')}"`),
+            `"${r.status === 'done' ? txt('Иҷро шуд', 'Выполнено') : txt('Дар нақша', 'Запланировано')}"`,
+          ].join(';')),
+        ];
+        const blob = new Blob(['\uFEFF' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${cabinetId}-journal.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    };
+  }
+
   function refreshPanelById(id) {
     if (id === 'smStudentsPanel' && canStudents) renderStudents({ refresh: true });
     else if (id === 'smTeacherWorkloadPanel' && canWorkload) renderWorkload({ refresh: true });
@@ -1384,6 +1769,7 @@ export function setupPhase2Panels(article, docs, school, views) {
     else if (id === 'smAnalyticsPanel' && canAnalytics) renderAnalytics();
     else if (id === 'smVerificationPanel' && canVerify) renderVerification();
     else if (id === 'smUsersPanel' && canUsers) renderUsers({ refresh: true });
+    else if (id === 'smRoleWorkspacePanel' && roleCfg) renderRoleWorkspace();
   }
 
   function refreshAll(refreshData = true) {
@@ -1394,6 +1780,7 @@ export function setupPhase2Panels(article, docs, school, views) {
     if (canAnalytics) renderAnalytics();
     if (canVerify) renderVerification();
     if (canUsers) renderUsers({ refresh: refreshData });
+    if (roleCfg) renderRoleWorkspace();
   }
 
   function syncLabels() {
