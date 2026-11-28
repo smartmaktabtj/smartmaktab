@@ -1646,7 +1646,7 @@ export function setupPhase2Panels(article, docs, school, views) {
   let renderRoleWorkspace = () => {};
   if (roleCfg) {
     registerModule('smRoleWorkspacePanel', roleCfg.icon, roleCfg.tg, roleCfg.ru, roleCfg.descTg, roleCfg.descRu);
-    const rwPanel = addPanel('smRoleWorkspacePanel', roleCfg.icon, roleCfg.tg, roleCfg.ru);
+    const rwPanel = createPanel(article, 'smRoleWorkspacePanel');
     const rwStorageKey = () => `smartmaktab.rw.v1.${cabinetId}.${ctx().organizationId || 'local'}`;
     const readRwRows = () => {
       try {
