@@ -258,7 +258,7 @@ export function setupWorkspace({configured,school}){
  const label=(ru,tj)=>tg()?tj:ru;
 
  const profCard=createProfileManager(cabinetId,tg,label);
- drawer.append(profCard.card);
+ drawer.append(wrapAccordion(profCard.card));
 
  function wrapAccordion(el){
   if(!el)return null;
