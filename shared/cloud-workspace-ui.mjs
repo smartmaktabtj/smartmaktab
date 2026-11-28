@@ -357,14 +357,18 @@ export function setupCloudWorkspace(article, group, school) {
 
   const extraWrap = make('div', 'field school-field-wide');
   const extraLbl = make('span');
-  const extraListBox = make('div', 'control');
-  const aliyaLabel = make('label', 'small');
+  const extraListBox = make('div');
+  extraListBox.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin:8px 0;';
+  const aliyaLabel = make('label');
+  aliyaLabel.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line,#d1d5db);border-radius:10px;cursor:pointer;margin:6px 0;font-size:13px;font-weight:600;';
   const aliyaToggle = make('input');
   aliyaToggle.type = 'checkbox';
   aliyaToggle.id = 'cloudAliyaAddonToggle';
+  aliyaToggle.style.cssText = 'width:18px;height:18px;flex-shrink:0;cursor:pointer;';
   const aliyaTxt = make('span');
   aliyaLabel.append(aliyaToggle, aliyaTxt);
-  const tariffCalcLine = make('small', 'small');
+  const tariffCalcLine = make('div', 'notice');
+  tariffCalcLine.style.cssText = 'margin-top:8px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700;';
   extraWrap.append(extraLbl, extraListBox, aliyaLabel, tariffCalcLine);
 
   const fileWrap = make('label', 'field');
@@ -730,19 +734,27 @@ export function setupCloudWorkspace(article, group, school) {
       if (!compatibleIds.has(oldExtra)) selectedExtras.delete(oldExtra);
     }
     const nodes = compatible.map(r => {
-      const lbl = make('label', 'small');
+      const lbl = make('label');
+      lbl.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border:1px solid var(--line,#d1d5db);border-radius:10px;cursor:pointer;font-size:13px;background:rgba(255,255,255,0.02);';
+      const left = make('span');
+      left.style.cssText = 'display:flex;align-items:center;gap:8px;';
       const cb = make('input');
       cb.type = 'checkbox';
       cb.value = r.position_code;
       cb.checked = selectedExtras.has(r.position_code);
+      cb.style.cssText = 'width:17px;height:17px;flex-shrink:0;cursor:pointer;';
       cb.addEventListener('change', () => {
         if (cb.checked) selectedExtras.add(r.position_code);
         else selectedExtras.delete(r.position_code);
         updateTariffSummary();
       });
-      const txt = make('span');
-      txt.textContent = ` ${lang === 'ru' ? r.title_ru : r.title_tg} (+${Number(r.extra_price_tjs ?? r.base_price_tjs ?? 10).toFixed(2)} TJS)`;
-      lbl.append(cb, txt);
+      const titleEl = make('span');
+      titleEl.textContent = lang === 'ru' ? r.title_ru : r.title_tg;
+      left.append(cb, titleEl);
+      const priceEl = make('strong');
+      priceEl.style.cssText = 'font-size:12px;white-space:nowrap;opacity:0.85;';
+      priceEl.textContent = `+${Number(r.extra_price_tjs ?? r.base_price_tjs ?? 10).toFixed(0)} TJS`;
+      lbl.append(left, priceEl);
       extraCheckboxes.push(cb);
       return lbl;
     });
