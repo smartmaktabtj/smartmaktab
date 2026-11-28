@@ -1,9 +1,19 @@
 import {
   CATEGORY_LABELS,
   TAJIK_HOLIDAY_PRESETS,
+  TAHLIL_SUBJECTS_BY_CLASS,
+  getSubjectsForClassCode,
+  roundTajikGrade,
+  parseTahlilNumbers,
+  computeTahlilScore,
+  computePeriodDatesStatus,
   loadStudents,
   upsertStudents,
   deleteStudent,
+  loadStudentUpdateRequests,
+  submitStudentUpdateRequest,
+  reviewStudentUpdateRequest,
+  loadColleaguesDirectory,
   loadWorkloads,
   upsertWorkload,
   deleteWorkload,
@@ -13,10 +23,6 @@ import {
   loadQuarterGrades,
   saveQuarterGrades,
   computeGradeMetrics,
-  loadVerifications,
-  submitVerification,
-  directorReviewVerification,
-  maorifReviewVerification,
   loadAnalyticsSummary,
   resolvePhase2Context,
 } from './phase2-store.mjs';
@@ -24,11 +30,17 @@ import { persistentStore } from './cabinet-runtime.mjs';
 import { createCloudClient } from './cloud-client.mjs';
 import { getCloudConfig } from './cloud-config.mjs';
 import { smConfirm } from './sm-dialog.mjs';
-import { canPositionManageUsers, canPositionVerifySchoolStaff, formatPositionTitle } from './position-catalog.mjs';
+import {
+  canPositionManageUsers,
+  canPositionVerifySchoolStaff,
+  canPositionApproveStudentUpdates,
+  formatPositionTitle,
+} from './position-catalog.mjs';
 import {
   parseStudentImportFile,
   buildStudentsCsv,
   buildSimpleDocxBytes,
+  formatBirthDateDisplay,
 } from './spreadsheet-import.mjs';
 import {
   renderQualityRingSvg,
@@ -134,8 +146,7 @@ export function setupPhase2Panels(article, docs, school, views) {
   const canPayroll = isAccountant || isDirector;
   const canGrades = isClassOrQuality;
   const canAnalytics = isAuthority || ['school-director', 'school-education-quality', 'school-academic-deputy', 'school-primary-deputy', 'school-class-teacher'].includes(cabinetId);
-  const canVerify = true;
-  const canUsers = canPositionManageUsers(cabinetId);
+  const canUsers = true;
 
   const ctx = () => {
     const s = typeof school === 'function' ? school() : null;
@@ -181,6 +192,26 @@ export function setupPhase2Panels(article, docs, school, views) {
 
   // Mount core module cards directly on the main home grid (#smMainModules)
   const navEntries = [];
+  const moduleBadges = new Map();
+
+  function setModuleBadge(panelId, count) {
+    const b = moduleBadges.get(panelId);
+    if (!b) return;
+    const n = Number(count) || 0;
+    if (n > 0) {
+      b.textContent = String(n);
+      b.hidden = false;
+    } else {
+      b.textContent = '';
+      b.hidden = true;
+    }
+  }
+
+  function emitNotificationsSnapshot(extra = {}) {
+    try {
+      document.dispatchEvent(new CustomEvent('sm:notifications-updated', { detail: extra }));
+    } catch {}
+  }
 
   function registerModule(panelId, icon, labelTg, labelRu, descTg, descRu) {
     const tile = document.createElement('button');
@@ -196,7 +227,11 @@ export function setupPhase2Panels(article, docs, school, views) {
     const st = document.createElement('strong');
     const sm = document.createElement('small');
     body.append(st, sm);
-    tile.append(spIcon, body);
+    const badge = document.createElement('span');
+    badge.className = 'sm-mod-badge';
+    badge.hidden = true;
+    moduleBadges.set(panelId, badge);
+    tile.append(spIcon, body, badge);
     tile.addEventListener('click', () => {
       views.open(panelId, tile);
       refreshPanelById(panelId);
@@ -205,70 +240,99 @@ export function setupPhase2Panels(article, docs, school, views) {
     navEntries.push({ panelId, icon, labelTg, labelRu, descTg, descRu, st, sm });
   }
 
+  // Allow bell popover or other UI triggers to open a panel & specific subtab
+  document.addEventListener('sm:open-phase2-panel', ev => {
+    const { panelId, subtab } = ev.detail || {};
+    if (!panelId) return;
+    const tile = docs.querySelector(`[data-open-phase2="${panelId}"]`);
+    views.open(panelId, tile || undefined);
+    if (panelId === 'smStudentsPanel' && subtab) {
+      studentsTabMode = subtab;
+    }
+    refreshPanelById(panelId);
+  });
+
   // ============================================================================
-  // PANEL 1: STUDENTS REGISTRY + WORD/EXCEL IMPORT
+  // PANEL 1: STUDENTS REGISTRY + CLASS BUTTONS + SMART IMPORT + UPDATE REQUESTS
   // ============================================================================
+  let studentsTabMode = 'list';
   let renderStudents = () => {};
   if (canStudents) {
     const panel = createPanel(article, 'smStudentsPanel');
     registerModule(
       'smStudentsPanel',
       '👥',
-      'Феҳристи хонандагон (Word / Excel)',
-      'Реестр учеников (Word / Excel)',
-      'Воридоти рӯйхат аз .docx, .xlsx, .csv ва идоракунии синфҳо',
-      'Импорт списков из .docx, .xlsx, .csv и управление классами',
+      'Феҳристи хонандагон',
+      'Реестр учеников',
+      'Интихоби синф, санаи таваллуд, воридоти рӯйхат ва тасдиқи дархостҳо',
+      'Выбор класса, дата рождения, импорт списков и согласование заявок',
     );
 
-    let state = { rows: [], classFilter: '', statusMsg: '', defaultClass: '5А' };
+    let state = { rows: [], requests: [], classFilter: '', statusMsg: '', defaultClass: '5А' };
     let stuSeq = 0;
+    let stuInFlight = 0;
 
     renderStudents = async ({ refresh = true } = {}) => {
-      const mySeq = ++stuSeq;
+      if (!refresh && stuInFlight > 0) return;
       if (refresh) {
-        const loaded = await loadStudents(ctx());
-        if (mySeq !== stuSeq) return;
-        state.rows = loaded;
+        const mySeq = ++stuSeq;
+        stuInFlight += 1;
+        try {
+          const [loaded, reqs] = await Promise.all([loadStudents(ctx()), loadStudentUpdateRequests(ctx())]);
+          if (mySeq !== stuSeq) return;
+          state.rows = loaded;
+          state.requests = Array.isArray(reqs) ? reqs : [];
+        } finally {
+          stuInFlight = Math.max(0, stuInFlight - 1);
+        }
       }
+      const c = ctx();
       const l = getLang();
+      const canApprove = c.canApproveStudentUpdates;
+      const pendingReqs = state.requests.filter(r => r.status === 'pending');
+      setModuleBadge('smStudentsPanel', canApprove ? pendingReqs.length : 0);
+      emitNotificationsSnapshot({ studentRequests: canApprove ? pendingReqs : [] });
+
+      const classes = [...new Set(state.rows.map(r => String(r.class_code || '').toUpperCase()).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       const filtered = state.classFilter
         ? state.rows.filter(r => String(r.class_code || '').toUpperCase() === state.classFilter)
         : state.rows;
       const boys = filtered.filter(r => r.gender === 'male').length;
       const girls = filtered.filter(r => r.gender === 'female').length;
-      const classes = [...new Set(state.rows.map(r => String(r.class_code || '').toUpperCase()).filter(Boolean))].sort();
 
-      setPanelHtml(panel, `
-        <h2 tabindex="-1">${esc(txt('Феҳристи хонандагон ва воридот (Word / Excel)', 'Реестр учеников и импорт (Word / Excel)'))}</h2>
-        ${dbLockBannerHtml()}
-        <p class="small">${esc(txt('Файлҳои .docx, .xlsx, .csv ё .tsv-ро ворид кунед ё хонандаро дастӣ илова намоед.', 'Загрузите файл .docx, .xlsx, .csv или .tsv, либо добавьте ученика вручную.'))}</p>
+      const listHtml = `
         <div class="sm-p2-kpis">
           <div class="sm-p2-kpi"><span>${esc(txt('Ҳамагӣ хонандагон', 'Всего учеников'))}</span><b>${filtered.length}</b></div>
           <div class="sm-p2-kpi"><span>${esc(txt('Писарон', 'Мальчики'))}</span><b>${boys}</b></div>
           <div class="sm-p2-kpi"><span>${esc(txt('Духтарон', 'Девочки'))}</span><b>${girls}</b></div>
           <div class="sm-p2-kpi"><span>${esc(txt('Синфҳо', 'Классов'))}</span><b>${classes.length}</b></div>
         </div>
+        <div>
+          <strong class="small">${esc(txt('Интихоби синф:', 'Выбор класса:'))}</strong>
+          <div class="sm-class-pills" id="smStuClassPills">
+            <button type="button" class="sm-class-pill ${state.classFilter === '' ? 'is-active' : ''}" data-cls-pick="">${esc(txt('Ҳамаи синфҳо', 'Все классы'))} (${state.rows.length})</button>
+            ${classes.map(cls => {
+              const cnt = state.rows.filter(r => String(r.class_code || '').toUpperCase() === cls).length;
+              return `<button type="button" class="sm-class-pill ${state.classFilter === cls ? 'is-active' : ''}" data-cls-pick="${esc(cls)}">${esc(cls)} (${cnt})</button>`;
+            }).join('')}
+          </div>
+        </div>
         <div class="sm-p2-grid">
-          <label class="field"><span>${esc(txt('Филтри синф', 'Фильтр класса'))}</span>
-            <select id="smStuClassFilter">
-              <option value="">${esc(txt('Ҳамаи синфҳо', 'Все классы'))}</option>
-              ${classes.map(c => `<option value="${esc(c)}" ${state.classFilter === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-            </select>
-          </label>
-          <label class="field"><span>${esc(txt('Синфи пешфарз барои воридот', 'Класс по умолчанию для импорта'))}</span>
+          <label class="field"><span>${esc(txt('Синфи интихобшуда барои воридот', 'Класс по умолчанию для импорта'))}</span>
             <input id="smStuImportClass" type="text" maxlength="12" value="${esc(state.defaultClass)}" placeholder="5А">
           </label>
-          <label class="field"><span>${esc(txt('Воридот аз Word (.docx) / Excel (.xlsx, .csv)', 'Импорт из Word (.docx) / Excel (.xlsx, .csv)'))}</span>
+          <label class="field"><span>${esc(txt('Воридот аз Word (.docx) / Excel (.xlsx, .csv, .txt)', 'Импорт из Word (.docx) / Excel (.xlsx, .csv, .txt)'))}</span>
             <input id="smStuFile" type="file" accept=".docx,.xlsx,.csv,.tsv,.txt">
           </label>
           <label class="field" style="justify-content:end">
             <span style="display:flex;align-items:center;gap:6px"><input id="smStuReplace" type="checkbox" style="width:auto"> ${esc(txt('Иваз кардани синфи интихобшуда', 'Заменить выбранный класс'))}</span>
           </label>
         </div>
+        ${!canApprove ? `<div class="notice">${esc(txt('Шумо дар вазифаи худ метавонед тағйиротро ҳамчун дархости расмӣ бо ному вазифаатон фиристед — пас аз тасдиқи роҳбарият ё роҳбари синф ба феҳрист ворид мешавад.', 'Ваша должность отправляет изменения как именную заявку на утверждение руководству или классному руководителю.'))}</div>` : ''}
         <form id="smStuAddForm" class="sm-p2-grid" autocomplete="off">
           <label class="field"><span>${esc(txt('Ному насаби хонанда', 'ФИО ученика'))}</span><input id="smStuName" type="text" required maxlength="180" placeholder="${esc(txt('Алиев Беҳрӯз Рустамович', 'Алиев Бехруз Рустамович'))}"></label>
           <label class="field"><span>${esc(txt('Синф', 'Класс'))}</span><input id="smStuCls" type="text" required maxlength="12" value="${esc(state.classFilter || state.defaultClass)}" placeholder="5А"></label>
-          <label class="field"><span>${esc(txt('Соли таваллуд', 'Год рождения'))}</span><input id="smStuBirth" type="number" min="1995" max="2026" placeholder="2014"></label>
+          <label class="field"><span>${esc(txt('Санаи таваллуд', 'Дата рождения'))}</span><input id="smStuBirthDate" type="date" min="1995-01-01" max="2026-12-31"></label>
           <label class="field"><span>${esc(txt('Ҷинс', 'Пол'))}</span>
             <select id="smStuGender">
               <option value="">—</option>
@@ -277,38 +341,97 @@ export function setupPhase2Panels(article, docs, school, views) {
             </select>
           </label>
           <div class="control" style="align-self:end;margin:0">
-            <button type="submit" class="button" id="smStuAddBtn">${esc(txt('+ Илова кардан', '+ Добавить'))}</button>
+            <button type="submit" class="button" id="smStuAddBtn">${esc(canApprove ? txt('+ Илова кардан', '+ Добавить') : txt('Фиристодани дархост', 'Отправить заявку'))}</button>
           </div>
         </form>
         <div class="sm-p2-actions">
           <button type="button" class="button alt" id="smStuExportCsv">${esc(txt('Боргирии Excel (.csv)', 'Скачать Excel (.csv)'))}</button>
           <button type="button" class="button alt" id="smStuExportDocx">${esc(txt('Боргирии Word (.docx)', 'Скачать Word (.docx)'))}</button>
-          <button type="button" class="button" id="smStuSubmitVerif">${esc(txt('Фиристодан барои тасдиқ', 'Отправить на проверку'))}</button>
           <span id="smStuStatus" class="small" role="status">${esc(state.statusMsg)}</span>
         </div>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>№</th><th>${esc(txt('Ному насаб', 'ФИО'))}</th><th>${esc(txt('Синф', 'Класс'))}</th><th>${esc(txt('Соли тав.', 'Год рожд.'))}</th><th>${esc(txt('Ҷинс', 'Пол'))}</th><th></th></tr></thead>
+            <thead><tr><th>№</th><th>${esc(txt('Ному насаб', 'ФИО'))}</th><th>${esc(txt('Синф', 'Класс'))}</th><th>${esc(txt('Санаи таваллуд', 'Дата рождения'))}</th><th>${esc(txt('Ҷинс', 'Пол'))}</th><th></th></tr></thead>
             <tbody>
               ${filtered.length ? filtered.map((r, i) => `
                 <tr>
                   <td>${i + 1}</td>
                   <td><strong>${esc(r.full_name)}</strong>${r.guardian_phone ? `<div class="small">${esc(r.guardian_phone)}</div>` : ''}</td>
                   <td><span class="tag">${esc(r.class_code)}</span></td>
-                  <td>${r.birth_year || '—'}</td>
+                  <td>${esc(formatBirthDateDisplay(r.birth_date, r.birth_year) || '—')}</td>
                   <td>${r.gender === 'male' ? txt('Писар', 'М') : (r.gender === 'female' ? txt('Духтар', 'Ж') : '—')}</td>
-                  <td><button type="button" class="button alt" data-del-student="${esc(r.id)}">✕</button></td>
+                  <td><button type="button" class="button alt" data-del-student="${esc(r.id)}" data-del-name="${esc(r.full_name)}" data-del-cls="${esc(r.class_code)}">✕</button></td>
                 </tr>
-              `).join('') : `<tr><td colspan="6" class="small">${esc(txt('Рӯйхат холӣ аст. Аз Word/Excel ворид кунед ё дастӣ илова намоед.', 'Список пуст. Импортируйте из Word/Excel или добавьте вручную.'))}</td></tr>`}
+              `).join('') : `<tr><td colspan="6" class="small">${esc(txt('Рӯйхат холӣ аст. Синфро интихоб кунед, файл ворид кунед ё дастӣ илова намоед.', 'Список пуст. Выберите класс, импортируйте файл или добавьте ученика вручную.'))}</td></tr>`}
             </tbody>
           </table>
         </div>
+      `;
+
+      const actionLabel = act => ({
+        import: txt('Воридоти рӯйхат', 'Импорт списка'),
+        add: txt('Иловаи хонанда', 'Добавление ученика'),
+        update: txt('Тағйири маълумот', 'Изменение данных'),
+        delete: txt('Хориҷ кардани хонанда', 'Удаление ученика'),
+      }[act] || act);
+
+      const requestsHtml = `
+        <p class="small">${esc(txt('Дар ин бахш дархостҳои воридшуда бо ному насаб ва вазифаи фиристонанда намоиш дода мешаванд.', 'Здесь показаны входящие заявки с ФИО и должностью отправителя.'))}</p>
+        <p id="smStuReqStatus" class="small" role="status">${esc(state.statusMsg)}</p>
+        ${state.requests.length ? state.requests.map(req => {
+          const rowsArr = Array.isArray(req.rows_payload) ? req.rows_payload : [];
+          const stCls = req.status === 'approved' ? 'approved' : (req.status === 'rejected' ? 'rejected' : 'pending');
+          const stTxt = req.status === 'approved' ? txt('Тасдиқ шуд', 'Одобрено') : (req.status === 'rejected' ? txt('Рад шуд', 'Отклонено') : txt('Интизор', 'Ожидает'));
+          const previewNames = rowsArr.slice(0, 5).map(x => `${x.full_name || ''}${x.birth_date ? ` (${formatBirthDateDisplay(x.birth_date, x.birth_year)})` : ''}`).filter(Boolean).join(', ');
+          const dtStr = (req.created_at || '').replace('T', ' ').slice(0, 16);
+          return `
+            <div class="sm-req-card">
+              <div class="sm-req-sender">
+                <div>
+                  <strong>👤 ${esc(req.requested_by_name || txt('Корманд', 'Сотрудник'))}</strong>
+                  ${req.requested_by_position ? `<span class="tag">${esc(req.requested_by_position)}</span>` : ''}
+                </div>
+                <span class="sm-badge sm-badge-${stCls}">${esc(stTxt)}</span>
+              </div>
+              <div class="small">
+                <strong>${esc(actionLabel(req.action_type))}</strong> · ${esc(txt('Синф:', 'Класс:'))} <b>${esc(req.class_code || '—')}</b> · ${esc(txt('Сабтҳо:', 'Записей:'))} ${rowsArr.length}${dtStr ? ` · ${esc(dtStr)}` : ''}
+              </div>
+              ${req.summary_text ? `<div class="small">${esc(req.summary_text)}</div>` : ''}
+              ${previewNames ? `<div class="small">${esc(previewNames)}${rowsArr.length > 5 ? ` … (+${rowsArr.length - 5})` : ''}</div>` : ''}
+              ${req.reviewed_by_name ? `<div class="small">${esc(txt('Баррасӣ кард:', 'Рассмотрел:'))} ${esc(req.reviewed_by_name)}</div>` : ''}
+              ${req.status === 'pending' && canApprove ? `
+                <div class="sm-p2-actions" style="margin:4px 0 0">
+                  <button type="button" class="button" data-stu-req-act="approved" data-req-id="${esc(req.id)}">✓ ${esc(txt('Тасдиқ ва татбиқ', 'Одобрить и применить'))}</button>
+                  <button type="button" class="button alt" data-stu-req-act="rejected" data-req-id="${esc(req.id)}">✕ ${esc(txt('Рад кардан', 'Отклонить'))}</button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('') : `<div class="notice">${esc(txt('Ҳанӯз дархости навсозии хонандагон вуҷуд надорад.', 'Заявок на обновление списка учеников пока нет.'))}</div>`}
+      `;
+
+      setPanelHtml(panel, `
+        <h2 tabindex="-1">${esc(txt('Феҳристи хонандагон', 'Реестр учеников'))}</h2>
+        ${dbLockBannerHtml()}
+        <div class="sm-subtabs">
+          <button type="button" class="sm-subtab ${studentsTabMode === 'list' ? 'is-active' : ''}" data-stu-tab="list">📋 ${esc(txt('Синфҳо ва хонандагон', 'Классы и ученики'))}</button>
+          <button type="button" class="sm-subtab ${studentsTabMode === 'requests' ? 'is-active' : ''}" data-stu-tab="requests">🔔 ${esc(txt('Дархостҳо', 'Заявки'))}${pendingReqs.length ? ` <span class="sm-bell-count">${pendingReqs.length}</span>` : ''}</button>
+        </div>
+        ${studentsTabMode === 'requests' ? requestsHtml : listHtml}
       `);
 
-      panel.querySelector('#smStuClassFilter')?.addEventListener('change', ev => {
-        state.classFilter = ev.target.value;
-        if (state.classFilter) state.defaultClass = state.classFilter;
-        renderStudents({ refresh: false });
+      panel.querySelectorAll('[data-stu-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          studentsTabMode = btn.dataset.stuTab || 'list';
+          renderStudents({ refresh: false });
+        });
+      });
+      panel.querySelectorAll('[data-cls-pick]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.classFilter = btn.dataset.clsPick || '';
+          if (state.classFilter) state.defaultClass = state.classFilter;
+          renderStudents({ refresh: false });
+        });
       });
       panel.querySelector('#smStuImportClass')?.addEventListener('input', ev => {
         state.defaultClass = ev.target.value.trim().toUpperCase() || '5А';
@@ -326,10 +449,22 @@ export function setupPhase2Panels(article, docs, school, views) {
             return;
           }
           const replaceCls = panel.querySelector('#smStuReplace')?.checked ? state.defaultClass : '';
-          state.rows = await upsertStudents(ctx(), parsed.rows, { replaceClass: replaceCls });
-          state.statusMsg = l === 'ru'
-            ? `Импортировано из ${parsed.format.toUpperCase()}: ${parsed.rows.length} уч.`
-            : `Аз ${parsed.format.toUpperCase()} ворид шуд: ${parsed.rows.length} хонанда.`;
+          if (canApprove) {
+            state.rows = await upsertStudents(ctx(), parsed.rows, { replaceClass: replaceCls });
+            state.statusMsg = l === 'ru'
+              ? `Импортировано из ${parsed.format.toUpperCase()}: ${parsed.rows.length} уч.`
+              : `Аз ${parsed.format.toUpperCase()} ворид шуд: ${parsed.rows.length} хонанда.`;
+          } else {
+            await submitStudentUpdateRequest(ctx(), {
+              classCode: state.defaultClass,
+              actionType: 'import',
+              replaceClass: Boolean(replaceCls),
+              rowsPayload: parsed.rows,
+              summaryText: `${txt('Воридот аз файл', 'Импорт из файла')} (${parsed.format.toUpperCase()}): ${parsed.rows.length}`,
+            });
+            state.requests = await loadStudentUpdateRequests(ctx());
+            state.statusMsg = txt('Дархости воридот бо ному вазифаи шумо барои тасдиқ фиристода шуд.', 'Заявка на импорт с вашим ФИО и должностью отправлена на согласование.');
+          }
           await renderStudents({ refresh: false });
           if (canGrades) await renderGrades({ refresh: true });
           if (canAnalytics) await renderAnalytics();
@@ -342,18 +477,34 @@ export function setupPhase2Panels(article, docs, school, views) {
         ev.preventDefault();
         const fullName = panel.querySelector('#smStuName')?.value.trim();
         const cls = panel.querySelector('#smStuCls')?.value.trim().toUpperCase() || state.defaultClass;
-        const birth = panel.querySelector('#smStuBirth')?.value.trim();
+        const bDate = panel.querySelector('#smStuBirthDate')?.value.trim() || '';
+        const birthYear = bDate ? Number(bDate.slice(0, 4)) : null;
         const gender = panel.querySelector('#smStuGender')?.value || '';
         if (!fullName) return;
         ++stuSeq;
-        state.rows = await upsertStudents(ctx(), [{
+        const payloadRow = {
           full_name: fullName,
           class_code: cls,
-          birth_year: birth ? Number(birth) : null,
+          birth_date: bDate || null,
+          birth_year: birthYear,
           gender,
-        }]);
+        };
+        if (canApprove) {
+          state.rows = await upsertStudents(ctx(), [payloadRow]);
+          state.statusMsg = txt(`Хонанда илова шуд (${cls}).`, `Ученик добавлен (${cls}).`);
+        } else {
+          await submitStudentUpdateRequest(ctx(), {
+            classCode: cls,
+            actionType: 'add',
+            replaceClass: false,
+            rowsPayload: [payloadRow],
+            summaryText: `${txt('Иловаи хонанда', 'Добавление ученика')}: ${fullName} (${cls})`,
+          });
+          state.requests = await loadStudentUpdateRequests(ctx());
+          state.statusMsg = txt('Дархост барои тасдиқ фиристода шуд.', 'Заявка отправлена на подтверждение.');
+        }
         state.defaultClass = cls;
-        state.statusMsg = txt(`Хонанда илова шуд (${cls}).`, `Ученик добавлен (${cls}).`);
+        state.classFilter = cls;
         await renderStudents({ refresh: false });
         if (canGrades) await renderGrades({ refresh: true });
         if (canAnalytics) await renderAnalytics();
@@ -361,9 +512,44 @@ export function setupPhase2Panels(article, docs, school, views) {
       panel.querySelectorAll('[data-del-student]').forEach(btn => {
         btn.addEventListener('click', async () => {
           ++stuSeq;
-          state.rows = await deleteStudent(ctx(), btn.dataset.delStudent);
-          state.statusMsg = txt('Хонанда хориҷ шуд.', 'Ученик удалён.');
+          const sid = btn.dataset.delStudent;
+          const sname = btn.dataset.delName || '';
+          const scls = btn.dataset.delCls || state.defaultClass;
+          if (canApprove) {
+            state.rows = await deleteStudent(ctx(), sid);
+            state.statusMsg = txt('Хонанда хориҷ шуд.', 'Ученик удалён.');
+          } else {
+            await submitStudentUpdateRequest(ctx(), {
+              classCode: scls,
+              actionType: 'delete',
+              replaceClass: false,
+              rowsPayload: [{ id: sid, full_name: sname, class_code: scls }],
+              summaryText: `${txt('Дархости хориҷ кардан', 'Запрос на удаление')}: ${sname}`,
+            });
+            state.requests = await loadStudentUpdateRequests(ctx());
+            state.statusMsg = txt('Дархости хориҷ кардан бо ному вазифаи шумо фиристода шуд.', 'Запрос на удаление с вашим ФИО и должностью отправлен.');
+          }
           await renderStudents({ refresh: false });
+        });
+      });
+      panel.querySelectorAll('[data-stu-req-act]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const dec = btn.dataset.stuReqAct;
+          const reqId = btn.dataset.reqId;
+          try {
+            state.requests = await reviewStudentUpdateRequest(ctx(), reqId, dec, '');
+            state.rows = await loadStudents(ctx());
+            state.statusMsg = dec === 'approved'
+              ? txt('Дархост тасдиқ ва ба феҳрист ворид шуд.', 'Заявка одобрена и применена к списку.')
+              : txt('Дархост рад карда шуд.', 'Заявка отклонена.');
+            await renderStudents({ refresh: false });
+            if (canGrades) await renderGrades({ refresh: true });
+            if (canAnalytics) await renderAnalytics();
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderStudents({ refresh: false });
+          }
         });
       });
       panel.querySelector('#smStuExportCsv')?.addEventListener('click', () => {
@@ -372,21 +558,10 @@ export function setupPhase2Panels(article, docs, school, views) {
       panel.querySelector('#smStuExportDocx')?.addEventListener('click', () => {
         const bytes = buildSimpleDocxBytes(
           txt('Феҳристи хонандагон', 'Список учеников'),
-          ['№', txt('Ному насаб', 'ФИО'), txt('Синф', 'Класс'), txt('Соли тав.', 'Год рожд.')],
-          filtered.map((r, i) => [String(i + 1), r.full_name, r.class_code, String(r.birth_year || '')]),
+          ['№', txt('Ному насаб', 'ФИО'), txt('Синф', 'Класс'), txt('Санаи таваллуд', 'Дата рождения')],
+          filtered.map((r, i) => [String(i + 1), r.full_name, r.class_code, formatBirthDateDisplay(r.birth_date, r.birth_year)]),
         );
         downloadBlob(bytes, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'students.docx');
-      });
-      panel.querySelector('#smStuSubmitVerif')?.addEventListener('click', async () => {
-        await submitVerification(ctx(), {
-          category: 'student_registry',
-          title: `${txt('Феҳристи хонандагон', 'Реестр учеников')} (${state.classFilter || txt('Ҳама', 'Все')}: ${filtered.length})`,
-          periodLabel: '2026-2027',
-          payload: { count: filtered.length, class_filter: state.classFilter || 'all' },
-        });
-        state.statusMsg = txt('Барои тасдиқи директор фиристода шуд.', 'Отправлено на проверку директору.');
-        await renderVerification();
-        renderStudents({ refresh: false });
       });
     };
   }
@@ -408,12 +583,19 @@ export function setupPhase2Panels(article, docs, school, views) {
 
     let state = { rows: [], statusMsg: '' };
     let wkSeq = 0;
+    let wkInFlight = 0;
     renderWorkload = async ({ refresh = true } = {}) => {
-      const mySeq = ++wkSeq;
+      if (!refresh && wkInFlight > 0) return;
       if (refresh) {
-        const loaded = await loadWorkloads(ctx());
-        if (mySeq !== wkSeq) return;
-        state.rows = loaded;
+        const mySeq = ++wkSeq;
+        wkInFlight += 1;
+        try {
+          const loaded = await loadWorkloads(ctx());
+          if (mySeq !== wkSeq) return;
+          state.rows = loaded;
+        } finally {
+          wkInFlight = Math.max(0, wkInFlight - 1);
+        }
       }
       const totalHrs = state.rows.reduce((s, r) => s + (Number(r.weekly_hours) || 0), 0);
       const l = getLang();
@@ -532,14 +714,21 @@ export function setupPhase2Panels(article, docs, school, views) {
     const nowYm = new Date().toISOString().slice(0, 7);
     let state = { cfg: null, workloads: [], yearMonth: nowYm, statusMsg: '' };
     let paySeq = 0;
+    let payInFlight = 0;
 
     renderPayroll = async ({ refresh = true } = {}) => {
-      const mySeq = ++paySeq;
+      if (!refresh && payInFlight > 0) return;
       if (refresh || !state.cfg) {
-        const [cfg, wks] = await Promise.all([loadPayrollConfig(ctx()), loadWorkloads(ctx())]);
-        if (mySeq !== paySeq) return;
-        state.cfg = cfg;
-        state.workloads = wks;
+        const mySeq = ++paySeq;
+        payInFlight += 1;
+        try {
+          const [cfg, wks] = await Promise.all([loadPayrollConfig(ctx()), loadWorkloads(ctx())]);
+          if (mySeq !== paySeq) return;
+          state.cfg = cfg;
+          state.workloads = wks;
+        } finally {
+          payInFlight = Math.max(0, payInFlight - 1);
+        }
       }
       const calc = computeMonthlyPayroll(state.cfg, state.workloads, state.yearMonth);
       const dayNames = getLang() === 'ru'
@@ -599,7 +788,6 @@ export function setupPhase2Panels(article, docs, school, views) {
         </div>
         <div class="sm-p2-actions">
           <button type="button" class="button alt" id="smPayExportCsv">${esc(txt('Содироти ведомост (.csv)', 'Экспорт ведомости (.csv)'))}</button>
-          <button type="button" class="button" id="smPaySubmitVerif">${esc(txt('Фиристодан барои тасдиқи директор', 'Отправить ведомость директору'))}</button>
           <span id="smPayStatus" class="small" role="status">${esc(state.statusMsg)}</span>
         </div>
         <div class="table-scroll">
@@ -676,22 +864,11 @@ export function setupPhase2Panels(article, docs, school, views) {
         calc.rows.forEach((r, i) => lines.push([i + 1, `"${r.teacher_name}"`, r.weekly_hours, r.basePay, (r.categoryBonus + r.supplements).toFixed(2), r.grossPay, (r.incomeTax + r.socialTax).toFixed(2), r.netPay].join(',')));
         downloadBlob(lines.join('\r\n'), 'text/csv;charset=utf-8', `payroll-${state.yearMonth}.csv`);
       });
-      panel.querySelector('#smPaySubmitVerif')?.addEventListener('click', async () => {
-        await submitVerification(ctx(), {
-          category: 'payroll',
-          title: `${txt('Ведомости маош', 'Зарплатная ведомость')} (${state.yearMonth}) — ${calc.totals.net.toFixed(2)} TJS`,
-          periodLabel: state.yearMonth,
-          payload: { month: state.yearMonth, working_days: calc.calendar.effectiveWorkingDays, total_net_tjs: calc.totals.net, staff_count: calc.rows.length },
-        });
-        state.statusMsg = txt('Ведомост барои тасдиқи директор фиристода шуд.', 'Ведомость отправлена директору на проверку.');
-        await renderVerification();
-        renderPayroll({ refresh: false });
-      });
     };
   }
 
   // ============================================================================
-  // PANEL 4: CLASS TEACHER QUARTER GRADES & LIVE ANIMATED CHARTS
+  // PANEL 4: CLASS TEACHER QUARTER GRADES & TAHLIL ANALYTICS
   // ============================================================================
   let renderGrades = () => {};
   if (canGrades) {
@@ -701,32 +878,98 @@ export function setupPhase2Panels(article, docs, school, views) {
       '📊',
       'Баҳоҳои чорякӣ ва сифат',
       'Четвертные оценки и качество',
-      'Воридоти баҳоҳои хонандагон (10-хола), таҳлили сифат ва нақшаҳои зинда',
-      'Ввод четвертных оценок (10-балльная), качество знаний и живые графики',
+      'Таҳлил (10-хола), пешгӯии баҳо, журнали фан ва ҷамъбасти Роҳбари синф',
+      'Тахлил (10-балльная), прогноз баллов, журнал предмета и сводка классного руководителя',
     );
 
     let state = {
+      subtab: 'journal', // 'calc' | 'journal' | 'roh'
       yearStart: 2026,
       period: 'q1',
       classCode: '5А',
       subject: 'Математика',
+      periodStart: '',
+      periodEnd: '',
       rows: [],
       allYearRows: [],
+      schoolClasses: [],
+      rohSubjects: [],
+      rohFocusIdx: 0,
+      rohEditing: false,
+      calcCur: '',
+      calcCtrl: '',
+      calcPeriods: [
+        { label: 'Ч1', val: '' },
+        { label: 'Ч2', val: '' },
+        { label: 'Ч3', val: '' },
+        { label: 'Ч4', val: '' },
+      ],
       statusMsg: '',
     };
 
     let grSeq = 0;
+    let grInFlight = 0;
+
+    const gradeTierClass = g => (g >= 8 ? 'is-high' : (g >= 5 ? 'is-mid' : (g >= 1 ? 'is-low' : 'is-none')));
+    const gradeHex = g => (g >= 8 ? '#27ae60' : (g >= 5 ? '#f39c12' : '#e74c3c'));
+
+    const renderCalcResultMarkup = (curVal, ctrlVal) => {
+      const score = computeTahlilScore(curVal, ctrlVal);
+      if (!score) {
+        return `<div class="notice">${esc(txt('Баҳоҳои ҷорӣ ё контролро ворид кунед (мас.: 8, 9, 10) — натиҷа фавран ҳисоб мешавад.', 'Введите текущие или контрольные оценки (напр.: 8, 9, 10) — итог посчитается сразу.'))}</div>`;
+      }
+      const cls = gradeTierClass(score.finalGrade);
+      const em = score.finalGrade >= 9 ? '🎉' : (score.finalGrade >= 7 ? '😊' : (score.finalGrade >= 5 ? '😐' : '😟'));
+      return `
+        <div class="sm-tahlil-score-card ${cls}">
+          <div class="small" style="color:rgba(255,255,255,.85)">${esc(txt('БАҲОИ НИҲОӢ (10-ХОЛА)', 'ИТОГОВАЯ ОЦЕНКА (10-БАЛЛЬНАЯ)'))}</div>
+          <div class="sm-tahlil-score-num">${score.finalGrade} ${em}</div>
+          <div style="font-size:.86rem;opacity:.92">${esc(txt('Ҷорӣ:', 'Текущие:'))} <b>${score.avgCurrent.toFixed(2)}</b> · ${esc(txt('Контролӣ:', 'Контрольные:'))} <b>${score.avgControl.toFixed(2)}</b> · ${esc(txt('Миёна:', 'Среднее:'))} <b>${score.exactAvg.toFixed(2)} → ${score.finalGrade}</b></div>
+        </div>
+        ${score.prognosis ? `
+          <div class="notice" style="margin-top:8px">
+            💡 ${esc(txt(
+              `Барои гирифтани баҳои ${score.prognosis.targetGrade} боз 1 баҳои ${score.prognosis.neededScore} лозим аст.`,
+              `Для получения оценки ${score.prognosis.targetGrade} нужен ещё 1 балл ${score.prognosis.neededScore}.`,
+            ))}
+          </div>
+        ` : ''}
+      `;
+    };
+
+    const renderPeriodSummaryMarkup = () => {
+      const nums = state.calcPeriods.map(p => Number(p.val)).filter(n => Number.isFinite(n) && n >= 1 && n <= 10);
+      if (!nums.length) return `<span class="small">${esc(txt('Баҳоҳои чорякҳоро ворид кунед.', 'Введите оценки четвертей.'))}</span>`;
+      const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+      const fin = roundTajikGrade(avg);
+      return `<div class="sm-tahlil-score-card ${gradeTierClass(fin)}" style="padding:10px">
+        <div>${esc(txt('Ҷамъбасти давраҳо', 'Итог по периодам'))}: <b>${avg.toFixed(2)} → <span style="font-size:1.5rem">${fin}</span></b></div>
+      </div>`;
+    };
 
     renderGrades = async ({ refresh = true } = {}) => {
-      const mySeq = ++grSeq;
+      if (!refresh && grInFlight > 0) return;
       if (refresh) {
-        const [slice, fullYear, roster] = await Promise.all([
-          loadQuarterGrades(ctx(), { yearStart: state.yearStart, period: state.period, classCode: state.classCode, subject: state.subject }),
-          loadQuarterGrades(ctx(), { yearStart: state.yearStart }),
-          loadStudents(ctx(), state.classCode),
-        ]);
+        const mySeq = ++grSeq;
+        grInFlight += 1;
+        let slice, fullYear, roster, allRoster;
+        try {
+          [slice, fullYear, roster, allRoster] = await Promise.all([
+            loadQuarterGrades(ctx(), { yearStart: state.yearStart, period: state.period, classCode: state.classCode, subject: state.subject }),
+            loadQuarterGrades(ctx(), { yearStart: state.yearStart }),
+            loadStudents(ctx(), state.classCode),
+            loadStudents(ctx()),
+          ]);
+        } finally {
+          grInFlight = Math.max(0, grInFlight - 1);
+        }
         if (mySeq !== grSeq) return;
         state.allYearRows = fullYear;
+        state.schoolClasses = [...new Set([
+          ...allRoster.map(r => String(r.class_code || '').toUpperCase()),
+          ...fullYear.map(r => String(r.class_code || '').toUpperCase()),
+        ].filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
         const byName = new Map(slice.map(r => [r.student_name.toLowerCase(), r]));
         for (const st of roster) {
           const k = st.full_name.toLowerCase();
@@ -736,88 +979,432 @@ export function setupPhase2Panels(article, docs, school, views) {
               student_name: st.full_name,
               class_code: st.class_code,
               grade: '',
+              current_grades: [],
+              control_grades: [],
               absent_hours: 0,
             });
           }
         }
         state.rows = [...byName.values()];
+        if (!state.periodStart && slice[0]?.period_start) state.periodStart = slice[0].period_start;
+        if (!state.periodEnd && slice[0]?.period_end) state.periodEnd = slice[0].period_end;
       }
 
+      const defaultSubjs = getSubjectsForClassCode(state.classCode);
+      if (!state.rohSubjects.length) state.rohSubjects = [...defaultSubjs];
+      const allSubjsForPicker = [...new Set([...defaultSubjs, ...state.rohSubjects, state.subject].filter(Boolean))];
+      const periodOrder = [
+        { code: 'q1', tg: 'Ч1 (Чораки 1)', ru: 'Ч1 (1-я четверть)' },
+        { code: 'q2', tg: 'Ч2 (Чораки 2)', ru: 'Ч2 (2-я четверть)' },
+        { code: 'h1', tg: 'Н1 (Нимсолаи 1)', ru: 'П1 (1-е полугодие)' },
+        { code: 'q3', tg: 'Ч3 (Чораки 3)', ru: 'Ч3 (3-я четверть)' },
+        { code: 'q4', tg: 'Ч4 (Чораки 4)', ru: 'Ч4 (4-я четверть)' },
+        { code: 'h2', tg: 'Н2 (Нимсолаи 2)', ru: 'П2 (2-е полугодие)' },
+        { code: 'year', tg: 'Сол (Ҷамъбасти сол)', ru: 'Год (Годовая)' },
+      ];
+
       const metrics = computeGradeMetrics(state.rows);
-      const periodOrder = ['q1', 'q2', 'h1', 'q3', 'q4', 'h2', 'year'];
       const periodSeries = ['q1', 'q2', 'q3', 'q4'].map(p => {
         const sl = state.allYearRows.filter(r => r.period === p && String(r.class_code).toUpperCase() === state.classCode);
         const pm = computeGradeMetrics(sl);
         return { period: p, quality_pct: pm.qualityPct, pass_pct: pm.passPct, assessed: pm.assessed };
       });
+      const dateStatus = computePeriodDatesStatus(state.periodStart, state.periodEnd);
 
-      setPanelHtml(panel, `
-        <h2 tabindex="-1">${esc(txt('Баҳоҳои чорякии роҳбари синф ва сифат', 'Четвертные оценки классного руководителя'))}</h2>
-        ${dbLockBannerHtml()}
-        <p class="small">${esc(txt('Меъёри 10-холаи Тоҷикистон: сифат = баҳои 8–10, азхудкунӣ = баҳои 4–10.', '10-балльная шкала РТ: качество = 8–10 баллов, успеваемость = 4–10 баллов.'))}</p>
+      const rankedSubject = state.rows
+        .map(r => ({ name: r.student_name, grade: r.grade !== '' && r.grade !== null && Number.isFinite(Number(r.grade)) ? Number(r.grade) : null }))
+        .filter(x => x.grade !== null)
+        .sort((a, b) => b.grade - a.grade);
+      const distCounts = {};
+      for (let g = 1; g <= 10; g += 1) distCounts[g] = 0;
+      rankedSubject.forEach(x => {
+        const k = Math.round(x.grade);
+        if (distCounts[k] !== undefined) distCounts[k] += 1;
+      });
+      const maxDist = Math.max(1, ...Object.values(distCounts));
+      const lowRisk = rankedSubject.filter(x => x.grade < 5);
+
+      const calcViewHtml = `
+        <div class="sm-tahlil-grid">
+          <div class="section" style="margin:0">
+            <h3>🧮 ${esc(txt('Калкулятори фаврии 10-хола', 'Быстрый 10-балльный калькулятор'))}</h3>
+            <p class="small">${esc(txt('Формула: round((Миёнаи ҷорӣ + Миёнаи контролӣ) ÷ 2)', 'Формула: round((Средний текущий + Средний контрольный) ÷ 2)'))}</p>
+            <label class="field" style="margin-top:8px"><span>${esc(txt('Баҳоҳои ҷорӣ (бо вергул ё фосила)', 'Текущие оценки (через запятую или пробел)'))}</span>
+              <input id="smTahCur" type="text" value="${esc(state.calcCur)}" placeholder="8, 9, 7, 10">
+            </label>
+            <label class="field" style="margin-top:8px"><span>${esc(txt('Баҳоҳои контролӣ', 'Оценки за контрольные'))}</span>
+              <input id="smTahCtrl" type="text" value="${esc(state.calcCtrl)}" placeholder="8, 9">
+            </label>
+            <div id="smTahLiveOut" style="margin-top:10px">${renderCalcResultMarkup(state.calcCur, state.calcCtrl)}</div>
+            ${state.rows.length ? `
+              <div class="sm-p2-actions" style="margin-top:10px">
+                <select id="smTahTargetStudent" style="flex:1;min-width:150px">
+                  ${state.rows.map((r, idx) => `<option value="${idx}">${esc(r.student_name)} (${esc(state.classCode)})</option>`).join('')}
+                </select>
+                <button type="button" class="button" id="smTahApplyToStudent">${esc(txt('Сабт дар журнал', 'Записать в журнал'))}</button>
+              </div>
+            ` : ''}
+          </div>
+          <div class="section" style="margin:0">
+            <h3>📅 ${esc(txt('Ҳисоби ҷамъбасти чоряк ва нимсола', 'Расчёт итогов четверти / полугодия'))}</h3>
+            <div style="display:grid;gap:6px;margin:8px 0">
+              ${state.calcPeriods.map((p, idx) => `
+                <div style="display:flex;align-items:center;gap:8px">
+                  <strong style="width:36px">${esc(p.label)}</strong>
+                  <input class="sm-inline-input" style="flex:1" type="number" min="1" max="10" step="1" data-tah-pidx="${idx}" value="${esc(p.val)}" placeholder="1–10">
+                </div>
+              `).join('')}
+            </div>
+            <div id="smTahPeriodsOut">${renderPeriodSummaryMarkup()}</div>
+          </div>
+        </div>
+      `;
+
+      const journalViewHtml = `
+        ${state.schoolClasses.length ? `
+          <div class="sm-class-pills">
+            ${state.schoolClasses.map(c => `<button type="button" class="sm-class-pill ${state.classCode === c ? 'is-active' : ''}" data-gr-cls-pick="${esc(c)}">${esc(c)}</button>`).join('')}
+          </div>
+        ` : ''}
         <div class="sm-p2-grid">
           <label class="field"><span>${esc(txt('Давра / Чоряк', 'Период / Четверть'))}</span>
             <select id="smGrPeriod">
-              ${periodOrder.map(p => `<option value="${p}" ${state.period === p ? 'selected' : ''}>${p.toUpperCase()}</option>`).join('')}
+              ${periodOrder.map(p => `<option value="${p.code}" ${state.period === p.code ? 'selected' : ''}>${esc(txt(p.tg, p.ru))}</option>`).join('')}
             </select>
           </label>
           <label class="field"><span>${esc(txt('Синф', 'Класс'))}</span>
             <input id="smGrClass" type="text" maxlength="12" value="${esc(state.classCode)}">
           </label>
           <label class="field"><span>${esc(txt('Фан', 'Предмет'))}</span>
-            <input id="smGrSubject" type="text" maxlength="120" value="${esc(state.subject)}">
+            <input id="smGrSubject" type="text" list="smGrSubjList" maxlength="120" value="${esc(state.subject)}">
+            <datalist id="smGrSubjList">${allSubjsForPicker.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
           </label>
-          <div class="control" style="align-self:end;margin:0">
-            <button type="button" class="button alt" id="smGrAddStudent">${esc(txt('+ Сатри хонанда', '+ Добавить строку'))}</button>
-          </div>
+          <label class="field"><span>${esc(txt('Оғози давра', 'Начало периода'))}</span>
+            <input id="smGrStart" type="date" value="${esc(state.periodStart)}">
+          </label>
+          <label class="field"><span>${esc(txt('Анҷоми давра', 'Конец периода'))}</span>
+            <input id="smGrEnd" type="date" value="${esc(state.periodEnd)}">
+          </label>
+        </div>
+        ${dateStatus ? `<div class="notice">${esc(txt('Мӯҳлати чорак:', 'Статус периода:'))} <b>${esc(dateStatus.label)}</b></div>` : ''}
+        <div class="sm-p2-actions">
+          <button type="button" class="button" id="smGrSaveBtn">${esc(txt('Сабти баҳоҳо', 'Сохранить оценки'))}</button>
+          <button type="button" class="button alt" id="smGrAddStudent">${esc(txt('+ Сатри хонанда', '+ Добавить строку'))}</button>
+          <button type="button" class="button alt" id="smGrPrintBtn">🖨️ ${esc(txt('Чоп кардан', 'Печать'))}</button>
+          <span id="smGrStatus" class="small" role="status">${esc(state.statusMsg)}</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>№</th>
+                <th>${esc(txt('Хонанда', 'Ученик'))}</th>
+                <th>${esc(txt('Баҳоҳои ҷорӣ', 'Текущие (через ,)'))}</th>
+                <th>${esc(txt('Контролӣ', 'Контрольные'))}</th>
+                <th>${esc(txt('Баҳо (0–10)', 'Итог (0–10)'))}</th>
+                <th>${esc(txt('Ғоиб (соат)', 'Пропуски (ч)'))}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${state.rows.length ? state.rows.map((r, i) => {
+                const curStr = Array.isArray(r.current_grades) ? r.current_grades.join(', ') : '';
+                const ctrlStr = Array.isArray(r.control_grades) ? r.control_grades.join(', ') : '';
+                const numG = r.grade !== '' && r.grade !== null && Number.isFinite(Number(r.grade)) ? Number(r.grade) : null;
+                return `
+                  <tr data-grade-row="${i}">
+                    <td>${i + 1}</td>
+                    <td><input class="sm-inline-input" style="width:100%;min-width:155px" data-gr-name="${i}" type="text" value="${esc(r.student_name)}"></td>
+                    <td><input class="sm-inline-input" style="width:115px" data-gr-cur="${i}" type="text" value="${esc(curStr)}" placeholder="8, 9, 10"></td>
+                    <td><input class="sm-inline-input" style="width:95px" data-gr-ctrl="${i}" type="text" value="${esc(ctrlStr)}" placeholder="8, 9"></td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <input class="sm-inline-input" data-gr-val="${i}" type="number" min="0" max="10" step="1" value="${r.grade ?? ''}">
+                        <span class="sm-tahlil-chip ${gradeTierClass(numG || 0)}" data-gr-chip="${i}">${numG ?? '—'}</span>
+                      </div>
+                    </td>
+                    <td><input class="sm-inline-input" data-gr-abs="${i}" type="number" min="0" max="1000" value="${r.absent_hours ?? 0}"></td>
+                  </tr>
+                `;
+              }).join('') : `<tr><td colspan="6" class="small">${esc(txt('Дар ин синф хонанда нест — ба феҳрист илова кунед ё «+ Сатри хонанда»-ро пахш намоед.', 'В этом классе пока нет учеников — добавьте в реестр или нажмите «+ Добавить строку».'))}</td></tr>`}
+            </tbody>
+          </table>
         </div>
         <div class="sm-chart-grid">
           ${renderQualityRingSvg({ qualityPct: metrics.qualityPct, passPct: metrics.passPct, avgGrade: metrics.avgGrade, lang: getLang() })}
           ${renderQuarterBarsSvg(periodSeries, getLang())}
         </div>
-        <div class="sm-p2-actions">
-          <button type="button" class="button" id="smGrSaveBtn">${esc(txt('Сабти баҳоҳо', 'Сохранить оценки'))}</button>
-          <button type="button" class="button alt" id="smGrSubmitVerif">${esc(txt('Фиристодан барои тасдиқ ба Директор', 'Отправить директору на проверку'))}</button>
-          <span id="smGrStatus" class="small" role="status">${esc(state.statusMsg)}</span>
+        <div class="sm-tahlil-grid">
+          <div class="section" style="margin:0">
+            <h3>📊 ${esc(txt('Тақсимоти баҳоҳо (1–10)', 'Распределение оценок (1–10)'))}</h3>
+            ${rankedSubject.length ? [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(g => {
+              const cnt = distCounts[g] || 0;
+              const pct = Math.round((cnt / maxDist) * 100);
+              return `
+                <div class="sm-tahlil-dist-row">
+                  <strong style="width:22px;color:${gradeHex(g)}">${g}</strong>
+                  <div class="sm-tahlil-dist-bar"><div class="sm-tahlil-dist-fill" style="width:${cnt ? Math.max(pct, 12) : 0}%;background:${gradeHex(g)}">${cnt || ''}</div></div>
+                  <span style="width:24px;text-align:right">${cnt}</span>
+                </div>
+              `;
+            }).join('') : `<p class="small">${esc(txt('Баҳоҳо ҳанӯз ворид нашудаанд.', 'Оценки ещё не введены.'))}</p>`}
+          </div>
+          <div class="section" style="margin:0">
+            <h3>🏆 ${esc(txt('Беҳтарин хонандагон ва диққатталабон', 'Лучшие и требующие внимания'))}</h3>
+            ${rankedSubject.length ? `
+              <div style="display:grid;gap:6px;margin-bottom:10px">
+                ${rankedSubject.slice(0, 5).map((s, idx) => `
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--line);border-radius:8px">
+                    <span>${idx < 3 ? ['🥇', '🥈', '🥉'][idx] : `${idx + 1}.`} <strong>${esc(s.name)}</strong></span>
+                    <span class="sm-tahlil-chip ${gradeTierClass(s.grade)}">${s.grade}</span>
+                  </div>
+                `).join('')}
+              </div>
+              ${lowRisk.length ? `
+                <strong class="small" style="color:#dc2626">⚠️ ${esc(txt('Диққат лозим (< 5 балл):', 'Требуют внимания (< 5 баллов):'))}</strong>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+                  ${lowRisk.map(s => `<span class="sm-badge sm-badge-rejected">${esc(s.name)} (${s.grade})</span>`).join('')}
+                </div>
+              ` : `<p class="small" style="color:#16a34a">✓ ${esc(txt('Хонандагони баҳояшон паст нестанд.', 'Отстающих учеников нет.'))}</p>`}
+            ` : `<p class="small">${esc(txt('Маълумот нест.', 'Нет данных.'))}</p>`}
+          </div>
         </div>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>№</th><th>${esc(txt('Хонанда', 'Ученик'))}</th><th>${esc(txt('Баҳо (0–10)', 'Оценка (0–10)'))}</th><th>${esc(txt('Соати ғоиб', 'Пропуски (ч)'))}</th></tr></thead>
-            <tbody>
-              ${state.rows.length ? state.rows.map((r, i) => `
-                <tr data-grade-row="${i}">
-                  <td>${i + 1}</td>
-                  <td><input class="sm-inline-input" style="width:100%;min-width:160px" data-gr-name="${i}" type="text" value="${esc(r.student_name)}"></td>
-                  <td><input class="sm-inline-input" data-gr-val="${i}" type="number" min="0" max="10" step="1" value="${r.grade ?? ''}"></td>
-                  <td><input class="sm-inline-input" data-gr-abs="${i}" type="number" min="0" max="1000" value="${r.absent_hours ?? 0}"></td>
+      `;
+
+      // Rohbari sinf multi-subject summary
+      const clsGradesSlice = state.allYearRows.filter(
+        r => r.period === state.period && String(r.class_code || '').toUpperCase() === state.classCode,
+      );
+      const rosterNames = [...new Set([
+        ...state.rows.map(r => r.student_name),
+        ...clsGradesSlice.map(r => r.student_name),
+      ].filter(Boolean))];
+      const gradeLookup = new Map(
+        clsGradesSlice.map(r => [`${r.student_name.toLowerCase()}::${String(r.subject || '').toLowerCase()}`, r.grade]),
+      );
+      const rohSummaryRows = rosterNames.map(name => {
+        const subMap = {};
+        let sum = 0;
+        let gradedCnt = 0;
+        for (const sub of state.rohSubjects) {
+          const val = gradeLookup.get(`${name.toLowerCase()}::${sub.toLowerCase()}`);
+          const num = val !== undefined && val !== null && val !== '' ? Number(val) : null;
+          subMap[sub] = num;
+          if (num !== null && Number.isFinite(num) && num > 0) {
+            sum += num;
+            gradedCnt += 1;
+          }
+        }
+        const finalAvg = gradedCnt > 0 ? roundTajikGrade(sum / state.rohSubjects.length) : null;
+        return { name, subMap, sum, gradedCnt, finalAvg };
+      });
+      const focusStudent = rohSummaryRows[state.rohFocusIdx] || rohSummaryRows[0] || null;
+
+      const rohViewHtml = `
+        <div class="sm-p2-grid">
+          <label class="field"><span>${esc(txt('Синф', 'Класс'))}</span>
+            <input id="smRohClass" type="text" maxlength="12" value="${esc(state.classCode)}">
+          </label>
+          <label class="field"><span>${esc(txt('Давра / Чоряк', 'Период / Четверть'))}</span>
+            <select id="smRohPeriod">
+              ${periodOrder.map(p => `<option value="${p.code}" ${state.period === p.code ? 'selected' : ''}>${esc(txt(p.tg, p.ru))}</option>`).join('')}
+            </select>
+          </label>
+          <div class="field"><span>${esc(txt('Илова кардани фан', 'Добавить предмет'))}</span>
+            <div style="display:flex;gap:6px">
+              <input id="smRohAddSubjInp" type="text" placeholder="${esc(txt('Номи фан', 'Название предмета'))}">
+              <button type="button" class="button alt" id="smRohAddSubjBtn">+</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <strong class="small">${esc(txt('Фанҳои синф (пахш кунед барои интихоб):', 'Предметы класса (нажмите для выбора):'))}</strong>
+          <div class="sm-class-pills">
+            ${allSubjsForPicker.map(sub => `
+              <button type="button" class="sm-class-pill ${state.rohSubjects.includes(sub) ? 'is-active' : ''}" data-roh-subj="${esc(sub)}">${esc(sub)}</button>
+            `).join('')}
+          </div>
+        </div>
+        ${state.rohEditing && focusStudent ? `
+          <div class="section" style="margin:10px 0">
+            <div class="sm-req-sender">
+              <h3>👤 ${esc(focusStudent.name)} (${state.rohFocusIdx + 1}/${rohSummaryRows.length})</h3>
+              <button type="button" class="button alt" id="smRohBackTableBtn">← ${esc(txt('Ба ҷадвали умумӣ', 'К общей таблице'))}</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:10px 0">
+              ${state.rohSubjects.map((sub, sIdx) => `
+                <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:9px">
+                  <span style="font-size:.86rem;font-weight:600">${esc(sub)}</span>
+                  <input class="sm-inline-input" type="number" min="1" max="10" step="1" data-roh-sidx="${sIdx}" value="${focusStudent.subMap[sub] ?? ''}" placeholder="—">
+                </label>
+              `).join('')}
+            </div>
+            <div class="sm-p2-actions">
+              <button type="button" class="button" id="smRohSaveStudentBtn">${esc(txt('Сабт ва хонандаи навбатӣ →', 'Сохранить и следующий →'))}</button>
+              <button type="button" class="button alt" id="smRohPrintStudentBtn">🖨️ ${esc(txt('Чопи табели хонанда', 'Печать табеля'))}</button>
+            </div>
+          </div>
+        ` : `
+          <div class="sm-p2-actions">
+            <button type="button" class="button alt" id="smRohPrintBtn">🖨️ ${esc(txt('Чопи ҷадвали умумӣ', 'Печать сводной таблицы'))}</button>
+            <span id="smGrStatus" class="small" role="status">${esc(state.statusMsg)}</span>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>№</th>
+                  <th>${esc(txt('Хонанда', 'Ученик'))}</th>
+                  ${state.rohSubjects.map(sub => `<th style="font-size:.75rem">${esc(sub.slice(0, 12))}</th>`).join('')}
+                  <th>${esc(txt('Ҷамъбаст', 'Итог'))}</th>
+                  <th></th>
                 </tr>
-              `).join('') : `<tr><td colspan="4" class="small">${esc(txt('Дар ин синф хонанда нест — ба феҳрист илова кунед ё «+ Сатри хонанда»-ро пахш намоед.', 'В этом классе пока нет учеников — добавьте в реестр или нажмите «+ Добавить строку».'))}</td></tr>`}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${rohSummaryRows.length ? rohSummaryRows.map((row, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td><strong>${esc(row.name)}</strong></td>
+                    ${state.rohSubjects.map(sub => {
+                      const v = row.subMap[sub];
+                      return `<td><span class="sm-tahlil-chip ${gradeTierClass(v || 0)}" style="min-width:24px;height:24px;font-size:.78rem">${v ?? '—'}</span></td>`;
+                    }).join('')}
+                    <td><span class="sm-tahlil-chip ${gradeTierClass(row.finalAvg || 0)}">${row.finalAvg ?? '—'}</span></td>
+                    <td><button type="button" class="button alt" data-roh-edit-idx="${idx}">${esc(txt('Таҳрир', 'Ввод'))}</button></td>
+                  </tr>
+                `).join('') : `<tr><td colspan="${state.rohSubjects.length + 4}" class="small">${esc(txt('Хонандагони ин синф ҳанӯз дар феҳрист нестанд.', 'Ученики этого класса ещё не добавлены в реестр.'))}</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        `}
+      `;
+
+      setPanelHtml(panel, `
+        <h2 tabindex="-1">${esc(txt('Баҳоҳои чорякӣ ва Таҳлил (10-хола)', 'Четвертные оценки и Аналитика (Тахлил)'))}</h2>
+        ${dbLockBannerHtml()}
+        <div class="sm-subtabs">
+          <button type="button" class="sm-subtab ${state.subtab === 'calc' ? 'is-active' : ''}" data-gr-tab="calc">🧮 ${esc(txt('Калкулятор (Таҳлил)', 'Калькулятор (Тахлил)'))}</button>
+          <button type="button" class="sm-subtab ${state.subtab === 'journal' ? 'is-active' : ''}" data-gr-tab="journal">📋 ${esc(txt('Журнал ва таҳлили фан', 'Журнал и аналитика'))}</button>
+          <button type="button" class="sm-subtab ${state.subtab === 'roh' ? 'is-active' : ''}" data-gr-tab="roh">🏫 ${esc(txt('Роҳбари синф', 'Рохбари синф'))}</button>
         </div>
+        ${state.subtab === 'calc' ? calcViewHtml : (state.subtab === 'roh' ? rohViewHtml : journalViewHtml)}
       `);
 
-      const syncScopeInputs = () => {
-        state.period = panel.querySelector('#smGrPeriod')?.value || 'q1';
-        state.classCode = (panel.querySelector('#smGrClass')?.value || '5А').trim().toUpperCase();
-        state.subject = (panel.querySelector('#smGrSubject')?.value || 'Математика').trim();
-      };
-      const readRowsFromDom = () => state.rows.map((r, i) => ({
-        ...r,
-        student_name: panel.querySelector(`[data-gr-name="${i}"]`)?.value.trim() || r.student_name,
-        grade: (() => {
-          const v = panel.querySelector(`[data-gr-val="${i}"]`)?.value;
-          return v === '' || v === undefined ? null : Number(v);
-        })(),
-        absent_hours: Number(panel.querySelector(`[data-gr-abs="${i}"]`)?.value || 0),
-      }));
+      // Subtab switcher
+      panel.querySelectorAll('[data-gr-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.subtab = btn.dataset.grTab || 'journal';
+          renderGrades({ refresh: false });
+        });
+      });
 
+      // Calculator events (update live output directly without losing input focus)
+      const updateLiveCalcDom = () => {
+        const curEl = panel.querySelector('#smTahCur');
+        const ctrlEl = panel.querySelector('#smTahCtrl');
+        state.calcCur = curEl ? curEl.value : state.calcCur;
+        state.calcCtrl = ctrlEl ? ctrlEl.value : state.calcCtrl;
+        const out = panel.querySelector('#smTahLiveOut');
+        if (out) out.innerHTML = renderCalcResultMarkup(state.calcCur, state.calcCtrl);
+      };
+      panel.querySelector('#smTahCur')?.addEventListener('input', updateLiveCalcDom);
+      panel.querySelector('#smTahCtrl')?.addEventListener('input', updateLiveCalcDom);
+      panel.querySelectorAll('[data-tah-pidx]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const idx = Number(inp.dataset.tahPidx);
+          if (state.calcPeriods[idx]) state.calcPeriods[idx].val = inp.value;
+          const out = panel.querySelector('#smTahPeriodsOut');
+          if (out) out.innerHTML = renderPeriodSummaryMarkup();
+        });
+      });
+      panel.querySelector('#smTahApplyToStudent')?.addEventListener('click', async () => {
+        const score = computeTahlilScore(state.calcCur, state.calcCtrl);
+        const sIdx = Number(panel.querySelector('#smTahTargetStudent')?.value || 0);
+        const st = state.rows[sIdx];
+        if (!score || !st) return;
+        st.current_grades = score.currentGrades;
+        st.control_grades = score.controlGrades;
+        st.grade = score.finalGrade;
+        await saveQuarterGrades(ctx(), {
+          yearStart: state.yearStart,
+          period: state.period,
+          classCode: state.classCode,
+          subject: state.subject,
+          periodStart: state.periodStart,
+          periodEnd: state.periodEnd,
+          entries: [st],
+        });
+        state.statusMsg = txt(`Баҳои ${score.finalGrade} барои ${st.student_name} сабт шуд.`, `Оценка ${score.finalGrade} записана для ${st.student_name}.`);
+        state.subtab = 'journal';
+        await renderGrades({ refresh: true });
+      });
+
+      // Journal events
+      const syncScopeInputs = () => {
+        state.period = panel.querySelector('#smGrPeriod')?.value || state.period;
+        state.classCode = (panel.querySelector('#smGrClass')?.value || state.classCode).trim().toUpperCase();
+        state.subject = (panel.querySelector('#smGrSubject')?.value || state.subject).trim();
+        state.periodStart = panel.querySelector('#smGrStart')?.value || '';
+        state.periodEnd = panel.querySelector('#smGrEnd')?.value || '';
+      };
+      const readRowsFromDom = () => state.rows.map((r, i) => {
+        const curArr = parseTahlilNumbers(panel.querySelector(`[data-gr-cur="${i}"]`)?.value ?? r.current_grades);
+        const ctrlArr = parseTahlilNumbers(panel.querySelector(`[data-gr-ctrl="${i}"]`)?.value ?? r.control_grades);
+        const rawVal = panel.querySelector(`[data-gr-val="${i}"]`)?.value;
+        let g = rawVal === '' || rawVal === undefined ? null : Number(rawVal);
+        if (g === null && (curArr.length || ctrlArr.length)) {
+          g = computeTahlilScore(curArr, ctrlArr)?.finalGrade ?? null;
+        }
+        return {
+          ...r,
+          student_name: panel.querySelector(`[data-gr-name="${i}"]`)?.value.trim() || r.student_name,
+          current_grades: curArr,
+          control_grades: ctrlArr,
+          grade: g,
+          absent_hours: Number(panel.querySelector(`[data-gr-abs="${i}"]`)?.value || 0),
+          period_start: state.periodStart || null,
+          period_end: state.periodEnd || null,
+        };
+      });
+
+      panel.querySelectorAll('[data-gr-cls-pick]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.classCode = btn.dataset.grClsPick || state.classCode;
+          state.rohSubjects = [...getSubjectsForClassCode(state.classCode)];
+          renderGrades({ refresh: true });
+        });
+      });
       panel.querySelector('#smGrPeriod')?.addEventListener('change', () => { syncScopeInputs(); renderGrades({ refresh: true }); });
-      panel.querySelector('#smGrClass')?.addEventListener('change', () => { syncScopeInputs(); renderGrades({ refresh: true }); });
+      panel.querySelector('#smGrClass')?.addEventListener('change', () => {
+        syncScopeInputs();
+        state.rohSubjects = [...getSubjectsForClassCode(state.classCode)];
+        renderGrades({ refresh: true });
+      });
       panel.querySelector('#smGrSubject')?.addEventListener('change', () => { syncScopeInputs(); renderGrades({ refresh: true }); });
+      panel.querySelector('#smGrStart')?.addEventListener('change', () => { syncScopeInputs(); renderGrades({ refresh: false }); });
+      panel.querySelector('#smGrEnd')?.addEventListener('change', () => { syncScopeInputs(); renderGrades({ refresh: false }); });
+
+      // Auto-recalculate row grade & badge live when typing current/control grades
+      panel.querySelectorAll('[data-gr-cur],[data-gr-ctrl]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const i = Number(inp.dataset.grCur ?? inp.dataset.grCtrl);
+          const curStr = panel.querySelector(`[data-gr-cur="${i}"]`)?.value || '';
+          const ctrlStr = panel.querySelector(`[data-gr-ctrl="${i}"]`)?.value || '';
+          const score = computeTahlilScore(curStr, ctrlStr);
+          if (score) {
+            const valEl = panel.querySelector(`[data-gr-val="${i}"]`);
+            const chipEl = panel.querySelector(`[data-gr-chip="${i}"]`);
+            if (valEl) valEl.value = String(score.finalGrade);
+            if (chipEl) {
+              chipEl.textContent = String(score.finalGrade);
+              chipEl.className = `sm-tahlil-chip ${gradeTierClass(score.finalGrade)}`;
+            }
+          }
+        });
+      });
+
       panel.querySelector('#smGrAddStudent')?.addEventListener('click', () => {
         state.rows = readRowsFromDom();
-        state.rows.push({ student_name: '', class_code: state.classCode, grade: 8, absent_hours: 0 });
+        state.rows.push({ student_name: '', class_code: state.classCode, current_grades: [], control_grades: [], grade: 8, absent_hours: 0 });
         renderGrades({ refresh: false });
       });
       panel.querySelector('#smGrSaveBtn')?.addEventListener('click', async () => {
@@ -828,26 +1415,80 @@ export function setupPhase2Panels(article, docs, school, views) {
           period: state.period,
           classCode: state.classCode,
           subject: state.subject,
+          periodStart: state.periodStart,
+          periodEnd: state.periodEnd,
           entries: edited,
         });
         state.statusMsg = txt('Баҳоҳо сабт шуданд ва таҳлил навсозӣ гардид.', 'Оценки сохранены, аналитика обновлена.');
         await renderGrades({ refresh: true });
         if (canAnalytics) renderAnalytics();
       });
-      panel.querySelector('#smGrSubmitVerif')?.addEventListener('click', async () => {
-        syncScopeInputs();
-        const edited = readRowsFromDom().filter(r => r.student_name);
-        const m = computeGradeMetrics(edited);
-        await submitVerification(ctx(), {
-          category: 'grades',
-          title: `${txt('Ҷамъбасти чорякӣ', 'Четвертная сводка')}: ${state.classCode} · ${state.subject} (${state.period.toUpperCase()})`,
-          periodLabel: `${state.yearStart}-${state.period}`,
-          payload: { class_code: state.classCode, subject: state.subject, quality_pct: m.qualityPct, pass_pct: m.passPct, assessed: m.assessed },
+      panel.querySelector('#smGrPrintBtn')?.addEventListener('click', () => window.print());
+
+      // Rohbari sinf events
+      panel.querySelector('#smRohClass')?.addEventListener('change', ev => {
+        state.classCode = (ev.target.value || state.classCode).trim().toUpperCase();
+        state.rohSubjects = [...getSubjectsForClassCode(state.classCode)];
+        state.rohEditing = false;
+        renderGrades({ refresh: true });
+      });
+      panel.querySelector('#smRohPeriod')?.addEventListener('change', ev => {
+        state.period = ev.target.value || state.period;
+        renderGrades({ refresh: true });
+      });
+      panel.querySelectorAll('[data-roh-subj]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const s = btn.dataset.rohSubj;
+          if (!s) return;
+          if (state.rohSubjects.includes(s)) state.rohSubjects = state.rohSubjects.filter(x => x !== s);
+          else state.rohSubjects.push(s);
+          renderGrades({ refresh: false });
         });
-        state.statusMsg = txt('Барои тасдиқи директор фиристода шуд.', 'Отправлено на проверку директору.');
-        await renderVerification();
+      });
+      panel.querySelector('#smRohAddSubjBtn')?.addEventListener('click', () => {
+        const v = panel.querySelector('#smRohAddSubjInp')?.value.trim();
+        if (v && !state.rohSubjects.includes(v)) state.rohSubjects.push(v);
         renderGrades({ refresh: false });
       });
+      panel.querySelectorAll('[data-roh-edit-idx]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.rohFocusIdx = Number(btn.dataset.rohEditIdx || 0);
+          state.rohEditing = true;
+          renderGrades({ refresh: false });
+        });
+      });
+      panel.querySelector('#smRohBackTableBtn')?.addEventListener('click', () => {
+        state.rohEditing = false;
+        renderGrades({ refresh: false });
+      });
+      panel.querySelector('#smRohSaveStudentBtn')?.addEventListener('click', async () => {
+        const stRow = rohSummaryRows[state.rohFocusIdx];
+        if (!stRow) return;
+        for (let sIdx = 0; sIdx < state.rohSubjects.length; sIdx += 1) {
+          const sub = state.rohSubjects[sIdx];
+          const val = panel.querySelector(`[data-roh-sidx="${sIdx}"]`)?.value;
+          const num = val === '' || val === undefined ? null : Number(val);
+          if (num !== null && Number.isFinite(num)) {
+            await saveQuarterGrades(ctx(), {
+              yearStart: state.yearStart,
+              period: state.period,
+              classCode: state.classCode,
+              subject: sub,
+              entries: [{ student_name: stRow.name, grade: num, absent_hours: 0 }],
+            });
+          }
+        }
+        state.statusMsg = txt(`Баҳоҳои ${stRow.name} сабт шуданд.`, `Оценки ${stRow.name} сохранены.`);
+        if (state.rohFocusIdx < rohSummaryRows.length - 1) {
+          state.rohFocusIdx += 1;
+        } else {
+          state.rohEditing = false;
+        }
+        await renderGrades({ refresh: true });
+        if (canAnalytics) renderAnalytics();
+      });
+      panel.querySelector('#smRohPrintBtn')?.addEventListener('click', () => window.print());
+      panel.querySelector('#smRohPrintStudentBtn')?.addEventListener('click', () => window.print());
     };
   }
 
@@ -880,7 +1521,7 @@ export function setupPhase2Panels(article, docs, school, views) {
           <div class="sm-p2-kpi"><span>${esc(txt('Хонандагон', 'Учеников'))}</span><b>${summary.student_count || 0}</b></div>
           <div class="sm-p2-kpi"><span>${esc(txt('Сифати таҳсилот', 'Качество знаний'))}</span><b>${qPct}%</b></div>
           <div class="sm-p2-kpi"><span>${esc(txt('Азхудкунӣ', 'Успеваемость'))}</span><b>${pPct}%</b></div>
-          <div class="sm-p2-kpi"><span>${esc(txt('Тасдиқи Маориф', 'Утверждено Маориф'))}</span><b>${summary.verifications?.maorif_approved || 0} / ${summary.verifications?.total || 0}</b></div>
+          <div class="sm-p2-kpi"><span>${esc(txt('Баҳои миёна', 'Средний балл'))}</span><b>${summary.grades?.avg_grade ?? 0}</b></div>
         </div>
         <div class="sm-chart-grid">
           ${renderQualityRingSvg({ qualityPct: qPct, passPct: pPct, avgGrade: summary.grades?.avg_grade || 0, lang: l })}
@@ -892,214 +1533,7 @@ export function setupPhase2Panels(article, docs, school, views) {
   }
 
   // ============================================================================
-  // PANEL 6: HIERARCHICAL VERIFICATION (Maorif -> Director -> School staff)
-  // ============================================================================
-  let renderVerification = () => {};
-  if (canVerify) {
-    const panel = createPanel(article, 'smVerificationPanel');
-    registerModule(
-      'smVerificationPanel',
-      '✓',
-      'Санҷиш ва тасдиқ (Маориф → Директор → Корманд)',
-      'Проверка и утверждение (Маориф → Директор → Сотрудник)',
-      'Зиндаи тасдиқи ҳуҷҷатҳо аз корманди мактаб то директор ва шуъбаи маориф',
-      'Иерархическая проверка документов от сотрудника к директору и в маориф',
-    );
-
-    let state = { items: [], accountQueue: [], canReviewAccounts: false, statusMsg: '' };
-    const statusBadge = st => {
-      const map = {
-        pending: txt('Интизор', 'Ожидает'),
-        approved: txt('Тасдиқ шуд', 'Утверждено'),
-        changes: txt('Барои ислоҳ', 'На доработку'),
-        rejected: txt('Рад шуд', 'Отклонено'),
-        not_sent: txt('Фиристода нашудааст', 'Не отправлено'),
-      };
-      return `<span class="sm-badge sm-badge-${esc(st || 'not_sent')}">${esc(map[st] || st)}</span>`;
-    };
-
-    renderVerification = async () => {
-      const c = ctx();
-      state.items = await loadVerifications(c);
-      state.accountQueue = [];
-      state.canReviewAccounts = false;
-
-      const cl = getAuthedCloudClient();
-      let prof = {};
-      try { prof = JSON.parse(persistentStore.getItem('smartmaktab.profile.v1') || '{}') || {}; } catch {}
-      const canReview = Boolean(
-        cl && c.verified && (isAuthority || prof.canReviewVerifications || canPositionVerifySchoolStaff(prof.primaryPosition || cabinetId)),
-      );
-      if (canReview) {
-        state.canReviewAccounts = true;
-        try {
-          const rows = await cl.getPendingAccountVerifications(isAuthority ? null : (c.orgId && /^[0-9a-f-]{36}$/i.test(c.orgId) ? c.orgId : null));
-          if (Array.isArray(rows)) state.accountQueue = rows;
-        } catch {}
-      }
-
-      const accountSectionHtml = c.hasCloudSession ? `
-        <section class="section" style="margin-bottom:14px">
-          <h3>${esc(txt('Верификатсияи ҳисобҳо (Корманд → Директор → Маориф)', 'Верификация аккаунтов (Сотрудник → Директор → Маориф)'))}</h3>
-          ${!c.verified ? dbLockBannerHtml() : ''}
-          ${state.canReviewAccounts ? `
-            <p class="small">${esc(txt('Дархостҳои воридшуда бо ФИО, санаи таваллуд, телефон ва рақами шиноснома:', 'Входящие заявки с ФИО, датой рождения, телефоном и номером паспорта:'))}</p>
-            <div class="table-scroll">
-              <table>
-                <thead><tr><th>${esc(txt('Корманд ва вазифа', 'Пользователь и должность'))}</th><th>${esc(txt('Мактаб / Ҷамоат', 'Школа / Джамоат'))}</th><th>${esc(txt('Санаи таваллуд', 'Дата рождения'))}</th><th>${esc(txt('Телефон / Шиноснома', 'Телефон / Паспорт'))}</th><th>${esc(txt('Қарор', 'Решение'))}</th></tr></thead>
-                <tbody>
-                  ${state.accountQueue.length ? state.accountQueue.map(req => `
-                    <tr>
-                      <td><strong>${esc(req.full_name)}</strong><div class="small">${esc(formatPositionTitle(req.primary_position, getLang()))}</div></td>
-                      <td>${esc(req.organization_name || '')}<div class="small">${esc([req.district_name, req.jamoat_name, req.village_name].filter(Boolean).join(' · '))}</div></td>
-                      <td>${esc(req.birth_date || '')}</td>
-                      <td>${esc(req.phone || '')}<div class="small">${esc(req.passport_number || '')}</div></td>
-                      <td>
-                        <div class="sm-p2-actions" style="margin:0">
-                          <button type="button" class="button" data-acc-act="verified" data-acc-id="${esc(req.membership_id || req.id || '')}">${esc(txt('Тасдиқ', 'Подтвердить'))}</button>
-                          <button type="button" class="button alt" data-acc-act="rejected" data-acc-id="${esc(req.membership_id || req.id || '')}">${esc(txt('Рад ва нест кардан', 'Отклонить и удалить'))}</button>
-                        </div>
-                      </td>
-                    </tr>
-                  `).join('') : `<tr><td colspan="5" class="small">${esc(txt('Дархости нави верификатсияи аккаунт нест.', 'Новых заявок на верификацию аккаунтов нет.'))}</td></tr>`}
-                </tbody>
-              </table>
-            </div>
-          ` : ''}
-        </section>
-      ` : '';
-
-      panel.innerHTML = `
-        <h2 tabindex="-1">${esc(txt('Иерархияи санҷиш ва тасдиқ: Корманд → Директор → Маориф', 'Иерархия проверки: Сотрудник → Директор → Маориф'))}</h2>
-        ${accountSectionHtml}
-        <p class="small">${esc(txt('Ҳар як ҳуҷҷат, нақша ё баҳогузорӣ аввал аз тасдиқи директор гузашта, сипас ба шуъбаи маориф фиристода мешавад.', 'Документы и отчёты сначала проверяет директор школы, затем утверждает отдел образования (Маориф).'))}</p>
-        ${!isAuthority ? `
-          <form id="smVerifForm" class="sm-p2-grid" autocomplete="off">
-            <label class="field"><span>${esc(txt('Намуди ҳуҷҷат', 'Категория'))}</span>
-              <select id="smVfCat">
-                <option value="lesson_plan">${esc(txt('Нақшаи дарс', 'План урока'))}</option>
-                <option value="quality_report">${esc(txt('Ҳисоботи сифати таҳсилот', 'Отчёт по качеству'))}</option>
-                <option value="grades">${esc(txt('Баҳоҳои чорякӣ', 'Четвертные оценки'))}</option>
-                <option value="payroll">${esc(txt('Ведомости маош', 'Зарплатная ведомость'))}</option>
-                <option value="director_plan">${esc(txt('Нақшаи корӣ', 'План работы'))}</option>
-                <option value="document">${esc(txt('Ҳуҷҷати дигар', 'Другой документ'))}</option>
-              </select>
-            </label>
-            <label class="field"><span>${esc(txt('Номи ҳуҷҷат ё ҳисобот', 'Название документа'))}</span>
-              <input id="smVfTitle" type="text" required maxlength="240" placeholder="${esc(txt('Ҳисоботи чоряки 1 · Синфи 5А', 'Отчёт за 1 четверть · 5А класс'))}">
-            </label>
-            <label class="field"><span>${esc(txt('Давра', 'Период'))}</span>
-              <input id="smVfPeriod" type="text" maxlength="80" value="2026-Q1">
-            </label>
-            <div class="control" style="align-self:end;margin:0;gap:10px">
-              ${isDirector ? `<label style="display:flex;align-items:center;gap:6px"><input id="smVfDirectMaorif" type="checkbox" checked> ${esc(txt('Мустақим ба Маориф', 'Сразу в Маориф'))}</label>` : ''}
-              <button type="submit" class="button" id="smVfSubmitBtn">${esc(txt('Фиристодан барои тасдиқ', 'Отправить на проверку'))}</button>
-            </div>
-          </form>
-        ` : ''}
-        <p id="smVfStatus" class="small" role="status">${esc(state.statusMsg)}</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>${esc(txt('Ҳуҷҷат', 'Документ'))}</th><th>${esc(txt('Фиристода', 'Отправитель'))}</th><th>${esc(txt('Директор', 'Директор'))}</th><th>${esc(txt('Маориф', 'Маориф'))}</th><th>${esc(txt('Амал', 'Действие'))}</th></tr></thead>
-            <tbody>
-              ${state.items.length ? state.items.map(it => `
-                <tr>
-                  <td><strong>${esc(it.title)}</strong><div class="small">${esc(it.category)} · ${esc(it.period_label || '')}</div></td>
-                  <td>${esc(it.submitted_by_name || it.source_cabinet || '')}<div class="small">${esc(it.organization_name || '')}</div></td>
-                  <td>${statusBadge(it.director_status)}${it.director_note ? `<div class="small">${esc(it.director_note)}</div>` : ''}</td>
-                  <td>${statusBadge(it.maorif_status)}${it.maorif_note ? `<div class="small">${esc(it.maorif_note)}</div>` : ''}</td>
-                  <td>
-                    <div class="sm-p2-actions" style="margin:0">
-                      ${isDirector && !isAuthority ? `
-                        <button type="button" class="button" data-dir-act="approve-forward" data-id="${esc(it.id)}">${esc(txt('Тасдиқ → Маориф', 'Утвердить → Маориф'))}</button>
-                        <button type="button" class="button alt" data-dir-act="approve" data-id="${esc(it.id)}">${esc(txt('Тасдиқ', 'Утвердить'))}</button>
-                        <button type="button" class="button alt" data-dir-act="changes" data-id="${esc(it.id)}">${esc(txt('Барои ислоҳ', 'На доработку'))}</button>
-                      ` : ''}
-                      ${isAuthority && it.maorif_status !== 'not_sent' ? `
-                        <button type="button" class="button" data-mao-act="approved" data-id="${esc(it.id)}" data-org="${esc(it.organization_id || '')}">${esc(txt('Тасдиқи Маориф', 'Утвердить (Маориф)'))}</button>
-                        <button type="button" class="button alt" data-mao-act="changes" data-id="${esc(it.id)}" data-org="${esc(it.organization_id || '')}">${esc(txt('Баргардондан', 'Вернуть'))}</button>
-                      ` : ''}
-                    </div>
-                  </td>
-                </tr>
-              `).join('') : `<tr><td colspan="5" class="small">${esc(txt('Ҳанӯз дархости тасдиқ вуҷуд надорад.', 'Заявок на проверку пока нет.'))}</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      panel.querySelector('#smVerifForm')?.addEventListener('submit', async ev => {
-        ev.preventDefault();
-        const title = panel.querySelector('#smVfTitle')?.value.trim();
-        if (!title) return;
-        await submitVerification(ctx(), {
-          category: panel.querySelector('#smVfCat')?.value || 'document',
-          title,
-          periodLabel: panel.querySelector('#smVfPeriod')?.value.trim() || '',
-          directToMaorif: Boolean(panel.querySelector('#smVfDirectMaorif')?.checked),
-        });
-        state.statusMsg = txt('Ҳуҷҷат ба навбати тасдиқ ворид шуд.', 'Документ добавлен в очередь проверки.');
-        await renderVerification();
-      });
-
-      panel.querySelectorAll('[data-dir-act]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const act = btn.dataset.dirAct;
-          const id = btn.dataset.id;
-          const forward = act === 'approve-forward';
-          const decision = act === 'changes' ? 'changes' : 'approved';
-          const note = decision === 'changes' ? txt('Ислоҳ зарур аст', 'Требуется доработка') : '';
-          await directorReviewVerification(ctx(), id, decision, note, forward);
-          state.statusMsg = forward
-            ? txt('Директор тасдиқ кард ва ба Маориф фиристод.', 'Директор утвердил и отправил в Маориф.')
-            : txt('Қарори директор сабт шуд.', 'Решение директора сохранено.');
-          await renderVerification();
-          if (canAnalytics) renderAnalytics();
-        });
-      });
-
-      panel.querySelectorAll('[data-acc-act]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const cl2 = getAuthedCloudClient();
-          if (!cl2) return;
-          const rawDecision = btn.dataset.accAct;
-          const decision = rawDecision === 'approved' ? 'verified' : rawDecision;
-          const membershipId = btn.dataset.accId;
-          btn.disabled = true;
-          try {
-            await cl2.reviewAccountVerification({
-              p_membership_id: membershipId,
-              p_decision: decision,
-              p_note: '',
-            });
-            state.statusMsg = decision === 'verified'
-              ? txt('Ҳисоб тасдиқ карда шуд.', 'Аккаунт подтверждён.')
-              : txt('Дархост рад ва нест карда шуд.', 'Заявка отклонена и удалена.');
-            await renderVerification();
-          } catch (err) {
-            state.statusMsg = err?.message || 'Error';
-            await renderVerification();
-          }
-        });
-      });
-
-      panel.querySelectorAll('[data-mao-act]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const decision = btn.dataset.maoAct;
-          const id = btn.dataset.id;
-          const orgId = btn.dataset.org;
-          const note = decision === 'changes' ? txt('Маориф барои ислоҳ баргардонд', 'Маориф вернул на доработку') : txt('Маориф тасдиқ кард', 'Утверждено Маорифом');
-          await maorifReviewVerification(ctx(), id, orgId, decision, note);
-          state.statusMsg = note;
-          await renderVerification();
-          if (canAnalytics) renderAnalytics();
-        });
-      });
-    };
-  }
-
-  // ============================================================================
-  // 7. КОРБАРОН (Идоракунии кормандон, дастгоҳҳо ва рамзҳо)
+  // PANEL 7: КОРБАРОН (Доступно барои ҳамаи 24 вазифа + тасдиқи аккаунтҳо)
   // ============================================================================
   let renderUsers = async () => {};
   if (canUsers) {
@@ -1108,12 +1542,14 @@ export function setupPhase2Panels(article, docs, school, views) {
       '👤',
       'Корбарон',
       'Пользователи',
-      'Идоракунии кормандон, дастгоҳҳо ва рамзҳо',
-      'Управление пользователями, устройствами и паролями',
+      'Кормандон, дастгоҳҳои ман ва тасдиқи бақайдгирии нав',
+      'Коллеги, мои устройства и верификация новых аккаунтов',
     );
     const panel = createPanel(article, 'smUsersPanel');
     const state = {
       items: [],
+      colleagues: [],
+      myDevices: [],
       search: '',
       statusFilter: 'all',
       orgFilter: 'all',
@@ -1137,11 +1573,17 @@ export function setupPhase2Panels(article, docs, school, views) {
     const renderUsersUi = () => {
       const c = ctx();
       const cl = getAuthedCloudClient();
+      const isManager = canPositionManageUsers(cabinetId) || canPositionManageUsers(c.primaryPosition);
+      const canVerifyAccounts = isAuthority || canPositionVerifySchoolStaff(cabinetId) || canPositionVerifySchoolStaff(c.primaryPosition);
+      const pendingUsers = state.items.filter(u => u.verification_status === 'pending');
+      setModuleBadge('smUsersPanel', isManager || canVerifyAccounts ? pendingUsers.length : 0);
+      emitNotificationsSnapshot({ accountVerifications: (isManager || canVerifyAccounts) ? pendingUsers : [] });
+
       if (!cl) {
         panel.innerHTML = `
           <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
           <div class="notice">
-            <p class="small">${esc(txt('Барои дидан ва идоракунии корбарон, дастгоҳҳо ва бозсозии рамз аввал бо ҳисоби системавии худ ворид шавед.', 'Для управления сотрудниками, отвязки устройств и сброса паролей сначала войдите в аккаунт системы.'))}</p>
+            <p class="small">${esc(txt('Барои дидани корбарони муассиса, дастгоҳҳои худ ва тасдиқи дархостҳои бақайдгирӣ аввал бо ҳисоби системавии худ ворид шавед.', 'Для просмотра коллег, своих устройств и подтверждения новых заявок войдите в аккаунт системы.'))}</p>
             <button type="button" class="button" id="smUsrOpenCloudBtn">${esc(txt('Ворид шудан ба система', 'Войти в систему'))}</button>
           </div>
         `;
@@ -1157,6 +1599,91 @@ export function setupPhase2Panels(article, docs, school, views) {
           <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
           ${dbLockBannerHtml()}
         `;
+        return;
+      }
+
+      const myDevicesSectionHtml = `
+        <section class="section" style="margin-bottom:14px">
+          <h3>📱 ${esc(txt('Дастгоҳҳои ман', 'Мои устройства'))}</h3>
+          ${state.myDevices.length ? `
+            <ul class="sm-device-list">
+              ${state.myDevices.map(d => {
+                const icon = d.device_kind === 'mobile' ? '📱' : '🖥';
+                const seen = (d.last_seen_at || '').replace('T', ' ').slice(0, 16);
+                return `
+                  <li class="sm-device-row">
+                    <span>${icon} <strong>${esc(d.device_label || 'Web')}</strong>${seen ? ` · <span class="small">${esc(seen)}</span>` : ''}</span>
+                    <button type="button" class="button alt" data-my-dev-revoke="${esc(d.device_id)}" data-org="${esc(d.organization_id || c.orgId)}">${esc(txt('Қатъ кардан', 'Отвязать'))}</button>
+                  </li>
+                `;
+              }).join('')}
+            </ul>
+          ` : `<p class="small">${esc(txt('Ҳанӯз дастгоҳи фаъол сабт нашудааст.', 'Активных привязанных устройств нет.'))}</p>`}
+        </section>
+      `;
+
+      // Regular non-manager role view: Colleagues directory + own devices
+      if (!isManager) {
+        const q = state.search.trim().toLowerCase();
+        const cols = state.colleagues.filter(u => {
+          if (!q) return true;
+          const hay = `${u.full_name || ''} ${u.primary_position || ''} ${u.organization_name || ''}`.toLowerCase();
+          return hay.includes(q);
+        });
+        setPanelHtml(panel, `
+          <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳои ман', 'Коллеги и мои устройства'))}</h2>
+          ${myDevicesSectionHtml}
+          <section class="section">
+            <h3>👥 ${esc(txt('Ҳамкорони муассиса', 'Сотрудники учреждения'))} (${state.colleagues.length})</h3>
+            <div class="sm-p2-grid">
+              <label class="field"><span>${esc(txt('Ҷустуҷӯ (ном, вазифа)', 'Поиск (ФИО, должность)'))}</span>
+                <input id="smUsrSearch" type="search" value="${esc(state.search)}" placeholder="${esc(txt('Ном ё вазифаро нависед', 'Введите имя или должность'))}">
+              </label>
+              <div class="control" style="align-self:end;margin:0">
+                <button type="button" class="button alt" id="smUsrReloadBtn" ${state.loading ? 'disabled' : ''}>${esc(txt('Навсозӣ', 'Обновить'))}</button>
+              </div>
+            </div>
+            <p class="small" role="status" id="smUsrStatusMsg">${esc(state.statusMsg)}</p>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>№</th><th>${esc(txt('Корманд', 'Сотрудник'))}</th><th>${esc(txt('Вазифа', 'Должность'))}</th><th>${esc(txt('Ҳолат', 'Статус'))}</th></tr></thead>
+                <tbody>
+                  ${cols.length ? cols.map((u, idx) => `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td><strong>${esc(u.full_name || '—')}</strong></td>
+                      <td>${esc(formatPositionTitle(u.primary_position, getLang()))}</td>
+                      <td>${verifBadge(u.verification_status)}</td>
+                    </tr>
+                  `).join('') : `<tr><td colspan="4" class="small">${esc(txt('Ҳамкорон ёфт нашуданд.', 'Коллеги не найдены.'))}</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        `);
+        panel.querySelector('#smUsrSearch')?.addEventListener('input', ev => {
+          state.search = ev.target.value;
+          renderUsersUi();
+          const inp = panel.querySelector('#smUsrSearch');
+          if (inp) {
+            inp.focus();
+            try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch {}
+          }
+        });
+        panel.querySelector('#smUsrReloadBtn')?.addEventListener('click', () => renderUsers({ refresh: true }));
+        panel.querySelectorAll('[data-my-dev-revoke]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+              await cl.revokeMyDeviceSession({ p_org_id: btn.dataset.org, p_device_id: btn.dataset.myDevRevoke });
+              state.statusMsg = txt('Дастгоҳ ҷудо карда шуд.', 'Устройство отвязано.');
+              await renderUsers({ refresh: true });
+            } catch (err) {
+              state.statusMsg = err?.message || 'Error';
+              renderUsersUi();
+            }
+          });
+        });
         return;
       }
 
@@ -1179,7 +1706,7 @@ export function setupPhase2Panels(article, docs, school, views) {
       });
 
       const totalCount = state.items.length;
-      const pendingCount = state.items.filter(u => u.verification_status === 'pending').length;
+      const pendingCount = pendingUsers.length;
       const verifiedCount = state.items.filter(u => u.verification_status === 'verified').length;
       const disabledCount = state.items.filter(u => u.account_active === false).length;
 
@@ -1192,8 +1719,14 @@ export function setupPhase2Panels(article, docs, school, views) {
             : txt('Шумо метавонед кормандони мактабро (ғайр аз директор) тасдиқ, қатъи дастгоҳ ё бозсозии рамз кунед.', 'Вы управляете сотрудниками школы (кроме директора): подтверждение, сброс устройств и пароля.');
 
       setPanelHtml(panel, `
-        <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
+        <h2 tabindex="-1">${esc(txt('Корбарон, верификатсияи бақайдгирӣ ва дастгоҳҳо', 'Пользователи, верификация аккаунтов и устройства'))}</h2>
         <p class="small">${esc(hierarchyNote)}</p>
+        ${pendingCount > 0 ? `
+          <div class="notice" style="border-left:4px solid #dc2626">
+            <strong>🔔 ${esc(txt(`Дархостҳои нави бақайдгирӣ (${pendingCount})`, `Новые заявки на регистрацию (${pendingCount})`))}</strong>
+            <p class="small">${esc(txt('Барои он ки шахсони бегона ба мактаб ворид нашаванд, бақайдгириҳои навро тафтиш ва тасдиқ ё рад кунед.', 'Проверьте новые заявки, чтобы посторонние не попали в школу — подтвердите или отклоните каждую.'))}</p>
+          </div>
+        ` : ''}
         <div class="sm-p2-kpis">
           <div class="sm-p2-kpi"><span>${esc(txt('Ҳамаи корбарон', 'Всего пользователей'))}</span><b>${totalCount}</b></div>
           <div class="sm-p2-kpi"><span>${esc(txt('Интизори тасдиқ', 'Ожидают подтверждения'))}</span><b>${pendingCount}</b></div>
@@ -1297,6 +1830,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             </tbody>
           </table>
         </div>
+        ${myDevicesSectionHtml}
       `);
 
       panel.querySelector('#smUsrSearch')?.addEventListener('input', ev => {
@@ -1326,6 +1860,19 @@ export function setupPhase2Panels(article, docs, school, views) {
       panel.querySelector('#smUsrHidePassBtn')?.addEventListener('click', () => {
         state.issuedPass = null;
         renderUsersUi();
+      });
+      panel.querySelectorAll('[data-my-dev-revoke]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await cl.revokeMyDeviceSession({ p_org_id: btn.dataset.org, p_device_id: btn.dataset.myDevRevoke });
+            state.statusMsg = txt('Дастгоҳ ҷудо карда шуд.', 'Устройство отвязано.');
+            await renderUsers({ refresh: true });
+          } catch (err) {
+            state.statusMsg = err?.message || 'Error';
+            renderUsersUi();
+          }
+        });
       });
 
       panel.querySelectorAll('[data-usr-unlink]').forEach(btn => {
@@ -1437,12 +1984,23 @@ export function setupPhase2Panels(article, docs, school, views) {
     renderUsers = async ({ refresh = true } = {}) => {
       const cl = getAuthedCloudClient();
       const c = ctx();
+      const isManager = canPositionManageUsers(cabinetId) || canPositionManageUsers(c.primaryPosition);
       if (refresh && cl && c.verified) {
         state.loading = true;
         renderUsersUi();
         try {
-          const rows = await cl.getManagedUsers(null);
-          state.items = Array.isArray(rows) ? rows : [];
+          const [devs, listRows] = await Promise.all([
+            cl.getMyDeviceSessions(c.orgId && /^[0-9a-f-]{36}$/i.test(c.orgId) ? c.orgId : null).catch(() => []),
+            isManager
+              ? cl.getManagedUsers(null).catch(() => [])
+              : loadColleaguesDirectory(c).catch(() => []),
+          ]);
+          state.myDevices = Array.isArray(devs) ? devs : [];
+          if (isManager) {
+            state.items = Array.isArray(listRows) ? listRows : [];
+          } else {
+            state.colleagues = Array.isArray(listRows) ? listRows : [];
+          }
           state.loadedOnce = true;
         } catch (err) {
           state.statusMsg = err?.message || 'Error';
@@ -1851,7 +2409,6 @@ export function setupPhase2Panels(article, docs, school, views) {
     else if (id === 'smPayrollPanel' && canPayroll) renderPayroll({ refresh: true });
     else if (id === 'smGradesPanel' && canGrades) renderGrades({ refresh: true });
     else if (id === 'smAnalyticsPanel' && canAnalytics) renderAnalytics();
-    else if (id === 'smVerificationPanel' && canVerify) renderVerification();
     else if (id === 'smUsersPanel' && canUsers) renderUsers({ refresh: true });
     else if (id === 'smRoleWorkspacePanel' && roleCfg) renderRoleWorkspace();
   }
@@ -1862,7 +2419,6 @@ export function setupPhase2Panels(article, docs, school, views) {
     if (canPayroll) renderPayroll({ refresh: refreshData });
     if (canGrades) renderGrades({ refresh: refreshData });
     if (canAnalytics) renderAnalytics();
-    if (canVerify) renderVerification();
     if (canUsers) renderUsers({ refresh: refreshData });
     if (roleCfg) renderRoleWorkspace();
   }

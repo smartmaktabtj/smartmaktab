@@ -89,7 +89,8 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);
   assert.equal(await page.locator('#cabinetUpdateTrigger').isVisible(),true);
-  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),7);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),6);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2="smVerificationPanel"]').count(),0);
   assert.equal(await page.locator('#smMainModules [data-open-phase2="smUsersPanel"]').count(),1);
   await page.locator('#workspaceSettingsToggle').click();
   assert.equal(await page.locator('#profFirst').inputValue(),'Нав');

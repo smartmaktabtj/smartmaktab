@@ -79,10 +79,32 @@ export async function installMockSupabase(target,opts={}){
  let createdSchool=null;
  let cloudStudents=[];
  let cloudWorkloads=[];
+ let cloudStudentRequests=[];
  await target.route('https://*.supabase.co/**',async route=>{
   const req=route.request();
   const url=new URL(req.url());
   const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if(url.pathname.endsWith('/rest/v1/rpc/submit_student_update_request')&&req.method()==='POST'){
+   const body=req.postDataJSON()||{};
+   const rec={
+    id:`req-${cloudStudentRequests.length+1}`,
+    organization_id:body.p_org_id,
+    class_code:body.p_class_code||'',
+    action_type:body.p_action_type||'import',
+    replace_class:Boolean(body.p_replace_class),
+    rows_payload:body.p_rows_payload||[],
+    summary_text:body.p_summary_text||'',
+    requested_by_name:body.p_requested_by_name||'Корманд',
+    requested_by_position:body.p_requested_by_position||'',
+    status:'pending',
+    created_at:new Date().toISOString(),
+   };
+   cloudStudentRequests.unshift(rec);
+   return json(rec.id);
+  }
+  if(url.pathname.endsWith('/rest/v1/student_update_requests')&&req.method()==='GET'){
+   return json(cloudStudentRequests);
+  }
   if(url.pathname.endsWith('/rest/v1/rpc/upsert_school_students')&&req.method()==='POST'){
    const body=req.postDataJSON()||{};
    const rows=Array.isArray(body.p_rows)?body.p_rows:[];

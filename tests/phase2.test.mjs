@@ -7,11 +7,17 @@ import {
   parseStudentImportFile,
   buildStudentsCsv,
   buildSimpleDocxBytes,
+  formatBirthDateDisplay,
 } from '../shared/spreadsheet-import.mjs';
 import {
   computeMonthlyPayroll,
   computeGradeMetrics,
   buildMonthCalendar,
+  TAHLIL_SUBJECTS_BY_CLASS,
+  getSubjectsForClassCode,
+  roundTajikGrade,
+  computeTahlilScore,
+  computePeriodDatesStatus,
 } from '../shared/phase2-store.mjs';
 
 function makeTestXlsxBytes() {
@@ -117,6 +123,47 @@ test('Phase 2 unit: Quarter grade metrics follow 10-point quality (>=8) and pass
   assert.equal(m.avgGrade, 6.75);
 });
 
+test('Stage 4 unit: birth_date extraction (.docx/.csv/.txt) & Tahlil 10-point calculator/subjects/periods', () => {
+  // Birth date parsing: DD.MM.YYYY, YYYY-MM-DD, and year-only
+  const txtSample = [
+    '№;Ному насаб;Синф;Санаи таваллуд;Ҷинс',
+    '1;Сафарова Меҳрона;6А;14.05.2013;Духтар',
+    '2;Зоиров Сомон;6А;2013-11-02;Писар',
+    '3;Расулова Нилуфар;6А;2013;Д',
+  ].join('\n');
+  const txtRes = parseStudentImportFile(txtSample, 'students.txt', '6А');
+  assert.equal(txtRes.rows.length, 3);
+  assert.equal(txtRes.rows[0].birth_date, '2013-05-14');
+  assert.equal(txtRes.rows[0].birth_year, 2013);
+  assert.equal(txtRes.rows[1].birth_date, '2013-11-02');
+  assert.equal(txtRes.rows[2].birth_date, null);
+  assert.equal(txtRes.rows[2].birth_year, 2013);
+  assert.equal(formatBirthDateDisplay('2013-05-14'), '14.05.2013');
+
+  const csvOut = buildStudentsCsv(txtRes.rows);
+  assert.match(csvOut, /14\.05\.2013/);
+
+  // Tahlil rounding, score, prognosis, subjects, and dates
+  assert.equal(roundTajikGrade(8.5), 9);
+  assert.equal(roundTajikGrade(8.49), 8);
+  const sc = computeTahlilScore('8, 9, 7', '9, 8');
+  assert.equal(sc.avgCurrent, 8);
+  assert.equal(sc.avgControl, 8.5);
+  assert.equal(sc.exactAvg, 8.25);
+  assert.equal(sc.finalGrade, 8);
+  assert.ok(sc.prognosis);
+  assert.equal(sc.prognosis.targetGrade, 9);
+  assert.equal(sc.prognosis.neededScore, 10);
+
+  assert.ok(Array.isArray(TAHLIL_SUBJECTS_BY_CLASS['1']));
+  assert.ok(getSubjectsForClassCode('5А').includes('Математика'));
+  assert.ok(getSubjectsForClassCode('11Б').includes('Алгебра'));
+
+  const futureEnd = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const stSoon = computePeriodDatesStatus('2026-09-01', futureEnd);
+  assert.equal(stSoon.tone, 'danger');
+});
+
 // ============================================================================
 // PGlite Full Database RLS, Hierarchy, Verification & Analytics Tests
 // ============================================================================
@@ -160,10 +207,21 @@ before(async () => {
     '../supabase/migrations/20261126000200_role_tariffs_quotas_devices_cleanup.sql',
     '../supabase/migrations/20261126000300_aliya_addon_profiles_positions.sql',
     '../supabase/migrations/20261126000400_phase2_registries_payroll_grades_verification_hierarchy.sql',
+    '../supabase/migrations/20261126000500_account_verification.sql',
+    '../supabase/migrations/20261127000100_public_bootstrap_rpc.sql',
+    '../supabase/migrations/20261128000100_stage0_cleanup.sql',
+    '../supabase/migrations/20261128000200_stage1_locations_tariffs_devices.sql',
+    '../supabase/migrations/20261128000300_stage1_registration_payments_quotas.sql',
+    '../supabase/migrations/20261128000400_stage1_self_devices_and_users.sql',
+    '../supabase/migrations/20261128000500_stage1_fix_assign_membership_and_ctx.sql',
+    '../supabase/migrations/20261129000100_stage2_5_cleanup_and_devices.sql',
+    '../supabase/migrations/20261130000100_document_library_editor_storage.sql',
+    '../supabase/migrations/20261130000200_stage3_pdf_templates_support.sql',
+    '../supabase/migrations/20261201000100_stage4_admin_managers_students_tahlil.sql',
   ]) {
     await db.exec(await read(m));
   }
-  for (const [i, name] of ['super_admin', 'raesat_head', 'maorif_head', 'director_a', 'teacher_a', 'teacher_b'].entries()) {
+  for (const [i, name] of ['super_admin', 'raesat_head', 'maorif_head', 'director_a', 'teacher_a', 'teacher_b', 'mgr_sughd', 'class_teacher_a'].entries()) {
     await q('insert into auth.users values ($1,$2,now())', [uid(i + 1), `${name}@example.test`]);
   }
   await q('insert into smartmaktab_private.platform_developers(user_id) values ($1)', [uid(1)]);
@@ -173,11 +231,14 @@ before(async () => {
   schoolAId = (await as(1, () => q("select public.admin_upsert_organization('МТМУ № 1','school',$1,null,'Суғд','Хуҷанд','MTMU-01') as id", [maorifId])))[0].id;
   schoolBId = (await as(1, () => q("select public.admin_upsert_organization('МТМУ № 2','school',null,null,'Хатлон','Бохтар','MTMU-02') as id")))[0].id;
 
-  await as(1, () => q("select public.admin_assign_membership($1,$2,'authority_viewer')", [uid(2), raesatId]));
-  await as(1, () => q("select public.admin_assign_membership($1,$2,'maorif')", [uid(3), maorifId]));
+  await as(1, () => q("select public.admin_assign_membership($1,$2,'authority_viewer','raesat-head')", [uid(2), raesatId]));
+  await as(1, () => q("select public.admin_assign_membership($1,$2,'maorif','office-head')", [uid(3), maorifId]));
   await as(1, () => q("select public.admin_assign_membership($1,$2,'director','school-director')", [uid(4), schoolAId]));
   await as(1, () => q("select public.admin_assign_membership($1,$2,'teacher','school-teacher')", [uid(5), schoolAId]));
   await as(1, () => q("select public.admin_assign_membership($1,$2,'teacher','school-teacher')", [uid(6), schoolBId]));
+  await as(1, () => q("select public.admin_assign_membership($1,$2,'teacher','school-class-teacher')", [uid(8), schoolAId]));
+  await q("insert into public.user_profiles(user_id, full_name, preferred_lang) values ($1,'Устод Карим','tg') on conflict (user_id) do update set full_name=excluded.full_name", [uid(5)]);
+  await q("insert into public.user_profiles(user_id, full_name, preferred_lang) values ($1,'Роҳбари синф Нодира','tg') on conflict (user_id) do update set full_name=excluded.full_name", [uid(8)]);
 });
 
 after(() => db.close());
@@ -240,4 +301,85 @@ test('Phase 2 DB: territory hierarchy & strict RLS across students, workloads, p
   assert.equal(raesatAnalytics.student_count, 1);
   assert.equal(raesatAnalytics.schools.length, 1);
   assert.equal(raesatAnalytics.schools[0].id, schoolAId);
+});
+
+test('Stage 4 DB: admin_managers scoped permissions, student birth_date + update requests, colleagues directory & Tahlil grades', async () => {
+  // 1) Non-super-admin cannot manage admin_managers
+  await denied(as(4, () => q("select public.admin_upsert_admin_manager($1,'Hack','hack',array['orgs']::text[],null,true,'')", [uid(7)])));
+
+  // 2) Super-admin creates a Sughd-scoped admin manager with ['orgs','verifications'] only
+  await as(1, () => q(
+    "select public.admin_upsert_admin_manager($1,'Менеҷер Суғд','mgr_sughd',array['orgs','verifications']::text[],'Суғд',true,'Назорати вилояти Суғд')",
+    [uid(7)],
+  ));
+  const mgrCtx = (await as(7, () => q('select public.get_my_workspace_context() as ctx')))[0].ctx;
+  assert.equal(mgrCtx.is_super_admin, false);
+  assert.equal(mgrCtx.is_admin_manager, true);
+  assert.deepEqual(mgrCtx.admin_permissions, ['orgs', 'verifications']);
+  assert.equal(mgrCtx.admin_region_scope, 'Суғд');
+
+  // Manager sees Sughd orgs via RLS, NOT Khatlon (schoolBId)
+  const mgrOrgs = await as(7, () => q('select id from public.organizations'));
+  assert.ok(mgrOrgs.some(o => o.id === schoolAId));
+  assert.ok(!mgrOrgs.some(o => o.id === schoolBId));
+
+  // Manager can upsert org inside Sughd, denied inside Khatlon, denied on licenses/plans without permission
+  await as(7, () => q("select public.admin_upsert_organization('МТМУ № 19','school',$1,null,'Суғд','Хуҷанд','MTMU-19')", [maorifId]));
+  await denied(as(7, () => q("select public.admin_upsert_organization('МТМУ Хатлон','school',null,null,'Хатлон','Бохтар','MTMU-KH')")));
+  await denied(as(7, () => q("select public.admin_set_license($1,'active','std',now() + interval '30 days',30,'',10,1,2)", [schoolAId])));
+
+  // 3) Student full birth_date + non-anonymous update request + approval flow
+  await as(5, () => q('select public.upsert_school_students($1,$2)', [
+    schoolAId,
+    JSON.stringify([{ class_code: '6А', full_name: 'Саидова Шабнам', birth_date: '14.05.2013', gender: 'female' }]),
+  ]));
+  const stuRows = await as(5, () => q("select id, birth_date::text as bd, birth_year from public.school_students where organization_id=$1 and full_name='Саидова Шабнам'", [schoolAId]));
+  assert.equal(stuRows.length, 1);
+  assert.equal(stuRows[0].bd, '2013-05-14');
+  assert.equal(stuRows[0].birth_year, 2013);
+
+  const reqId = (await as(5, () => q(
+    "select public.submit_student_update_request($1,'6А','add',false,$2::jsonb,'Хонандаи нав омад','','') as id",
+    [schoolAId, JSON.stringify([{ class_code: '6А', full_name: 'Сафаров Рустам', birth_date: '2013-09-21', gender: 'male' }])],
+  )))[0].id;
+  const reqRow = (await as(4, () => q('select requested_by_name, requested_by_position, status from public.student_update_requests where id=$1', [reqId])))[0];
+  assert.equal(reqRow.requested_by_name, 'Устод Карим');
+  assert.ok(reqRow.requested_by_position.length > 0);
+  assert.equal(reqRow.status, 'pending');
+
+  // Ordinary teacher cannot approve student update request; class-teacher (uid 8) CAN approve -> auto-inserts student
+  await denied(as(5, () => q("select public.review_student_update_request($1,'approved','ok')", [reqId])));
+  await as(8, () => q("select public.review_student_update_request($1,'approved','Тасдиқ')", [reqId]));
+  const addedByReq = await as(5, () => q("select full_name, birth_date::text as bd from public.school_students where organization_id=$1 and full_name='Сафаров Рустам'", [schoolAId]));
+  assert.equal(addedByReq.length, 1);
+  assert.equal(addedByReq[0].bd, '2013-09-21');
+
+  // 4) Colleagues directory accessible to ordinary verified staff (uid 5), denied for school B (uid 6)
+  const colleagues = (await as(5, () => q('select public.get_school_colleagues_directory($1) as list', [schoolAId])))[0].list;
+  assert.ok(Array.isArray(colleagues));
+  assert.ok(colleagues.length >= 3);
+  assert.ok(colleagues.some(c => c.primary_position === 'school-director'));
+  await denied(as(6, () => q('select public.get_school_colleagues_directory($1)', [schoolAId])));
+
+  // 5) Extended Tahlil quarter_grades (current_grades, control_grades, period_start, period_end)
+  await as(5, () => q('select public.save_quarter_grades($1,2026,$2,$3,$4,$5::jsonb)', [
+    schoolAId,
+    'q1',
+    '6А',
+    'Математика',
+    JSON.stringify([{
+      student_name: 'Саидова Шабнам',
+      grade: 9,
+      current_grades: [8, 9, 10],
+      control_grades: [9],
+      period_start: '2026-09-01',
+      period_end: '2026-10-31',
+      absent_hours: 1,
+    }]),
+  ]));
+  const savedGr = (await as(5, () => q("select current_grades, control_grades, period_start::text as ps, period_end::text as pe from public.quarter_grades where organization_id=$1 and student_name='Саидова Шабнам'", [schoolAId])))[0];
+  assert.deepEqual(savedGr.current_grades, [8, 9, 10]);
+  assert.deepEqual(savedGr.control_grades, [9]);
+  assert.equal(savedGr.ps, '2026-09-01');
+  assert.equal(savedGr.pe, '2026-10-31');
 });

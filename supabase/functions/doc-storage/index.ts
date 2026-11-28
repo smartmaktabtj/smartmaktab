@@ -75,6 +75,8 @@ Deno.serve(async (req) => {
 
     const userId = String(ctx.user_id);
     const isSuperAdmin = ctx.is_super_admin === true;
+    const adminPerms = Array.isArray(ctx.admin_permissions) ? ctx.admin_permissions.map(String) : [];
+    const canManageDocs = isSuperAdmin || (ctx.is_admin_manager === true && adminPerms.includes('documents'));
     const body = await req.json().catch(() => ({}));
     const action = typeof body?.action === 'string' ? body.action.trim() : '';
 
@@ -196,7 +198,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'save_template_blob') {
-      if (!isSuperAdmin) {
+      if (!canManageDocs) {
         return json(403, { error: 'super_admin_required' });
       }
       const templateId = typeof body?.template_id === 'string' ? body.template_id.trim() : '';
@@ -235,7 +237,7 @@ Deno.serve(async (req) => {
       const storagePath = typeof body?.storage_path === 'string' && isSafeStoragePath(body.storage_path.trim())
         ? body.storage_path.trim()
         : String(tpl.storage_path || '');
-      if (!storagePath || (!isSuperAdmin && !storagePath.startsWith(`templates/${templateId}/`))) {
+      if (!storagePath || (!canManageDocs && !storagePath.startsWith(`templates/${templateId}/`))) {
         return json(404, { error: 'template_blob_not_found' });
       }
       const { data, error } = await adminClient.storage
@@ -249,7 +251,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'save_template_pdf') {
-      if (!isSuperAdmin) {
+      if (!canManageDocs) {
         return json(403, { error: 'super_admin_required' });
       }
       const templateId = typeof body?.template_id === 'string' ? body.template_id.trim() : '';
@@ -293,7 +295,7 @@ Deno.serve(async (req) => {
       const pdfPath = typeof body?.pdf_storage_path === 'string' && isSafeStoragePath(body.pdf_storage_path.trim())
         ? body.pdf_storage_path.trim()
         : String(tpl.pdf_storage_path || '');
-      if (!pdfPath || (!isSuperAdmin && !pdfPath.startsWith(`templates/${templateId}/`))) {
+      if (!pdfPath || (!canManageDocs && !pdfPath.startsWith(`templates/${templateId}/`))) {
         return json(404, { error: 'template_pdf_not_found' });
       }
       const { data, error } = await adminClient.storage
@@ -307,7 +309,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'delete_template_blob') {
-      if (!isSuperAdmin) {
+      if (!canManageDocs) {
         return json(403, { error: 'super_admin_required' });
       }
       const templateId = typeof body?.template_id === 'string' ? body.template_id.trim() : '';

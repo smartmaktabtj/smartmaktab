@@ -88,8 +88,9 @@ const copy = {
     lang: 'Забон',
     signOut: 'Баромадан',
     reload: 'Навсозӣ',
-    loginTitle: 'Вориди маъмури низом (Супер-админ)',
+    loginTitle: 'Вориди маъмур ё менеҷери низом',
     email: 'Почтаи электронӣ',
+    emailOrLogin: 'Email ё логин (агар менеҷер бошед)',
     password: 'Рамз',
     signIn: 'Ворид шудан',
     sendRecovery: 'Пайванди таъини рамз ба почта',
@@ -97,8 +98,29 @@ const copy = {
     setPasswordTitle: 'Таъин ё навсозии рамзи маъмур',
     newPassword: 'Рамзи нав (на кам аз 8 рамз)',
     projectInfo: 'Лоиҳаи Supabase',
-    needSuperAdmin: 'Ин ҳисоб ҳуқуқи маъмури низом (super_admin) надорад.',
-    signedIn: 'Ворид шудед ҳамчун маъмури низом.',
+    needSuperAdmin: 'Ин ҳисоб ҳуқуқи маъмури низом (Супер-админ ё Менеҷер) надорад.',
+    signedIn: 'Ворид шудед ба панели маъмурӣ.',
+    tabManagers: 'Менеҷерони админка',
+    managersHint: 'Супер-админ метавонад менеҷеронро бо ҳуқуқҳои маҳдуд (танҳо бахшҳои интихобшуда ва/ё танҳо як вилоят) таъин намояд.',
+    mgrLogin: 'Логин ё Email',
+    mgrPassword: 'Рамз (ихтиёрӣ барои нав)',
+    mgrRegionScope: 'Маҳдудияти минтақа (Вилоят)',
+    mgrAllRegions: 'Ҳамаи вилоятҳо (бе маҳдудият)',
+    mgrPermissionsLabel: 'Бахшҳои иҷозатдодашуда:',
+    mgrSaveBtn: 'Сабти менеҷер',
+    mgrColPerms: 'Ҳуқуқҳо (Бахшҳо)',
+    mgrColScope: 'Вилоят',
+    mgrSuperLabel: 'Супер-админ',
+    mgrRoleLabel: 'Менеҷери админка',
+    confirmDeleteMgr: 'Менеҷери «{name}»-ро аз рӯйхати менеҷерони админка хориҷ мекунед?',
+    deletedMgr: 'Менеҷер хориҷ карда шуд.',
+    permOrgs: 'Муассисаҳо ва мактабҳо',
+    permVerifications: 'Верификатсияи ҳисобҳо',
+    permRoles: 'Корбарон ва дастгоҳҳо',
+    permLicenses: 'Иҷозатномаҳо ва квотаҳо',
+    permPlans: 'Тарифҳо ва реквизитҳо',
+    permPayments: 'Чекҳои пардохт (OCR)',
+    permDocuments: 'Ҳуҷҷатҳо ва қолабҳо',
     statRaesat: 'Раёсатҳо (вилоят/шаҳр)',
     statMaorif: 'Шуъбаҳои маориф',
     statSchools: 'Мактабҳо / муассисаҳо',
@@ -299,8 +321,9 @@ const copy = {
     lang: 'Язык',
     signOut: 'Выйти',
     reload: 'Обновить',
-    loginTitle: 'Вход администратора системы (Супер-админ)',
+    loginTitle: 'Вход администратора или менеджера',
     email: 'Электронная почта',
+    emailOrLogin: 'Email или логин (для менеджеров)',
     password: 'Пароль',
     signIn: 'Войти',
     sendRecovery: 'Отправить ссылку для задания пароля',
@@ -308,8 +331,29 @@ const copy = {
     setPasswordTitle: 'Установка / смена пароля администратора',
     newPassword: 'Новый пароль (мин. 8 символов)',
     projectInfo: 'Проект Supabase',
-    needSuperAdmin: 'У этого аккаунта нет прав администратора (super_admin).',
-    signedIn: 'Вы вошли как администратор системы.',
+    needSuperAdmin: 'У этого аккаунта нет прав администратора или активного менеджера.',
+    signedIn: 'Вы вошли в панель администратора.',
+    tabManagers: 'Менеджеры админки',
+    managersHint: 'Супер-админ может назначать менеджеров админки с доступом только к выбранным разделам и/или одной области.',
+    mgrLogin: 'Логин или Email',
+    mgrPassword: 'Пароль (необязательно)',
+    mgrRegionScope: 'Ограничение по области',
+    mgrAllRegions: 'Все области (без ограничений)',
+    mgrPermissionsLabel: 'Разрешённые разделы:',
+    mgrSaveBtn: 'Сохранить менеджера',
+    mgrColPerms: 'Доступные разделы',
+    mgrColScope: 'Область',
+    mgrSuperLabel: 'Супер-админ',
+    mgrRoleLabel: 'Менеджер админки',
+    confirmDeleteMgr: 'Удалить права менеджера админки для «{name}»?',
+    deletedMgr: 'Менеджер удалён.',
+    permOrgs: 'Организации и школы',
+    permVerifications: 'Верификация аккаунтов',
+    permRoles: 'Пользователи и устройства',
+    permLicenses: 'Лицензии и квоты',
+    permPlans: 'Тарифы и реквизиты',
+    permPayments: 'Чеки оплаты (OCR)',
+    permDocuments: 'Документы и шаблоны',
     statRaesat: 'Управлений (Раёсат)',
     statMaorif: 'Отделов (Маориф)',
     statSchools: 'Школ / учреждений',
@@ -507,15 +551,33 @@ const copy = {
 };
 
 const $ = id => document.getElementById(id);
-const lang = 'tg';
+let lang = localStorage.getItem('smartmaktab.admin.lang') === 'ru' ? 'ru' : 'tg';
+let theme = localStorage.getItem('smartmaktab.admin.theme') === 'dark' ? 'dark' : 'light';
 
-const t = key => copy.tg[key] || key;
+const t = key => (copy[lang] || copy.tg)[key] || copy.tg[key] || key;
 const client = createCloudClient({
   config: getCloudConfig(),
   storage: globalThis.localStorage,
   storageKey: 'smartmaktab.admin.session.v1',
 });
 
+const MANAGER_PERM_KEYS = ['orgs', 'verifications', 'roles', 'licenses', 'plans', 'payments', 'documents'];
+const PERM_LABEL_KEYS = {
+  orgs: 'permOrgs',
+  verifications: 'permVerifications',
+  roles: 'permRoles',
+  licenses: 'permLicenses',
+  plans: 'permPlans',
+  payments: 'permPayments',
+  documents: 'permDocuments',
+};
+
+let adminAccess = {
+  isSuperAdmin: false,
+  isManager: false,
+  permissions: [],
+  regionScope: null,
+};
 let activeTab = 'orgs';
 let editingOrgId = null;
 let orgs = [];
@@ -528,8 +590,52 @@ let pendingVerifications = [];
 let locations = [];
 let authUsers = [];
 let deviceSessions = [];
+let adminManagers = [];
 let selectedExtraSet = new Set();
+let selectedMgrPerms = new Set(['orgs', 'verifications']);
+let editingMgrUserId = null;
 let docsPanel = null;
+
+function canPerm(perm) {
+  if (adminAccess.isSuperAdmin) return true;
+  if (!adminAccess.isManager) return false;
+  return adminAccess.permissions.includes(perm);
+}
+
+function applyTheme(nextTheme = theme) {
+  theme = nextTheme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem('smartmaktab.admin.theme', theme); } catch {}
+  const btn = $('admThemeToggle');
+  if (btn) {
+    btn.textContent = theme === 'dark'
+      ? (lang === 'ru' ? '☀️ День' : '☀️ Рӯз')
+      : (lang === 'ru' ? '🌙 Ночь' : '🌙 Шаб');
+  }
+}
+
+function syncAdminSidebarAndAccess() {
+  const roleLbl = $('admRoleLabel');
+  const scopeLbl = $('admScopeLabel');
+  if (roleLbl) roleLbl.textContent = adminAccess.isSuperAdmin ? t('mgrSuperLabel') : t('mgrRoleLabel');
+  if (scopeLbl) scopeLbl.textContent = adminAccess.regionScope || t('mgrAllRegions');
+  const btns = [...document.querySelectorAll('.adm-tabs button[data-tab]')];
+  for (const btn of btns) {
+    const tab = btn.dataset.tab;
+    btn.hidden = tab === 'managers' ? !adminAccess.isSuperAdmin : !canPerm(tab);
+  }
+  const activeBtn = btns.find(b => b.dataset.tab === activeTab && !b.hidden);
+  if (!activeBtn) {
+    const firstVisible = btns.find(b => !b.hidden);
+    if (firstVisible) showTab(firstVisible.dataset.tab);
+  }
+  if (adminAccess.regionScope) {
+    const fReg = $('filterRegion');
+    if (fReg && !fReg.value) fReg.value = adminAccess.regionScope;
+    const oReg = $('orgRegion');
+    if (oReg && !oReg.value && !editingOrgId) oReg.value = adminAccess.regionScope;
+  }
+}
 
 function normalizeDistrictInput(value) {
   const cleaned = String(value || '').trim();
@@ -626,13 +732,15 @@ function renderSummaryBar() {
     return card;
   }));
 
-  const verifTabBtn = document.querySelector('.adm-tabs button[data-tab="verifications"]');
-  if (verifTabBtn) {
-    verifTabBtn.textContent = pendingVerifCnt > 0 ? `${t('tabVerifications')} (${pendingVerifCnt})` : t('tabVerifications');
+  const verifBadge = $('admTabBadgeVerif');
+  if (verifBadge) {
+    verifBadge.textContent = pendingVerifCnt > 0 ? String(pendingVerifCnt) : '';
+    verifBadge.hidden = pendingVerifCnt === 0;
   }
-  const payTabBtn = document.querySelector('.adm-tabs button[data-tab="payments"]');
-  if (payTabBtn) {
-    payTabBtn.textContent = pendingPayCnt > 0 ? `${t('tabPayments')} (${pendingPayCnt})` : t('tabPayments');
+  const payBadge = $('admTabBadgePay');
+  if (payBadge) {
+    payBadge.textContent = pendingPayCnt > 0 ? String(pendingPayCnt) : '';
+    payBadge.hidden = pendingPayCnt === 0;
   }
 }
 
@@ -641,6 +749,9 @@ function applyTranslations() {
   for (const el of document.querySelectorAll('[data-t]')) {
     el.textContent = t(el.dataset.t);
   }
+  applyTheme(theme);
+  const langBtn = $('admLangToggle');
+  if (langBtn) langBtn.textContent = lang === 'ru' ? '🌐 Тоҷикӣ' : '🌐 Русский';
   renderRoleAccessOptions();
   renderSummaryBar();
   renderFilterSelects();
@@ -648,7 +759,9 @@ function applyTranslations() {
   renderOrgSelects();
   renderOrgParentOptions();
   renderPositionControls();
+  renderManagerControls();
   renderEditBanner();
+  syncAdminSidebarAndAccess();
   renderTables();
   docsPanel?.rerenderLabels?.();
 }
@@ -663,12 +776,20 @@ function renderRoleAccessOptions() {
 }
 
 function showTab(name) {
+  const targetBtn = document.querySelector(`.adm-tabs button[data-tab="${name}"]`);
+  if (targetBtn && targetBtn.hidden) {
+    const firstVisible = document.querySelector('.adm-tabs button[data-tab]:not([hidden])');
+    if (firstVisible) name = firstVisible.dataset.tab;
+  }
   activeTab = name;
   for (const btn of document.querySelectorAll('.adm-tabs button')) {
     btn.setAttribute('aria-selected', btn.dataset.tab === name ? 'true' : 'false');
   }
   for (const pane of document.querySelectorAll('[data-pane]')) {
     pane.hidden = pane.dataset.pane !== name;
+  }
+  if (window.innerWidth <= 960) {
+    $('admSidebar')?.classList.add('is-collapsed');
   }
 }
 
@@ -802,17 +923,33 @@ function showIssuedCredentials(data) {
 async function refreshAll() {
   if (!client.session?.access_token) return;
   try {
-    const [o, m, l, pl, rt, p, ds, pv, locRows, uRes] = await Promise.all([
-      client.select('organizations', 'select=id,name,kind,parent_id,authority_tier,region_name,district_name,jamoat_name,village_name,verification_status,school_code&order=name.asc'),
-      client.select('school_memberships', 'select=id,user_id,organization_id,role,primary_position,extra_positions,max_extra_positions,max_devices,account_active,aliya_enabled,custom_method_name,verification_status,subscription_status,subscription_expires_at,created_at&order=created_at.desc'),
-      client.select('school_licenses', 'select=id,organization_id,status,plan_code,starts_at,expires_at,grace_days,max_accounts,max_positions_per_account,default_max_devices,notes,updated_at&order=updated_at.desc'),
-      client.getPaymentPlans(),
-      client.getRoleTariffs().catch(() => POSITION_CATALOG),
-      client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,include_aliya,storage_pack_count,ocr_payload,status,review_note,created_at&order=created_at.desc'),
-      client.select('user_device_sessions', 'select=id,user_id,organization_id,device_id,device_kind,device_label,is_active,first_seen_at,last_seen_at&order=last_seen_at.desc').catch(() => []),
-      client.getPendingAccountVerifications(null).catch(() => []),
+    const canRoles = canPerm('roles');
+    const canLic = canPerm('licenses');
+    const canPlans = canPerm('plans');
+    const canPay = canPerm('payments');
+    const canVerif = canPerm('verifications');
+    const canDocs = canPerm('documents');
+
+    const [o, m, l, pl, rt, p, ds, pv, locRows, uRes, mgrRows] = await Promise.all([
+      client.select('organizations', 'select=id,name,kind,parent_id,authority_tier,region_name,district_name,jamoat_name,village_name,verification_status,school_code&order=name.asc').catch(() => []),
+      (canRoles || canLic)
+        ? client.select('school_memberships', 'select=id,user_id,organization_id,role,primary_position,extra_positions,max_extra_positions,max_devices,account_active,aliya_enabled,custom_method_name,verification_status,subscription_status,subscription_expires_at,created_at&order=created_at.desc').catch(() => [])
+        : Promise.resolve([]),
+      (canRoles || canLic)
+        ? client.select('school_licenses', 'select=id,organization_id,status,plan_code,starts_at,expires_at,grace_days,max_accounts,max_positions_per_account,default_max_devices,notes,updated_at&order=updated_at.desc').catch(() => [])
+        : Promise.resolve([]),
+      canPlans ? client.getPaymentPlans().catch(() => []) : Promise.resolve([]),
+      (canRoles || canPlans) ? client.getRoleTariffs().catch(() => POSITION_CATALOG) : Promise.resolve([...POSITION_CATALOG]),
+      canPay
+        ? client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,include_aliya,storage_pack_count,ocr_payload,status,review_note,created_at&order=created_at.desc').catch(() => [])
+        : Promise.resolve([]),
+      canRoles
+        ? client.select('user_device_sessions', 'select=id,user_id,organization_id,device_id,device_kind,device_label,is_active,first_seen_at,last_seen_at&order=last_seen_at.desc').catch(() => [])
+        : Promise.resolve([]),
+      canVerif ? client.getPendingAccountVerifications(null).catch(() => []) : Promise.resolve([]),
       client.getTajikistanLocations().catch(() => []),
-      client.adminUsers({ action: 'list_users' }).catch(() => ({ users: [] })),
+      canRoles ? client.adminUsers({ action: 'list_users' }).catch(() => ({ users: [] })) : Promise.resolve({ users: [] }),
+      adminAccess.isSuperAdmin ? client.adminListAdminManagers().catch(() => []) : Promise.resolve([]),
     ]);
     orgs = o || [];
     memberships = m || [];
@@ -824,6 +961,7 @@ async function refreshAll() {
     pendingVerifications = Array.isArray(pv) ? pv : [];
     locations = Array.isArray(locRows) ? locRows : [];
     authUsers = Array.isArray(uRes?.users) ? uRes.users : [];
+    adminManagers = Array.isArray(mgrRows) ? mgrRows : [];
     renderSummaryBar();
     renderFilterSelects();
     renderDatalists();
@@ -831,9 +969,11 @@ async function refreshAll() {
     renderOrgSelects();
     renderOrgParentOptions();
     renderPositionControls();
+    renderManagerControls();
     renderEditBanner();
+    syncAdminSidebarAndAccess();
     renderTables();
-    await docsPanel?.refresh?.();
+    if (canDocs) await docsPanel?.refresh?.();
   } catch (err) {
     setStatus(err.message, 'error');
   }
@@ -1687,6 +1827,135 @@ function renderTables() {
     tr.append(td1, td2, td3);
     return tr;
   }) : [emptyRow(3)]));
+
+  // 7. Менеджеры админки (только супер-админ)
+  const mgrBody = $('managersTbody');
+  if (mgrBody) {
+    mgrBody.replaceChildren(...(adminManagers.length ? adminManagers.map(mgr => {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td');
+      const st = document.createElement('strong');
+      st.textContent = mgr.full_name || mgr.login_name || '—';
+      const sub = document.createElement('div');
+      sub.className = 'adm-meta';
+      sub.textContent = `${mgr.login_name || mgr.email || ''}${mgr.notes ? ` · ${mgr.notes}` : ''}`;
+      td1.append(st, sub);
+
+      const td2 = document.createElement('td');
+      const pills = document.createElement('div');
+      pills.className = 'adm-perm-pills';
+      const perms = Array.isArray(mgr.permissions) ? mgr.permissions : [];
+      for (const perm of perms) {
+        const span = document.createElement('span');
+        span.className = 'pill';
+        span.textContent = t(PERM_LABEL_KEYS[perm] || perm);
+        pills.append(span);
+      }
+      td2.append(pills);
+
+      const td3 = document.createElement('td');
+      td3.textContent = mgr.region_scope || t('mgrAllRegions');
+
+      const td4 = document.createElement('td');
+      const statusSpan = document.createElement('span');
+      statusSpan.className = `pill${mgr.is_active === false ? ' danger' : ''}`;
+      statusSpan.textContent = mgr.is_active === false ? t('disabledBadge') : t('activeBadge');
+      td4.append(statusSpan);
+
+      const td5 = document.createElement('td');
+      const row = document.createElement('div');
+      row.className = 'adm-row';
+      row.style.marginTop = '0';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn alt sm';
+      editBtn.textContent = t('editOrg');
+      editBtn.addEventListener('click', () => {
+        editingMgrUserId = mgr.user_id;
+        $('mgrLogin').value = mgr.login_name || mgr.email || '';
+        $('mgrLogin').disabled = true;
+        $('mgrFullName').value = mgr.full_name || '';
+        $('mgrPassword').value = '';
+        $('mgrRegionScope').value = mgr.region_scope || '';
+        $('mgrNotes').value = mgr.notes || '';
+        $('mgrActive').checked = mgr.is_active !== false;
+        selectedMgrPerms = new Set(Array.isArray(mgr.permissions) ? mgr.permissions : []);
+        renderManagerControls();
+        if ($('mgrResetBtn')) $('mgrResetBtn').hidden = false;
+        $('managerForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn danger sm';
+      delBtn.textContent = t('deleteOrg');
+      delBtn.addEventListener('click', async () => {
+        const ok = await smConfirm({
+          title: t('deleteOrg'),
+          message: t('confirmDeleteMgr').replace('{name}', mgr.full_name || mgr.login_name || ''),
+          confirmLabel: t('deleteOrg'),
+          cancelLabel: t('cancelEdit'),
+          danger: true,
+        });
+        if (!ok) return;
+        delBtn.disabled = true;
+        try {
+          await client.adminUsers({ action: 'delete_admin_manager', user_id: mgr.user_id });
+          setStatus(t('deletedMgr'));
+          if (editingMgrUserId === mgr.user_id) resetManagerForm();
+          await refreshAll();
+        } catch (err) {
+          setStatus(err.message, 'error');
+          delBtn.disabled = false;
+        }
+      });
+      row.append(editBtn, delBtn);
+      td5.append(row);
+
+      tr.append(td1, td2, td3, td4, td5);
+      return tr;
+    }) : [emptyRow(5)]));
+  }
+}
+
+function renderManagerControls() {
+  const scopeSel = $('mgrRegionScope');
+  if (scopeSel) {
+    const prev = scopeSel.value;
+    scopeSel.replaceChildren(
+      new Option(t('mgrAllRegions'), ''),
+      ...TAJIK_REGIONS.map(r => new Option(r, r)),
+    );
+    if (TAJIK_REGIONS.includes(prev)) scopeSel.value = prev;
+  }
+  const permsBox = $('mgrPermissionsBox');
+  if (permsBox) {
+    permsBox.replaceChildren(...MANAGER_PERM_KEYS.map(perm => {
+      const lbl = document.createElement('label');
+      lbl.className = 'adm-check';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = perm;
+      cb.checked = selectedMgrPerms.has(perm);
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedMgrPerms.add(perm);
+        else selectedMgrPerms.delete(perm);
+      });
+      const span = document.createElement('span');
+      span.textContent = t(PERM_LABEL_KEYS[perm] || perm);
+      lbl.append(cb, span);
+      return lbl;
+    }));
+  }
+}
+
+function resetManagerForm() {
+  editingMgrUserId = null;
+  $('managerForm')?.reset();
+  if ($('mgrLogin')) $('mgrLogin').disabled = false;
+  if ($('mgrActive')) $('mgrActive').checked = true;
+  selectedMgrPerms = new Set(['orgs', 'verifications']);
+  if ($('mgrResetBtn')) $('mgrResetBtn').hidden = true;
+  renderManagerControls();
 }
 
 function emptyRow(cols) {
@@ -1763,6 +2032,20 @@ $('copyAccessBtn').addEventListener('click', async () => {
 });
 $('closeAccessBtn').addEventListener('click', () => { $('issuedAccessCard').hidden = true; });
 
+function applyWorkspaceAuthContext(ctx) {
+  const perms = Array.isArray(ctx?.admin_permissions) ? ctx.admin_permissions : [];
+  const isSuper = Boolean(ctx?.is_super_admin);
+  const isMgr = Boolean(ctx?.is_admin_manager && perms.length > 0);
+  if (!isSuper && !isMgr) return false;
+  adminAccess = {
+    isSuperAdmin: isSuper,
+    isManager: isMgr,
+    permissions: isSuper ? [...MANAGER_PERM_KEYS, 'managers'] : perms,
+    regionScope: ctx?.admin_region_scope || null,
+  };
+  return true;
+}
+
 $('admLoginForm').addEventListener('submit', async e => {
   e.preventDefault();
   setStatus('');
@@ -1772,7 +2055,7 @@ $('admLoginForm').addEventListener('submit', async e => {
     await client.signIn($('loginEmail').value, $('loginPassword').value);
     $('loginPassword').value = '';
     const ctx = await client.getWorkspaceContext();
-    if (!ctx?.is_super_admin) {
+    if (!applyWorkspaceAuthContext(ctx)) {
       await client.signOut();
       setStatus(t('needSuperAdmin'), 'error');
       return;
@@ -1782,6 +2065,7 @@ $('admLoginForm').addEventListener('submit', async e => {
     $('signOutBtn').hidden = false;
     $('reloadBtn').hidden = false;
     setStatus(t('signedIn'));
+    syncAdminSidebarAndAccess();
     await refreshAll();
   } catch (err) {
     setStatus(err.message, 'error');
@@ -1792,12 +2076,66 @@ $('admLoginForm').addEventListener('submit', async e => {
 
 $('signOutBtn').addEventListener('click', async () => {
   await client.signOut();
+  adminAccess = { isSuperAdmin: false, isManager: false, permissions: [], regionScope: null };
   $('admLoginCard').hidden = false;
   $('admWorkspace').hidden = true;
   $('signOutBtn').hidden = true;
   $('reloadBtn').hidden = true;
   setStatus('');
 });
+
+$('admThemeToggle')?.addEventListener('click', () => {
+  applyTheme(theme === 'dark' ? 'light' : 'dark');
+});
+
+$('admLangToggle')?.addEventListener('click', () => {
+  lang = lang === 'tg' ? 'ru' : 'tg';
+  try { localStorage.setItem('smartmaktab.admin.lang', lang); } catch {}
+  applyTranslations();
+});
+
+$('admMenuToggle')?.addEventListener('click', () => {
+  $('admSidebar')?.classList.toggle('is-collapsed');
+});
+
+$('managerForm')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!adminAccess.isSuperAdmin) return;
+  const perms = [...selectedMgrPerms];
+  if (!perms.length) {
+    setStatus(lang === 'ru' ? 'Выберите хотя бы один раздел доступа' : 'Ақаллан як бахши дастрасиро интихоб кунед', 'error');
+    return;
+  }
+  const btn = $('mgrSaveBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await client.adminUsers({
+      action: 'create_or_update_admin_manager',
+      login: $('mgrLogin').value.trim(),
+      full_name: $('mgrFullName').value.trim(),
+      password: $('mgrPassword').value.trim() || undefined,
+      permissions: perms,
+      region_scope: $('mgrRegionScope').value || null,
+      is_active: $('mgrActive').checked,
+      notes: $('mgrNotes').value.trim(),
+    });
+    if (res?.temporary_password && $('mgrIssuedCard') && $('mgrIssuedText')) {
+      $('mgrIssuedText').textContent = `${t('mgrLogin')}: ${res.login_name || res.email}\n${t('tempPassword')}: ${res.temporary_password}`;
+      $('mgrIssuedCard').hidden = false;
+    } else if ($('mgrIssuedCard')) {
+      $('mgrIssuedCard').hidden = true;
+    }
+    resetManagerForm();
+    setStatus(t('saved'));
+    await refreshAll();
+  } catch (err) {
+    setStatus(err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+$('mgrResetBtn')?.addEventListener('click', resetManagerForm);
 
 $('reloadBtn').addEventListener('click', refreshAll);
 
@@ -1954,13 +2292,14 @@ $('planForm').addEventListener('submit', async e => {
   if (!client.session?.access_token) return;
   try {
     const ctx = await client.getWorkspaceContext();
-    if (ctx?.is_super_admin) {
+    if (applyWorkspaceAuthContext(ctx)) {
       $('admLoginCard').hidden = true;
       $('admWorkspace').hidden = false;
       $('signOutBtn').hidden = false;
       $('reloadBtn').hidden = false;
       if (authType === 'recovery' || authType === 'magiclink') $('admPasswordCard').hidden = false;
       setStatus(t('signedIn'));
+      syncAdminSidebarAndAccess();
       await refreshAll();
     } else {
       await client.signOut();
@@ -1984,6 +2323,7 @@ function wirePassEye(btnId, inpId) {
 wirePassEye('toggleAdmLoginPassword', 'loginPassword');
 wirePassEye('toggleAdmNewPassword', 'newPasswordInput');
 wirePassEye('toggleRoleTempPassword', 'roleTempPassword');
+wirePassEye('toggleMgrPassword', 'mgrPassword');
 const syncAdmLoginWarn = () => {
   const w = $('admLoginLatinWarn');
   if (w) w.hidden = !(hasCyrillic($('loginEmail')?.value) || hasCyrillic($('loginPassword')?.value));
