@@ -398,20 +398,73 @@ export function setupCloudWorkspace(article, group, school) {
   const ocrParsedLine = make('small', 'small');
   ocrWrap.append(ocrLbl, ocrInput, ocrParsedLine);
 
+  provWrap.hidden = true;
+  amtWrap.hidden = true;
+  ocrWrap.hidden = true;
+
+  reqBox.style.cssText = 'border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:12px 14px;border-radius:10px;display:grid;gap:8px;';
+  reqTitle.style.color = '#991b1b';
+  reqDetail.style.cssText = 'color:#991b1b;font-size:13px;font-weight:500;margin:0;';
+
+  let payStep = 1;
+  const step1Nav = make('div', 'control school-field-wide');
+  const payNext1Btn = make('button', 'button');
+  payNext1Btn.type = 'button';
+  payNext1Btn.textContent = !tg() ? 'Далее: доп. должности →' : 'Идома: вазифаҳои иловагӣ →';
+  step1Nav.append(payNext1Btn);
+
+  const step2Nav = make('div', 'control school-field-wide');
+  const payBack2Btn = make('button', 'button alt');
+  payBack2Btn.type = 'button';
+  payBack2Btn.textContent = !tg() ? '← Назад' : '← Бозгашт';
+  const paySkip2Btn = make('button', 'button alt');
+  paySkip2Btn.type = 'button';
+  paySkip2Btn.textContent = !tg() ? 'Пропустить →' : 'Гузаштан →';
+  const payNext2Btn = make('button', 'button');
+  payNext2Btn.type = 'button';
+  payNext2Btn.textContent = !tg() ? 'Перейти к оплате →' : 'Гузаштан ба пардохт →';
+  step2Nav.append(payBack2Btn, paySkip2Btn, payNext2Btn);
+
+  const step3Nav = make('div', 'control school-field-wide');
+  const payBack3Btn = make('button', 'button alt');
+  payBack3Btn.type = 'button';
+  payBack3Btn.textContent = !tg() ? '← Назад' : '← Бозгашт';
+
   const sendReceiptBtn = make('button', 'button');
   sendReceiptBtn.type = 'submit';
   sendReceiptBtn.id = 'cloudSubmitReceiptBtn';
+  step3Nav.append(payBack3Btn, sendReceiptBtn);
+
+  function syncPayWizardStep() {
+    posWrap.hidden = payStep !== 1;
+    periodWrap.hidden = payStep !== 1;
+    step1Nav.hidden = payStep !== 1;
+    extraWrap.hidden = payStep !== 2;
+    step2Nav.hidden = payStep !== 2;
+    reqBox.hidden = payStep !== 3;
+    fileWrap.hidden = payStep !== 3;
+    step3Nav.hidden = payStep !== 3;
+  }
+  payNext1Btn.addEventListener('click', () => { payStep = 2; syncPayWizardStep(); });
+  payBack2Btn.addEventListener('click', () => { payStep = 1; syncPayWizardStep(); });
+  paySkip2Btn.addEventListener('click', () => { selectedExtras.clear(); rebuildPositionSelectors(); payStep = 3; syncPayWizardStep(); });
+  payNext2Btn.addEventListener('click', () => { payStep = 3; syncPayWizardStep(); });
+  payBack3Btn.addEventListener('click', () => { payStep = 2; syncPayWizardStep(); });
+  syncPayWizardStep();
+
   receiptForm.append(
     recTitle,
-    reqBox,
     posWrap,
     periodWrap,
+    step1Nav,
     extraWrap,
+    step2Nav,
+    reqBox,
     fileWrap,
     provWrap,
     amtWrap,
     ocrWrap,
-    sendReceiptBtn,
+    step3Nav,
   );
 
   sessionBox.append(
@@ -1111,10 +1164,12 @@ export function setupCloudWorkspace(article, group, school) {
     vPassLbl.textContent = t('verifPassport');
     vSubmitBtn.textContent = t('verifSubmit');
     recTitle.textContent = t('receiptHeading');
-    reqTitle.textContent = t('payRequisites');
+    reqTitle.textContent = tg()
+      ? `⚠️ Пардохт ба рақами: ${activePlan.recipient_phone}`
+      : `⚠️ Оплата на номер: ${activePlan.recipient_phone}`;
     reqDetail.textContent = tg()
-      ? `Рақам / Ҳамён: ${activePlan.recipient_phone}`
-      : `Номер / Кошелёк: ${activePlan.recipient_phone}`;
+      ? `Барои пардохти хизматрасонӣ ба рақамҳои ${activePlan.recipient_phone} (Душанбе Сити ё Амонатбонк) пардохт намоед, баъдан чеки худро ба мо фиристед. Агар чекро нафиристед, ҳарчанде ки пардохт намудед, система пардохти шуморо намебинад.`
+      : `Для оплаты услуги переведите средства на номер ${activePlan.recipient_phone} (Душанбе Сити или Амонатбонк), затем отправьте нам чек. Если не отправить чек, даже при оплате система не увидит ваш платёж.`;
     copyPhoneBtn.textContent = t('copyPhone');
     posLbl.textContent = t('primaryPosLbl');
     periodLbl.textContent = t('periodLbl');
@@ -1161,7 +1216,11 @@ export function setupCloudWorkspace(article, group, school) {
         p_phone: vPhoneInp.value.trim(),
         p_passport_number: vPassInp.value.trim(),
       });
-      statusMessage = t('verifSent');
+      const m = activeOrg();
+      if (m) m.verification_status = 'pending';
+      verifForm.hidden = true;
+      vSubmitBtn.textContent = txt('Дархост фиристода шуд', 'Заявка отправлена');
+      statusMessage = txt('Дархост фиристода шуд', 'Заявка отправлена');
       await applySignedInContext();
     } catch (err) {
       statusMessage = err?.message || t('authError');
@@ -1315,8 +1374,26 @@ export function setupCloudWorkspace(article, group, school) {
         includeAliya: Boolean(aliyaToggle.checked),
         months: Number(periodSelect.value || 1),
       });
-      statusMessage = t('receiptSent');
+      const declaredAmt = amtInput.value ? Number(amtInput.value) : null;
+      const calc = calculateTariffTotal({
+        primaryPosition: posSelect.value || cabinetId || 'school-teacher',
+        extraPositions: [...selectedExtras],
+        includeAliya: Boolean(aliyaToggle.checked),
+        months: Number(periodSelect.value || 1),
+        catalog: roleTariffs,
+      });
+      const expectedTotal = Number(calc?.totalTjs || 0);
+      const overpaid = declaredAmt && expectedTotal > 0 && declaredAmt > expectedTotal
+        ? Math.round((declaredAmt - expectedTotal) * 100) / 100
+        : 0;
+      statusMessage = overpaid > 0
+        ? (!tg()
+          ? `${t('receiptSent')} Вы отправили на ${overpaid} сомони больше. Если хотите вернуть лишние деньги, пожалуйста, позвоните по номеру ${activePlan.recipient_phone}.`
+          : `${t('receiptSent')} Шумо ${overpaid} сомонӣ зиёд пардохт кардед. Агар хоҳед маблағи зиёдатиро баргардонед, лутфан ба рақами ${activePlan.recipient_phone} занг занед.`)
+        : t('receiptSent');
       receiptForm.reset();
+      payStep = 1;
+      syncPayWizardStep();
       manualAmountOverride = false;
       selectedExtras.clear();
       rebuildPositionSelectors();
