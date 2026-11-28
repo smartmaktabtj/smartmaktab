@@ -1,4 +1,10 @@
 'use strict';
+try{
+ const _q=new URLSearchParams(location.search);
+ if(!_q.get('setup')&&!_q.get('register')&&localStorage.getItem('smartmaktab.active.cabinet.v1')){
+  document.documentElement.style.visibility='hidden';
+ }
+}catch{}
 const params=new URLSearchParams(location.search);
 const wantsSetup=params.get('setup')==='1'||params.get('changeRole')==='1';
 const wantsRegister=params.get('register')==='1';
