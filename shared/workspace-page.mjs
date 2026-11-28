@@ -286,6 +286,40 @@ export function setupWorkspace({configured,school}){
  profTopBar.append(profNameEl,profVerifEl);
  drawer.append(profTopBar);
 
+ const profSubBar=document.createElement('button');
+ profSubBar.type='button';
+ profSubBar.id='smProfSubBtn';
+ profSubBar.style.cssText='width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin:0 0 8px 0;border-radius:10px;border:1px solid var(--line,#d1d5db);background:rgba(255,255,255,0.03);color:inherit;text-align:left;font-size:13px;';
+ function syncProfSubBar(){
+  let lic=null;
+  try{lic=JSON.parse(persistentStore.getItem('smartmaktab.license.cache.v1')||'null');}catch{}
+  const exp=lic?.expires_at||lic?.trial_ends_at||'';
+  const expStr=exp?new Date(exp).toLocaleDateString('ru-RU'):'';
+  const isPaid=Boolean(lic?.is_paid||(lic?.status==='active'&&lic?.plan_code&&lic?.plan_code!=='trial'));
+  profSubBar.replaceChildren();
+  const left=document.createElement('strong');
+  left.textContent=label('Услуги','Хизматрасонӣ');
+  const right=document.createElement('span');
+  if(isPaid){
+   right.style.cssText='color:#16a34a;font-weight:600;';
+   right.textContent=expStr?label(`Оплата действует до ${expStr}`,`Обуна фаъол то ${expStr}`):label('Оплата активна','Обуна фаъол');
+   profSubBar.style.cursor='default';
+   profSubBar.disabled=true;
+  }else{
+   right.style.cssText='color:#d97706;font-weight:600;';
+   right.textContent=expStr?label(`Пробный период до ${expStr} →`,`Давраи санҷишӣ то ${expStr} →`):label('Пробный период · Оплатить →','Давраи санҷишӣ · Пардохт →');
+   profSubBar.style.cursor='pointer';
+   profSubBar.disabled=false;
+  }
+  profSubBar.append(left,right);
+ }
+ profSubBar.addEventListener('click',()=>{
+  if(profSubBar.disabled)return;
+  document.dispatchEvent(new CustomEvent('sm:open-payment-wizard'));
+ });
+ syncProfSubBar();
+ drawer.append(profSubBar);
+
  const profCard=createProfileManager(cabinetId,tg,label);
  function wrapAccordion(el,customTitle){
   if(!el)return null;
