@@ -119,9 +119,9 @@ export function setupPhase2Panels(article, docs, school, views) {
         'Аккаунт не верифицирован. До подтверждения работает только локальный режим с файлами, база данных закрыта.',
       );
     return `
-      <div class="notice sm-db-verif-lock" role="status">
-        <p class="small">${esc(msg)}</p>
-        <button type="button" class="button alt" data-open-account-verif="1">${esc(txt('Верификатсия', 'Верификация'))}</button>
+      <div class="notice sm-db-verif-lock" role="status" style="border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:13px;font-weight:500;">⚠️ ${esc(msg)}</span>
+        <button type="button" class="button" data-open-account-verif="1" style="background:#dc2626;border-color:#dc2626;color:#fff;padding:6px 14px;font-size:13px;flex-shrink:0;">${esc(txt('Верификатсия', 'Верификация'))}</button>
       </div>
     `;
   }
