@@ -79,7 +79,7 @@ test('role home exposes unified profile drawer, Phase 2 cards, and role forms wi
   assert.equal(await page.locator('.hero').count(),0);
   await page.locator('#closeWorkspaceSettings').click();
   await page.locator('#smMainModules').waitFor();
-  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),4);
+  assert.equal(await page.locator('#smMainModules [data-open-phase2]').count(),5);
   await page.locator('#roleFormsBar').getByRole('button',{name:/Тавсифнома/}).click();
   await page.locator('#schoolForms').waitFor();
   await backView(page);

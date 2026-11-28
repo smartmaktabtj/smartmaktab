@@ -104,10 +104,21 @@ let workplaces=readTeacherWorkplaces(),workNote='';
 if(!workplaces.length&&school)workplaces=[school.id];
 const workText={ru:{saved:'Места работы сохранены в текущей вкладке.',required:'Отметьте хотя бы одну школу.',blocked:'Браузер не разрешил сохранить список школ.',current:'текущая',unsaved:'Изменения не сохранены.'},
  tg:{saved:'Ҷойҳои кор дар равзанаи ҷорӣ сабт шуданд.',required:'Камаш як мактабро интихоб кунед.',blocked:'Браузер сабти рӯйхати мактабҳоро иҷозат надод.',current:'ҷорӣ',unsaved:'Тағйирот сабт нашуд.'}};
-for(const [id,name] of Object.entries(demoSchoolNames)){
+const knownSchoolNames={...demoSchoolNames};
+try{
+ const savedNames=JSON.parse(tabStorage.getItem('smartmaktab.demo.teacher-school-names.v1')||'{}');
+ if(savedNames&&typeof savedNames==='object')Object.assign(knownSchoolNames,savedNames);
+}catch{}
+if(school?.id&&school?.name&&!Object.hasOwn(demoSchoolNames,school.id)){
+ knownSchoolNames[school.id]=school.name;
+ try{tabStorage.setItem('smartmaktab.demo.teacher-school-names.v1',JSON.stringify(knownSchoolNames));}catch{}
+}
+const extraIds=[school?.id,...workplaces].filter(id=>id&&!Object.hasOwn(demoSchoolNames,id));
+const selectableEntries=[...[...new Set(extraIds)].map(id=>[id,knownSchoolNames[id]||id]),...Object.entries(demoSchoolNames)];
+for(const [id,name] of selectableEntries){
  const label=document.createElement('label'),input=document.createElement('input');
  input.type='checkbox';input.value=id;input.checked=workplaces.includes(id);
- label.dataset.schoolId=id;label.append(input,document.createTextNode(name));$('teacherSchoolChecks').append(label);
+ label.dataset.schoolId=id;label.dataset.schoolName=name.toLowerCase();label.append(input,document.createTextNode(name));$('teacherSchoolChecks').append(label);
 }
 function renderWorkplaces(){
  $('teacherWorkplaces').hidden=!school;
@@ -115,7 +126,7 @@ function renderWorkplaces(){
  $('teacherWorkplaceStatus').textContent=labels[workNote]??'';
  $('teacherSchoolLinks').replaceChildren(...workplaces.map(id=>{
   const node=document.createElement(id===school?.id?'span':'a');
-  node.textContent=`${demoSchoolNames[id]||(id===school?.id?school.name:id)}${id===school?.id?` · ${labels.current}`:''}`;
+  node.textContent=`${knownSchoolNames[id]||(id===school?.id?school.name:id)}${id===school?.id?` · ${labels.current}`:''}`;
   node.className=id===school?.id?'tag':'button alt';
   if(id!==school?.id){
    const url=new URL(cabinetPageURL);url.search='';url.hash='';url.searchParams.set('school',id);
@@ -125,7 +136,14 @@ function renderWorkplaces(){
   return node;
  }));
 }
-$('teacherSchoolSearch').addEventListener('input',event=>{const ids=new Set(findDemoSchools(event.target.value));for(const label of $('teacherSchoolChecks').children)label.hidden=!ids.has(label.dataset.schoolId);});
+$('teacherSchoolSearch').addEventListener('input',event=>{
+ const q=event.target.value.toLowerCase().trim();
+ const ids=new Set(findDemoSchools(event.target.value));
+ for(const label of $('teacherSchoolChecks').children){
+  const customHit=Boolean(!Object.hasOwn(demoSchoolNames,label.dataset.schoolId)&&(!q||(label.dataset.schoolName||'').includes(q)));
+  label.hidden=!ids.has(label.dataset.schoolId)&&!customHit;
+ }
+});
 $('teacherSchoolChecks').addEventListener('change',()=>{workNote='unsaved';renderWorkplaces();});
 $('teacherSaveWorkplaces').addEventListener('click',()=>{
  const next=[...$('teacherSchoolChecks').querySelectorAll('input:checked')].map(input=>input.value);

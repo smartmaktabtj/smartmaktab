@@ -69,9 +69,11 @@ test('Windows-style file launch: full-width setup, automatic teacher bookshelf a
   assert.equal(await full(),true);
   await p.locator('#goToRegister').click();await p.locator('#primaryChoices input[value=school-teacher]').check();await p.locator('#toExtras').click();await p.locator('#toProfile').click();
   await p.locator('#firstName').fill('Озмоиш');await p.locator('#lastName').fill('Девор');
-  await p.locator('#birthYear').fill('1985');await p.locator('#genderSelect').selectOption('male');
+  await p.locator('#birthYear').fill('15.05.1985');await p.locator('#genderSelect').selectOption('male');
   await p.locator('#specialtyInput').fill('Информатика');await p.locator('#eduYearsInput').fill('5');
   await p.locator('#educationSelect').selectOption('higher');
+  await p.locator('#institutionTypeSelect').selectOption('school');
+  await p.locator('#institutionShiftsSelect').selectOption('one');
   await fillRoleFields(p.locator('[data-step="3"]'),{teacherClass:'5'});
   assert.equal(await full(),true);assert.equal(await p.locator('.hero').isVisible(),false);
   await p.locator('#toSchoolStep').click();await p.locator('#schoolSearch').fill('88');await p.locator('#begin').click();

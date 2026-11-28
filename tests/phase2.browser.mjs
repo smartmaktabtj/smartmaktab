@@ -4,7 +4,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { chromium } from 'playwright';
-import { fillStartupProfile, homeView, openView } from './onboarding-fixtures.mjs';
+import { fillStartupProfile, homeView, installMockSupabase, openView } from './onboarding-fixtures.mjs';
 import { buildSimpleDocxBytes } from '../shared/spreadsheet-import.mjs';
 
 const base = process.env.SM_BASE_URL ?? 'http://localhost:4180';
@@ -36,7 +36,7 @@ test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll,
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
-    await ctx.route('https://*.supabase.co/**', route => route.abort());
+    await installMockSupabase(ctx, { schools: [] });
     const page = await ctx.newPage();
     page.setDefaultTimeout(10000);
     const errors = [];
@@ -46,13 +46,12 @@ test('Phase 2 browser: Step 4 new school self-registration, teacher zero-scroll,
     await page.locator('#primaryChoices input[value="school-teacher"]').check();
     await page.locator('#toExtras').click();
     await page.locator('#toProfile').click();
-    await fillStartupProfile(page, { first: 'Нигина', last: 'Маҳмудова', teacherClass: '5А' });
+    await fillStartupProfile(page, { first: 'Нигина', last: 'Маҳмудова', teacherClass: '5А', login: 'nigina99', password: 'Password99' });
     await page.locator('#toSchoolStep').click();
 
     await page.locator('#toggleNewSchoolBtn').click();
     await page.locator('#newSchoolRegion').selectOption('Суғд');
-    await page.locator('#newSchoolDistrictSelect').selectOption('__custom__');
-    await page.locator('#newSchoolDistrict').fill('Хуҷанд');
+    await page.locator('#newSchoolDistrictSelect').selectOption('Хуҷанд');
     await page.locator('#newSchoolName').fill('МТМУ № 99');
     await page.waitForFunction(() => !document.getElementById('begin')?.disabled);
     await page.locator('#begin').click();

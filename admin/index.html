@@ -29,8 +29,9 @@
       <h2 data-t="loginTitle"></h2>
       <p class="adm-meta"><strong data-t="projectInfo"></strong>: <code id="projectEndpoint"></code></p>
       <form id="admLoginForm" class="adm-grid" autocomplete="off">
-        <label class="adm-field"><span data-t="email"></span><input id="loginEmail" type="email" required value="sinamostudio@gmail.com"></label>
-        <label class="adm-field"><span data-t="password"></span><input id="loginPassword" type="password" required></label>
+        <label class="adm-field"><span data-t="email"></span><input id="loginEmail" type="email" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required value="sinamostudio@gmail.com"></label>
+        <label class="adm-field"><span data-t="password"></span><div class="adm-pass-wrap"><input id="loginPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required><button type="button" id="toggleAdmLoginPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div></label>
+        <p class="adm-latin-warn" id="admLoginLatinWarn" hidden>⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
         <div class="adm-row" style="align-self:end">
           <button type="submit" class="btn" data-t="signIn"></button>
           <button id="sendRecoveryBtn" type="button" class="btn alt" data-t="sendRecovery"></button>
@@ -42,7 +43,7 @@
       <section id="admPasswordCard" class="adm-card" hidden>
         <h2 data-t="setPasswordTitle"></h2>
         <form id="admPasswordForm" class="adm-grid">
-          <label class="adm-field"><span data-t="newPassword"></span><input id="newPasswordInput" type="password" minlength="8" required></label>
+          <label class="adm-field"><span data-t="newPassword"></span><div class="adm-pass-wrap"><input id="newPasswordInput" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" minlength="8" required><button type="button" id="toggleAdmNewPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div></label>
           <div class="adm-row" style="align-self:end"><button type="submit" class="btn" data-t="save"></button></div>
         </form>
       </section>
@@ -185,7 +186,7 @@
           </label>
           <label class="adm-field">
             <span data-t="userEmail"></span>
-            <input id="roleUserId" type="text" required placeholder="alijon, 927001122 ё email">
+            <input id="roleUserId" type="text" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="sharipov, 907972295 ё email">
           </label>
           <label class="adm-field">
             <span data-t="fullName"></span>
@@ -222,9 +223,10 @@
           </label>
           <label class="adm-field">
             <span data-t="tempPassword"></span>
-            <input id="roleTempPassword" minlength="8" autocomplete="new-password">
+            <div class="adm-pass-wrap"><input id="roleTempPassword" type="password" lang="en" autocapitalize="none" autocorrect="off" spellcheck="false" minlength="8" autocomplete="new-password"><button type="button" id="toggleRoleTempPassword" class="adm-pass-eye" aria-label="Показать пароль">👁️</button></div>
             <small data-t="tempPassHint"></small>
           </label>
+          <p class="adm-latin-warn" id="admRoleLatinWarn" hidden>⚠️ Ба забони лотинӣ (англисӣ: a-z, 0-9) нависед — ҳуруфи кириллӣ истифода шудаанд.</p>
           <div class="adm-field" style="align-self:end;gap:8px">
             <label class="adm-check"><input id="roleResetPass" type="checkbox"><span data-t="issueTempPassword"></span></label>
             <label class="adm-check"><input id="roleAccountActive" type="checkbox" checked><span data-t="accountActive"></span></label>

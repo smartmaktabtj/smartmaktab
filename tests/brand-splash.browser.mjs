@@ -2,16 +2,16 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
-import {fillStartupProfile} from './onboarding-fixtures.mjs';
+import {TEST_SCHOOL_UUID_88,fillStartupProfile,installMockSupabase} from './onboarding-fixtures.mjs';
 const base=process.env.SM_BASE_URL??'http://localhost:4180';
-async function toSchool(page){
+async function toSchool(page,expectedId=TEST_SCHOOL_UUID_88){
  await page.locator('#goToRegister').click();
  await page.locator('#primaryChoices input[value=school-academic-deputy]').check();
  await page.locator('#toExtras').click();await page.locator('#toProfile').click();
- await fillStartupProfile(page,{first:'Демо',last:'Проверка'});
+ await fillStartupProfile(page,{first:'Демо',last:'Проверка',login:'splash_demo',password:'Password123'});
  await page.locator('#toSchoolStep').click();
  await page.locator('#schoolSearch').fill('88');
- assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
+ assert.equal(await page.locator('#schoolChoice').inputValue(),expectedId);
 }
 test('SmartMaktab is typed in two different full-screen scenes, with keyboard and button skip',async()=>{
  const browser=await chromium.launch();
@@ -19,7 +19,7 @@ test('SmartMaktab is typed in two different full-screen scenes, with keyboard an
   const page=await browser.newPage({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'no-preference'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.clock.install();
-  await page.route('https://*.supabase.co/**',route=>route.abort());
+  await installMockSupabase(page);
   await page.goto(`${base}/?lang=ru`);
   const intro=page.locator('#brandSplash'),letters=page.locator('#splashLetters');
   await intro.waitFor();
@@ -34,15 +34,15 @@ test('SmartMaktab is typed in two different full-screen scenes, with keyboard an
   const wordBounds=await letters.boundingBox();assert.ok(wordBounds.x>=0&&wordBounds.x+wordBounds.width<=390);
   await page.keyboard.press('Escape');
   assert.equal(await intro.isVisible(),false);
-  await toSchool(page);
+  await toSchool(page,TEST_SCHOOL_UUID_88);
   await page.locator('#begin').click();await intro.waitFor();
   assert.equal(await intro.getAttribute('data-scene'),'school');
   assert.equal(await page.locator('.splash-route').first().isVisible(),true);
- assert.equal(await page.locator('#splashCaption').textContent(),'МТМУ № 88');
- assert.equal(await page.locator('#splashRole').textContent(),'Муовини таълимӣ');
+  assert.equal(await page.locator('#splashCaption').textContent(),'МТМУ № 88');
+  assert.equal(await page.locator('#splashRole').textContent(),'Муовини таълимӣ');
   await page.clock.runFor(1000);assert.equal(await letters.textContent(),'SmartMaktab');
   assert.equal(new URL(page.url()).pathname,'/');
-  await page.locator('#splashSkip').click();await page.waitForURL('**/academic-deputy.html?school=demo-88&lang=tg');
+  await page.locator('#splashSkip').click();await page.waitForURL(`**/academic-deputy.html?school=${TEST_SCHOOL_UUID_88}&lang=tg`);
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
@@ -51,10 +51,10 @@ test('reduced motion skips both splash waits and the isolated viewer can play bo
  const browser=await chromium.launch();
  try{
   const p=await browser.newPage({reducedMotion:'reduce',serviceWorkers:'block'});
-  await p.route('https://*.supabase.co/**',route=>route.abort());
+  await installMockSupabase(p);
   await p.goto(`${base}/?lang=ru`);
   assert.equal(await p.locator('#brandSplash').isVisible(),false);
-  await toSchool(p);await p.locator('#begin').click();await p.waitForURL('**/academic-deputy.html?school=demo-88&lang=tg');
+  await toSchool(p,TEST_SCHOOL_UUID_88);await p.locator('#begin').click();await p.waitForURL(`**/academic-deputy.html?school=${TEST_SCHOOL_UUID_88}&lang=tg`);
   assert.equal(await p.locator('#workspaceSchool').textContent(),'МТМУ № 88');await p.close();
   const page=await browser.newPage({reducedMotion:'no-preference',viewport:{width:620,height:790}});
   await page.route('**/*',route=>route.abort());
@@ -62,7 +62,7 @@ test('reduced motion skips both splash waits and the isolated viewer can play bo
   await page.setContent('<iframe sandbox="allow-scripts" style="width:100%;height:730px"></iframe>');
   await page.locator('iframe').evaluate((frame,source)=>{frame.srcdoc=source;},html);
   const frame=page.frameLocator('iframe').first();await frame.locator('#brandSplash[open]').waitFor();
-  await frame.locator('#splashSkip').click();await toSchool(frame);
+  await frame.locator('#splashSkip').click();await toSchool(frame,'demo-88');
   await frame.locator('#begin').click();await frame.locator('#brandSplash[open]').waitFor();
   assert.equal(await frame.locator('#splashCaption').textContent(),'МТМУ № 88');
   await frame.locator('#splashSkip').click();

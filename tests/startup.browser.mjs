@@ -1,4 +1,4 @@
-import {fillStartupProfile,pickClass,chooseInitialSchool} from './onboarding-fixtures.mjs';
+import {TEST_SCHOOL_UUID_1,TEST_SCHOOL_UUID_88,fillStartupProfile,installMockSupabase,pickClass} from './onboarding-fixtures.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFile} from 'node:fs/promises';
@@ -11,7 +11,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   page.setDefaultTimeout(5500);
   const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>requests.push(request.url()));
-  await page.route('https://*.supabase.co/**',route=>route.abort());
+  await installMockSupabase(page);
   await page.goto(`${base}/?lang=tg`);
 
   // Step 0: Auth screen + authority toggle + update icon
@@ -50,7 +50,7 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.equal(teacherExtras.includes('school-facilities-head'),false);
   await page.locator('[data-step="2"] [data-back="1"]').click();
 
-  // Director (Group A) -> 19 compatible extras + Aliya (+30) full price sum
+  // Director (Group A) -> 19 compatible extras + Method Groups + Aliya (+30) full price sum
   await page.locator('#primaryChoices input[value=school-director]').check();
   await page.locator('#toExtras').click();
   assert.equal(await page.locator('#extraChoices input').count(),19);
@@ -58,31 +58,32 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   const a='school-academic-deputy',b='school-five-method-groups';
   await page.locator(`#extraChoices input[value=${a}]`).check();
   await page.locator(`#extraChoices input[value=${b}]`).check();
+  assert.equal(await page.locator('#methodGroupsSetupBox').isVisible(),true);
+  await page.locator('#methodGroupsList input[type="text"]').first().fill('Иттиҳодияи илмҳои дақиқ');
+  await page.locator('#methodGroupsList input[type="checkbox"]').first().check();
   await page.locator('#aliyaAddonToggle').check();
   // 50 (Director) + 40 (Academic Deputy) + 20 (Method Group) + 30 (Aliya) = 140 somoni
   assert.match(await page.locator('#totalPriceAmount').textContent(),/140\s+сомонӣ/);
 
-  // Step 3: Unified personal profile + custom method name (demo-mode without credentials)
+  // Step 3: Unified personal profile + prefilled method name + mandatory credentials
   await page.locator('#toProfile').click();
   assert.equal(await page.locator('#customMethodWrap').isVisible(),true);
-  await page.locator('#customMethodNameInput').fill('Иттиҳодияи илмҳои дақиқ');
-  await fillStartupProfile(page,{first:'Нав',last:'Озмоишӣ'});
+  assert.equal(await page.locator('#customMethodNameInput').inputValue(),'Иттиҳодияи илмҳои дақиқ');
+  await fillStartupProfile(page,{first:'Нав',last:'Озмоишӣ',login:'nav_dir88',password:'Password88'});
   await page.locator('#toSchoolStep').click();
 
   // Step 4: School choice & summary
   assert.equal(await page.locator('#results .row').count(),3);
   assert.match(await page.locator('#results').textContent(),/Иттиҳодияи илмҳои дақиқ/);
   assert.equal(await page.locator('#results a').count(),0);
-  assert.equal(await page.locator('#demoModeWarning').isVisible(),true);
-  assert.equal(await page.locator('#retryBootstrapBtn').isVisible(),true);
   assert.equal(await page.locator('#begin').textContent(),'Оғоз');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.locator('#schoolSearch').fill('88');
-  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
+  assert.equal(await page.locator('#schoolChoice').inputValue(),TEST_SCHOOL_UUID_88);
   await page.locator('#begin').click();
 
   // Cabinet view: unified Profile drawer + Update icon + clean header workspace switcher
-  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=tg');
+  await page.waitForURL(`**/cabinets/school/director.html?school=${TEST_SCHOOL_UUID_88}&lang=tg`);
   await page.locator('#workspaceSwitch').waitFor();
   assert.deepEqual(await page.locator('#workspaceSwitch option').evaluateAll(nodes=>nodes.map(node=>node.value)),['school-director',a,b]);
   assert.equal(await page.locator('#workspaceSchool').textContent(),'МТМУ № 88');
@@ -98,9 +99,9 @@ test('startup: auth screen, 20 school roles, compatibility matrix, Aliya add-on,
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
 
   await page.locator('#workspaceSwitch').selectOption(b);
-  await page.waitForURL('**/cabinets/school/five-method-groups.html?school=demo-88&lang=tg');
+  await page.waitForURL(`**/cabinets/school/five-method-groups.html?school=${TEST_SCHOOL_UUID_88}&lang=tg`);
   await page.locator('#workspaceSwitch').selectOption('school-director');
-  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=tg');
+  await page.waitForURL(`**/cabinets/school/director.html?school=${TEST_SCHOOL_UUID_88}&lang=tg`);
   assert.ok(requests.every(url=>!decodeURI(url).includes('Озмоишӣ')));
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
@@ -137,21 +138,22 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
  try{
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
   page.setDefaultTimeout(5500);
-  await page.route('https://*.supabase.co/**',route=>route.abort());
+  await installMockSupabase(page);
   await page.goto(`${base}/?lang=tg`);
   await page.locator('#goToRegister').click();
   await page.locator('#primaryChoices input[value=school-teacher]').check();
   await page.locator('#toExtras').click();
   await page.locator('#extraChoices input[value=school-library-head]').check();
   await page.locator('#toProfile').click();
-  await fillStartupProfile(page,{first:'Демо',last:'Озмоиш',teacherClass:'5Б'});
+  await fillStartupProfile(page,{first:'Демо',last:'Озмоиш',teacherClass:'5Б',login:'teacher_multi',password:'Password123'});
   await page.locator('#toSchoolStep').click();
-  await chooseInitialSchool(page);
-  await page.waitForURL('**/teacher.html?school=demo-a&lang=tg');
+  await page.locator('#schoolChoice').selectOption(TEST_SCHOOL_UUID_1);
+  await page.locator('#begin').click();
+  await page.waitForURL(`**/teacher.html?school=${TEST_SCHOOL_UUID_1}&lang=tg`);
   await page.locator('#workspaceSettingsToggle').click();
   await page.locator('#teacherSchoolChecks input[value=demo-b]').check();
   await page.locator('#teacherSaveWorkplaces').click();
-  assert.deepEqual(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('smartmaktab.demo.teacher-workplaces.v1'))),['demo-a','demo-b']);
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('smartmaktab.demo.teacher-workplaces.v1'))),[TEST_SCHOOL_UUID_1,'demo-b']);
   assert.equal(await page.locator('#teacherSchoolLinks a').count(),1);
   async function settings(classCode,lang){
    if(!await page.locator('#workspaceSettings').isVisible())await page.locator('#workspaceSettingsToggle').click();
@@ -166,7 +168,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
   await settings('9Б','ru');
   assert.equal(await page.locator('#profileClasses').textContent(),'9Б · Технологияи иттилоотӣ');
   await page.locator('#teacherSchoolLinks a').click();
-  await page.waitForURL('**/teacher.html?school=demo-a&lang=tg');
+  await page.waitForURL(`**/teacher.html?school=${TEST_SCHOOL_UUID_1}&lang=tg`);
   await page.locator('#workspaceSettingsToggle').click();
   await page.locator('#teacherProfileSummary').waitFor();
   assert.equal(await page.locator('#profileClasses').textContent(),'5Б · Технологияи иттилоотӣ');
@@ -174,7 +176,7 @@ test('teacher marks multiple workplaces and class profiles stay separate across 
   await page.locator('#teacherSchoolLinks a').click();
   await page.waitForURL('**/teacher.html?school=demo-b&lang=tg');
   await page.locator('#workspaceSwitch').selectOption('school-library-head');
-  await page.waitForURL('**/library-head.html?school=demo-a&lang=tg');
+  await page.waitForURL(`**/library-head.html?school=${TEST_SCHOOL_UUID_1}&lang=tg`);
   assert.equal(await page.locator('#workspaceSettings').isVisible(),false);
  }finally{await browser.close();}
 });
@@ -183,7 +185,7 @@ test('current version has no archive routes and the night setting persists acros
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({serviceWorkers:'block',colorScheme:'light',reducedMotion:'reduce'});
-  await page.route('https://*.supabase.co/**',route=>route.abort());
+  await installMockSupabase(page);
   await page.goto(`${base}/?lang=tg`);
   assert.equal(await page.locator('#lang').count(),0);
   await page.locator('#themeToggle').click();
@@ -193,10 +195,11 @@ test('current version has no archive routes and the night setting persists acros
   await page.locator('#primaryChoices input[value=school-academic-deputy]').check();
   await page.locator('#toExtras').click();
   await page.locator('#toProfile').click();
-  await fillStartupProfile(page,{first:'Демо',last:'Озмоиш'});
+  await fillStartupProfile(page,{first:'Демо',last:'Озмоиш',login:'theme_user',password:'Password123'});
   await page.locator('#toSchoolStep').click();
-  await chooseInitialSchool(page);
-  await page.waitForURL('**/academic-deputy.html?school=demo-a&lang=tg');
+  await page.locator('#schoolChoice').selectOption(TEST_SCHOOL_UUID_1);
+  await page.locator('#begin').click();
+  await page.waitForURL(`**/academic-deputy.html?school=${TEST_SCHOOL_UUID_1}&lang=tg`);
   assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
   assert.equal(await page.locator('body').evaluate(body=>getComputedStyle(body).backgroundColor),'rgb(17, 26, 23)');
   await page.reload();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
@@ -206,7 +209,7 @@ test('current version has no archive routes and the night setting persists acros
  }finally{await browser.close();}
 });
 
-test('cloud registration fails closed when backend is unreachable with login credentials',async()=>{
+test('cloud registration requires credentials and fails closed when backend is unreachable',async()=>{
  const browser=await chromium.launch();
  try{
   const page=await browser.newPage({serviceWorkers:'block',reducedMotion:'reduce',viewport:{width:390,height:844}});
@@ -217,18 +220,26 @@ test('cloud registration fails closed when backend is unreachable with login cre
   await page.locator('#primaryChoices input[value=school-director]').check();
   await page.locator('#toExtras').click();
   await page.locator('#toProfile').click();
-  await fillStartupProfile(page,{first:'Олим',last:'Сангов',login:'olim_fail',password:'secret123'});
+
+  // Credentials are mandatory on web/app registration (cannot leave login empty)
+  await fillStartupProfile(page,{first:'Олим',last:'Сангов',login:''});
+  await page.locator('#toSchoolStep').click();
+  assert.ok(Boolean((await page.locator('#primaryError').textContent())?.trim()));
+  assert.equal(await page.locator('[data-step="3"]').isVisible(),true);
+
+  await page.locator('#regLogin').fill('olim_fail');
+  await page.locator('#regPassword').fill('secret123');
+  await page.locator('#regPassword2').fill('secret123');
   await page.locator('#toSchoolStep').click();
 
-  assert.equal(await page.locator('#demoModeWarning').isVisible(),false);
   const cloudOpts=await page.locator('#schoolChoice option').evaluateAll(o=>o.map(x=>x.value));
   assert.equal(cloudOpts.includes('demo-88'),false);
+  assert.equal(await page.locator('#retryBootstrapBtn').isVisible(),true);
   assert.equal(await page.locator('#begin').isDisabled(),true);
 
   await page.locator('#toggleNewSchoolBtn').click();
   await page.locator('#newSchoolRegion').selectOption('Суғд');
-  await page.locator('#newSchoolDistrictSelect').selectOption('__custom__');
-  await page.locator('#newSchoolDistrict').fill('Исфара');
+  await page.locator('#newSchoolDistrictSelect').selectOption('Исфара');
   await page.locator('#newSchoolName').fill('МТМУ № 88');
   await page.waitForFunction(()=>!document.getElementById('begin')?.disabled);
   await page.locator('#begin').click();
@@ -237,18 +248,6 @@ test('cloud registration fails closed when backend is unreachable with login cre
   assert.equal(new URL(page.url()).pathname,'/');
   assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.active-cabinet.v1')),null);
   assert.equal(await page.evaluate(()=>localStorage.getItem('smartmaktab.cloud.session.v1')),null);
-
-  await page.locator('#toggleNewSchoolBtn').click();
-  await page.locator('[data-step="4"] [data-back="3"]').click();
-  await page.locator('#regLogin').fill('');
-  await page.locator('#regPassword').fill('');
-  await page.locator('#regPassword2').fill('');
-  await page.locator('#toSchoolStep').click();
-  assert.equal(await page.locator('#demoModeWarning').isVisible(),true);
-  await page.locator('#schoolSearch').fill('88');
-  assert.equal(await page.locator('#schoolChoice').inputValue(),'demo-88');
-  await page.locator('#begin').click();
-  await page.waitForURL('**/cabinets/school/director.html?school=demo-88&lang=tg');
  }finally{await browser.close();}
 });
 
@@ -264,10 +263,11 @@ test('cloud self-registration saves account with canonical Tajik phone and signs
    const req=route.request();
    const url=new URL(req.url());
    const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
-   if(url.pathname.endsWith('/functions/v1/register-user')&&req.method()==='GET'){
+   if((url.pathname.endsWith('/functions/v1/register-user')&&req.method()==='GET')||url.pathname.endsWith('/rest/v1/rpc/get_registration_bootstrap')){
     return json({
      schools:[{id:schoolUuid,name:'МТМУ № 88',region_name:'Суғд',district_name:'Хуҷанд',school_code:'SM-088',kind:'school'}],
      authorities:[{id:maorifUuid,name:'Маорифи Хуҷанд',authority_tier:'maorif',region_name:'Суғд',district_name:'Хуҷанд'}],
+     locations:[],
      tariffs:[],
     });
    }
@@ -292,9 +292,15 @@ test('cloud self-registration saves account with canonical Tajik phone and signs
     return json({
      user_id:userUuid,
      is_super_admin:false,
-     profile:{full_name:'Сангов Олим',preferred_lang:'tg',login_name:'927001122',profile_details:{first:'Олим',last:'Сангов',birthYear:'1985',gender:'male',specialty:'Педагогика',eduYears:'10',education:'higher',languages:['tg']}},
-     memberships:[{organization_id:schoolUuid,organization_name:'МТМУ № 88',kind:'school',role:'director',primary_position:'school-director',extra_positions:[],aliya_enabled:false,active_devices_count:1,max_devices:2}],
+     profile:{full_name:'Сангов Олим',preferred_lang:'tg',login_name:'927001122',profile_details:{first:'Олим',last:'Сангов',birthDate:'15.05.1985',birthYear:'1985',gender:'male',specialty:'Педагогика',eduYears:'10',education:'higher',institutionType:'school',institutionShifts:'one',languages:['tg']}},
+     memberships:[{organization_id:schoolUuid,organization_name:'МТМУ № 88',kind:'school',role:'director',primary_position:'school-director',extra_positions:[],aliya_enabled:false,active_devices_count:1,max_devices:2,account_active:true,verification_status:'verified',subscription_status:'trial',subscription_days_left:30}],
     });
+   }
+   if(url.pathname.endsWith('/rest/v1/rpc/get_license_status')){
+    return json({configured:true,organization_id:schoolUuid,status:'trial',effective_status:'trial',plan_code:'trial',expires_at:new Date(Date.now()+30*86400_000).toISOString(),server_now:new Date().toISOString(),grace_days:30,access_allowed:true,days_left:30,grace_days_left:30,verification_status:'verified'});
+   }
+   if(url.pathname.endsWith('/rest/v1/rpc/claim_device_session')){
+    return json({allowed:true,reason:'registered',verification_status:'verified',primary_position:'school-director',extra_positions:[]});
    }
    return json([]);
   });

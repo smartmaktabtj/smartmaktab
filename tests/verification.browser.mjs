@@ -135,8 +135,9 @@ test('Verification & Territory browser: empty schools bootstrap, Region->Distric
     assert.match(step2Text, /15%/);
 
     await page.locator('#extraChoices input[value="school-five-method-groups"]').check();
+    await page.locator('#methodGroupsList input[type="text"]').first().fill('Методобъединение точных наук');
+    await page.locator('#methodGroupsList input[type="checkbox"]').first().check();
     await page.locator('#toProfile').click();
-    await page.locator('#customMethodNameInput').fill('Методобъединение точных наук');
     await fillStartupProfile(page, { first: 'Бахтиёр', last: 'Каримов', login: 'dir77', password: 'Password77' });
     await page.locator('#toSchoolStep').click();
 
@@ -481,8 +482,7 @@ test('Step 4 bootstrap falls back/uses Data API RPC when Edge Function bootstrap
 
     await page.locator('#toggleNewSchoolBtn').click();
     await page.locator('#newSchoolRegion').selectOption('Суғд');
-    await page.locator('#newSchoolDistrictSelect').selectOption('__custom__');
-    await page.locator('#newSchoolDistrict').fill('ш. Исфара');
+    await page.locator('#newSchoolDistrictSelect').selectOption('Исфара');
     await page.locator('#newSchoolJamoatSelect option[value="Ворух"]').waitFor({ state: 'attached' });
     await page.locator('#newSchoolJamoatSelect').selectOption('Ворух');
     await page.locator('#newSchoolVillageSelect option[value="Ворух"]').waitFor({ state: 'attached' });

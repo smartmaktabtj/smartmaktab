@@ -282,3 +282,7 @@ html[data-theme="dark"] body.sm-print-preview .print-card{background:#fff;color:
 .sm-badge-unverified,.sm-badge-disabled{background:#fde7d8;color:#8b3a0e}
 [data-theme="dark"] .sm-badge-verified,[data-theme="dark"] .sm-badge-active{background:#1d4432;color:#a5f0c5}
 [data-theme="dark"] .sm-badge-unverified,[data-theme="dark"] .sm-badge-disabled{background:#4d2d1d;color:#ffd0b0}
+article[data-sm-locked="1"] > :not(#licenseGateBanner):not(#cloudWorkspacePanel){display:none!important}
+article[data-sm-locked="1"] #cloudWorkspacePanel:not(.sm-screen-current){display:none!important}
+article[data-sm-locked="1"]:has(#cloudWorkspacePanel.sm-screen-current) #licenseGateBanner{display:none!important}
+

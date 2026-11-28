@@ -52,9 +52,9 @@ const fieldCopy={
  failed:'Майдонҳои иловагӣ кушода нашуданд.',
  required:'Майдонҳои ҳатмиро пур кунед.',
  experience:'Собиқаи директорӣ набояд аз собиқаи умумӣ зиёд бошад.',
- none:'Мактаб ёфт нашуд.',
+ none:'Муассиса ёфт нашуд.',
  same:'Мисли вазифаи асосӣ',
- pick:'Мактабро интихоб кунед',
+ pick:'Муассисаро интихоб кунед',
  class:'Синфҳое, ки дарс медиҳед',
  other:'Забони дигарро нависед.',
 };
@@ -109,13 +109,20 @@ function fillProfileFields(id,container,doc){
   cloneControl(doc.getElementById('directorLeadYears'),grid,fields,'directorLeadYears',validators);
   cloneControl(doc.getElementById('directorUniversity'),grid,fields,'directorUniversity',validators);
   cloneControl(doc.getElementById('directorCategory'),grid,fields,'directorCategory',validators);
-  cloneControl(doc.getElementById('directorType'),grid,fields,'directorType',validators);
-  cloneControl(doc.getElementById('directorShifts'),grid,fields,'directorShifts',validators);
   validators.push(()=>{
    if(Number(fields.directorLeadYears||0)>Number(state.person.eduYears||0))return fp('experience');
    return null;
   });
  }else{
+  if(id==='school-five-method-groups'&&Array.isArray(state.methodGroups)&&state.methodGroups.length){
+   if(!fields['work-1']){
+    fields['work-1']=state.methodGroups.map(g=>g.name).filter(Boolean).join(', ');
+   }
+   if(!fields['work-2']){
+    const subNames=[...new Set(state.methodGroups.flatMap(g=>(g.subjects||[]).map(k=>subjectLabels[k]||k)))];
+    fields['work-2']=subNames.join(', ');
+   }
+  }
   for(const control of original.querySelectorAll('input:not([type=checkbox]),select,textarea')){
    const key=control.dataset.intakeField??control.id;
    if(!key||SKIP_DUPLICATE_KEYS.has(key))continue;
@@ -170,7 +177,6 @@ function formatSchoolAddress(s){
 function buildMergedSchoolCatalog(){
  const cloudReady=state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools);
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools:[];
- const hasLogin=Boolean(clean(state.credentials?.login)&&state.credentials?.password);
  const localCustom=readLocalCustomSchools();
  const base=cloudReady
   ? cloud.map(s=>{
@@ -182,7 +188,9 @@ function buildMergedSchoolCatalog(){
       raw:s,
      };
     })
-  : (hasLogin?[]:schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:null})));
+  : (useFileViewer&&typeof schoolIds!=='undefined'&&typeof schoolNames!=='undefined'
+     ? schoolIds.map(id=>({id,name:schoolNames[id],isCloud:false,raw:{id,name:schoolNames[id]}}))
+     : []);
  const seen=new Set(base.map(b=>b.id));
  for(const c of localCustom){
   if(c?.id&&!seen.has(c.id)){
@@ -201,25 +209,26 @@ function filterMergedSchools(term){
 function resolveSchoolTitle(schoolId){
  const cloud=Array.isArray(state.cloudSchools)?state.cloudSchools.find(s=>s.id===schoolId):null;
  if(cloud)return cloud.name;
+ if(useFileViewer&&typeof schoolNames!=='undefined'&&schoolNames[schoolId])return schoolNames[schoolId];
  const custom=readLocalCustomSchools().find(s=>s.id===schoolId);
  if(custom)return custom.name;
- return schoolNames[schoolId]||schoolId;
+ return schoolId;
 }
 function populateNewSchoolTerritory(){
  const regSel=$('newSchoolRegion');
- const distSel=$('newSchoolDistrictSelect'),distCustomWrap=$('newSchoolDistrictCustomWrap');
- const jamSel=$('newSchoolJamoatSelect'),jamCustomWrap=$('newSchoolJamoatCustomWrap');
+ const distSel=$('newSchoolDistrictSelect');
+ const jamSel=$('newSchoolJamoatSelect');
  const vilSel=$('newSchoolVillageSelect'),vilCustomWrap=$('newSchoolVillageCustomWrap');
  if(!regSel||!distSel)return;
  const auths=Array.isArray(state.cloudAuthorities)?state.cloudAuthorities:[];
- const locs=Array.isArray(state.cloudLocations)&&state.cloudLocations.length?state.cloudLocations:null;
+ const fallbackLocs=typeof FALLBACK_TAJIKISTAN_LOCATIONS!=='undefined'&&Array.isArray(FALLBACK_TAJIKISTAN_LOCATIONS)?FALLBACK_TAJIKISTAN_LOCATIONS:[];
+ const cloudLocs=Array.isArray(state.cloudLocations)?state.cloudLocations:[];
+ const locs=[...fallbackLocs,...cloudLocs].filter(row=>!/маркази\s+ш\.\s*душанбе/i.test(String(row?.district_name||'')));
  const regionSet=new Set(DEFAULT_REGIONS.map(r=>r.value));
  for(const a of auths){
   if(a.region_name)regionSet.add(canonicalRegionName(a.region_name));
  }
- if(locs){
-  for(const r of getRegionNames(locs))regionSet.add(canonicalRegionName(r));
- }
+ for(const r of getRegionNames(locs))regionSet.add(canonicalRegionName(r));
  const regions=[...regionSet];
  const prevReg=regSel.value||state.newSchool?.region_name||'';
  regSel.replaceChildren(new Option(fp('pick'),''),...regions.map(r=>new Option(regionDisplayLabel(r),r)));
@@ -229,12 +238,10 @@ function populateNewSchoolTerritory(){
  const canonReg=canonicalRegionName(curReg);
 
  const isDushanbeRegion=canonReg==='ш. душанбе'||canonReg==='душанбе';
- const dushanbeDistricts=['н. Исмоили Сомонӣ','н. Сино','н. Фирдавсӣ','н. Шоҳмансур'];
  const rawDistricts=[
-  ...getDistrictNames(curReg,locs||undefined),
+  ...getDistrictNames(curReg,locs),
   ...auths.filter(a=>a.authority_tier==='maorif'&&(!canonReg||canonicalRegionName(a.region_name)===canonReg)).map(a=>String(a.district_name||'').trim()).filter(Boolean),
-  ...(isDushanbeRegion?dushanbeDistricts:[]),
- ].filter(d=>!(isDushanbeRegion&&/маркази\s+ш\.\s*душанбе/i.test(d)));
+ ].filter(d=>!/маркази\s+ш\.\s*душанбе/i.test(d));
  const districts=[...new Set(rawDistricts)].sort((a,b)=>a.localeCompare(b,'tg'));
  const otherLbl=lang==='tg'?'Дигар (дастӣ ворид кардан)':'Другой (ввести вручную)';
  const pickDistLbl=fp('pick');
@@ -249,12 +256,11 @@ function populateNewSchoolTerritory(){
   const matchedDist=districts.find(d=>stripDistrictPrefix(d)===stripDistrictPrefix(state.newSchool.district_name));
   if(matchedDist)distSel.value=matchedDist;
  }
- if(distCustomWrap)distCustomWrap.hidden=true;
 
  const curDist=clean(distSel.value||state.newSchool?.district_name||'');
  if(curDist)state.newSchool.district_name=curDist;
  if(!jamSel||!vilSel)return;
- const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs||undefined):[];
+ const jamoats=curDist?getJamoatsForDistrict(curReg,curDist,locs):[];
  const isCityDist=isDushanbeRegion||/^ш\.\s*/i.test(curDist);
  const pickOptLbl=(isCityDist&&!jamoats.length)
   ?(lang==='tg'?'Барои шаҳр лозим нест (ихтиёрӣ)':'Для города не требуется (необязательно)')
@@ -266,10 +272,9 @@ function populateNewSchoolTerritory(){
  );
  if(jamPrev&&jamoats.includes(jamPrev))jamSel.value=jamPrev;
  else if(state.newSchool?.jamoat_name&&jamoats.includes(state.newSchool.jamoat_name))jamSel.value=state.newSchool.jamoat_name;
- if(jamCustomWrap)jamCustomWrap.hidden=true;
 
  const curJam=jamSel.value;
- const villages=(curDist&&curJam)?getVillagesForJamoat(curReg,curDist,curJam,locs||undefined):[];
+ const villages=(curDist&&curJam)?getVillagesForJamoat(curReg,curDist,curJam,locs):[];
  const vilPrev=vilSel.value;
  vilSel.replaceChildren(
   new Option(pickOptLbl,''),
@@ -313,38 +318,33 @@ function fillSchoolChoices(){
  state.school=choice.value;
  const hasCloudConnection=state.bootstrapStatus==='ready'&&Array.isArray(state.cloudSchools);
  const hasCloudSchools=hasCloudConnection&&state.cloudSchools.length>0;
- const hasLogin=Boolean(clean(state.credentials?.login)&&state.credentials?.password);
  const retryBtn=$('retryBootstrapBtn');
  if(retryBtn)retryBtn.hidden=useFileViewer||hasCloudConnection;
- const demoWarn=$('demoModeWarning');
- if(demoWarn)demoWarn.hidden=hasLogin;
  const diag=state.bootstrapError?` (${state.bootstrapError})`:'';
  let notice='';
  if(!items.length){
   if(hasCloudConnection&&!hasCloudSchools){
    notice=lang==='tg'
-    ?'Дар пойгоҳи додаҳо ҳанӯз мактаб илова нашудааст. Тугмаи «Мактаби мо дар рӯйхат нест — Илова кардан»-ро пахш кунед.'
-    :'В базе данных школы ещё не добавлены. Нажмите «Нашей школы нет в списке — Добавить», чтобы зарегистрировать вашу школу.';
-  }else if(!useFileViewer&&!hasCloudConnection&&hasLogin){
+    ?'Дар пойгоҳи додаҳо ҳанӯз муассиса илова нашудааст. Тугмаи «Муассисаи мо дар рӯйхат нест — Илова кардан»-ро пахш кунед.'
+    :'В базе данных учреждения ещё не добавлены. Нажмите «Нашего учреждения нет в списке — Добавить».';
+  }else if(!useFileViewer&&!hasCloudConnection){
    if(state.bootstrapStatus==='loading'){
-    notice=lang==='tg'?'Рӯйхати мактабҳо аз сервер бор мешавад…':'Загрузка списка школ с сервера…';
+    notice=lang==='tg'?'Рӯйхати муассисаҳо аз сервер бор мешавад…':'Загрузка списка учреждений с сервера…';
    }else{
     notice=lang==='tg'
-     ?`Рӯйхати мактабҳо аз сервер бор нашуд${diag}. «Аз нав бор кардан»-ро пахш кунед ё мактабатонро дастӣ илова кунед.`
-     :`Не удалось загрузить список школ с сервера${diag}. Нажмите «Повторить» при включённом интернете или добавьте школу вручную ниже.`;
+     ?`Рӯйхати муассисаҳо аз сервер бор нашуд${diag}. «Аз нав бор кардан»-ро пахш кунед ё муассисаатонро дастӣ илова кунед.`
+     :`Не удалось загрузить список учреждений с сервера${diag}. Нажмите «Повторить» или добавьте учреждение вручную ниже.`;
    }
   }else{
    notice=fp('none');
   }
  }else if(!useFileViewer&&!hasCloudConnection){
   if(state.bootstrapStatus==='loading'){
-   notice=lang==='tg'?'Рӯйхати мактабҳо аз сервер бор мешавад…':'Загрузка списка школ с сервера…';
-  }else if(hasLogin){
-   notice=lang==='tg'
-    ?`Рӯйхати мактабҳо аз сервер бор нашуд${diag}. «Аз нав бор кардан»-ро пахш кунед ё мактабатонро дастӣ илова кунед.`
-    :`Не удалось загрузить список школ с сервера${diag}. Нажмите «Повторить» при включённом интернете или добавьте школу вручную ниже.`;
+   notice=lang==='tg'?'Рӯйхати муассисаҳо аз сервер бор мешавад…':'Загрузка списка учреждений с сервера…';
   }else{
-   notice=lang==='tg'?'Пайваст бо сервер нест — мактабҳои демо нишон дода шудаанд.':'Сервер школ недоступен — показаны локальные демо-школы.';
+   notice=lang==='tg'
+    ?`Рӯйхати муассисаҳо аз сервер бор нашуд${diag}. «Аз нав бор кардан»-ро пахш кунед ё муассисаатонро дастӣ илова кунед.`
+    :`Не удалось загрузить список учреждений с сервера${diag}. Нажмите «Повторить» или добавьте учреждение вручную ниже.`;
   }
  }
  $('schoolNotice').textContent=notice;
@@ -369,16 +369,19 @@ function buildRolePayload(role,school,fields,personObj){
   ...fields,
   directorMiddle:personObj.middle||fields.directorMiddle||'',
   directorBirth:personObj.birthYear||fields.directorBirth||'',
+  directorBirthDate:personObj.birthDate||fields.directorBirthDate||'',
   directorGender:personObj.gender||fields.directorGender||'',
   directorSpecialty:personObj.specialty||fields.directorSpecialty||'',
   directorEduYears:personObj.eduYears||fields.directorEduYears||'',
   directorDiploma:(personObj.education==='higher'?'specialist':personObj.education)||fields.directorDiploma||'',
+  directorType:personObj.institutionType||fields.directorType||'',
+  directorShifts:personObj.institutionShifts||fields.directorShifts||'',
   directorLanguages:Array.isArray(personObj.languages)?personObj.languages:(fields.directorLanguages||[]),
   directorOtherLanguage:personObj.otherLanguage||fields.directorOtherLanguage||'',
  };
  const payload={[roleKey]:JSON.stringify({school,first,last,fields:enriched,expires:Date.now()+300000})};
  if(role.id==='school-teacher')payload[`smartmaktab.demo.teacher.v1.${school}`]=JSON.stringify({teaching:fields.teacherTeaching,language:fields.instructionLanguage});
  if(role.id==='school-library-head')payload[`smartmaktab.demo.library.v1.${school}`]=JSON.stringify({zone:fields.libraryZone,funds:fields.libraryFunds});
- if(role.id==='school-director')payload[`smartmaktab.demo.director.v1.${school}`]=JSON.stringify({type:fields.directorType,shifts:fields.directorShifts});
+ if(role.id==='school-director')payload[`smartmaktab.demo.director.v1.${school}`]=JSON.stringify({type:enriched.directorType,shifts:enriched.directorShifts});
  return payload;
 }
