@@ -12,7 +12,8 @@ export function installTheme(button,{initial,onChange}={}){
   const dark=mode()==='dark',tg=document.documentElement.lang==='tg';
   document.documentElement.dataset.theme=dark?'dark':'light';
   const text=dark?(tg?'Реҷаи рӯзона':'Дневной режим'):(tg?'Реҷаи шабона':'Ночной режим');
-  button.textContent=dark?'☀ '+text:'☾ '+text;
+  button.textContent=dark?'☀️':'🌙';
+  button.title=text;
   button.setAttribute('aria-label',text);
  }
  function set(value){
