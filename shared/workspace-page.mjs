@@ -279,7 +279,10 @@ export function setupWorkspace({configured,school}){
    vb.className='button';
    vb.textContent=label('Верификация','Верификатсия');
    vb.style.cssText='background:#dc2626;border-color:#dc2626;color:#fff;padding:5px 12px;font-size:13px;';
-   vb.addEventListener('click',()=>document.dispatchEvent(new CustomEvent('sm:open-account-verification')));
+   vb.addEventListener('click',()=>{
+    drawer.hidden=true;
+    document.dispatchEvent(new CustomEvent('sm:open-account-verification'));
+   });
    profVerifEl.append(vb);
   }
  }
