@@ -590,6 +590,8 @@ export function setupCloudWorkspace(article, group, school) {
 
   function openCloudToVerification() {
     panel.hidden = false;
+    verifBox.hidden = false;
+    receiptForm.hidden = true;
     renderLabels();
     openWorkspaceView(panel.id, verifyQuickBtn.hidden ? trigger : verifyQuickBtn);
     try { verifBox.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
@@ -1441,8 +1443,11 @@ export function setupCloudWorkspace(article, group, school) {
   document.addEventListener('sm:open-account-verification', openCloudToVerification);
   document.addEventListener('sm:open-payment-wizard', () => {
     panel.hidden = false;
-    panel.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    receiptForm.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    verifBox.hidden = true;
+    receiptForm.hidden = false;
+    renderLabels();
+    openWorkspaceView(panel.id, trigger);
+    try { receiptForm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
   });
   document.addEventListener('cabinet:language', () => {
     rebuildPositionSelectors();
