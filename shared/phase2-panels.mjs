@@ -1064,8 +1064,8 @@ export function setupPhase2Panels(article, docs, school, views) {
         panel.innerHTML = `
           <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
           <div class="notice">
-            <p class="small">${esc(txt('Барои дидан ва идоракунии корбарон, дастгоҳҳо ва бозсозии рамз аввал бо ҳисоби абрии худ ворид шавед.', 'Для управления сотрудниками, отвязки устройств и сброса паролей сначала войдите в облачный аккаунт.'))}</p>
-            <button type="button" class="button" id="smUsrOpenCloudBtn">${esc(txt('Ворид шудан ба абр', 'Войти в облако'))}</button>
+            <p class="small">${esc(txt('Барои дидан ва идоракунии корбарон, дастгоҳҳо ва бозсозии рамз аввал бо ҳисоби системавии худ ворид шавед.', 'Для управления сотрудниками, отвязки устройств и сброса паролей сначала войдите в аккаунт системы.'))}</p>
+            <button type="button" class="button" id="smUsrOpenCloudBtn">${esc(txt('Ворид шудан ба система', 'Войти в систему'))}</button>
           </div>
         `;
         panel.querySelector('#smUsrOpenCloudBtn')?.addEventListener('click', () => {
