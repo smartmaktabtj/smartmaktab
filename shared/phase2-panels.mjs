@@ -64,8 +64,60 @@ function createPanel(article, id) {
   const sec = document.createElement('section');
   sec.id = id;
   sec.className = 'section sm-screen no-print';
+  sec._dirtyIds = new Set();
+  const markDirty = ev => {
+    const t = ev.target;
+    if (t && t.id && t.type !== 'file') sec._dirtyIds.add(t.id);
+  };
+  sec.addEventListener('input', markDirty);
+  sec.addEventListener('change', markDirty);
+  sec.addEventListener('submit', () => {
+    sec._dirtyIds.clear();
+  }, true);
   article.append(sec);
   return sec;
+}
+
+function escapeIdSelector(id) {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(id)
+    : String(id).replace(/([^\w-])/g, '\\$1');
+}
+
+function setPanelHtml(panel, html) {
+  const dirty = panel._dirtyIds;
+  const activeEl = panel.contains(document.activeElement) ? document.activeElement : null;
+  const activeId = activeEl?.id || '';
+  const selStart = typeof activeEl?.selectionStart === 'number' ? activeEl.selectionStart : null;
+  const selEnd = typeof activeEl?.selectionEnd === 'number' ? activeEl.selectionEnd : null;
+  const saved = new Map();
+  if (dirty?.size || activeId) {
+    const ids = new Set(dirty || []);
+    if (activeId) ids.add(activeId);
+    for (const elId of ids) {
+      const el = panel.querySelector(`#${escapeIdSelector(elId)}`);
+      if (!el || el.type === 'file') continue;
+      saved.set(elId, el.type === 'checkbox' || el.type === 'radio'
+        ? { checked: el.checked }
+        : { value: el.value });
+    }
+  }
+  panel.innerHTML = html;
+  for (const [elId, st] of saved.entries()) {
+    const el = panel.querySelector(`#${escapeIdSelector(elId)}`);
+    if (!el) continue;
+    if ('checked' in st) el.checked = st.checked;
+    else if ('value' in st) el.value = st.value;
+  }
+  if (activeId) {
+    const nextEl = panel.querySelector(`#${escapeIdSelector(activeId)}`);
+    if (nextEl && typeof nextEl.focus === 'function') {
+      try { nextEl.focus({ preventScroll: true }); } catch { nextEl.focus(); }
+      if (selStart !== null && selEnd !== null && typeof nextEl.setSelectionRange === 'function') {
+        try { nextEl.setSelectionRange(selStart, selEnd); } catch {}
+      }
+    }
+  }
 }
 
 export function setupPhase2Panels(article, docs, school, views) {
@@ -168,9 +220,15 @@ export function setupPhase2Panels(article, docs, school, views) {
     );
 
     let state = { rows: [], classFilter: '', statusMsg: '', defaultClass: '5А' };
+    let stuSeq = 0;
 
     renderStudents = async ({ refresh = true } = {}) => {
-      if (refresh) state.rows = await loadStudents(ctx());
+      const mySeq = ++stuSeq;
+      if (refresh) {
+        const loaded = await loadStudents(ctx());
+        if (mySeq !== stuSeq) return;
+        state.rows = loaded;
+      }
       const l = getLang();
       const filtered = state.classFilter
         ? state.rows.filter(r => String(r.class_code || '').toUpperCase() === state.classFilter)
@@ -179,7 +237,7 @@ export function setupPhase2Panels(article, docs, school, views) {
       const girls = filtered.filter(r => r.gender === 'female').length;
       const classes = [...new Set(state.rows.map(r => String(r.class_code || '').toUpperCase()).filter(Boolean))].sort();
 
-      panel.innerHTML = `
+      setPanelHtml(panel, `
         <h2 tabindex="-1">${esc(txt('Феҳристи хонандагон ва воридот (Word / Excel)', 'Реестр учеников и импорт (Word / Excel)'))}</h2>
         ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Файлҳои .docx, .xlsx, .csv ё .tsv-ро ворид кунед ё хонандаро дастӣ илова намоед.', 'Загрузите файл .docx, .xlsx, .csv или .tsv, либо добавьте ученика вручную.'))}</p>
@@ -244,7 +302,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             </tbody>
           </table>
         </div>
-      `;
+      `);
 
       panel.querySelector('#smStuClassFilter')?.addEventListener('change', ev => {
         state.classFilter = ev.target.value;
@@ -258,6 +316,7 @@ export function setupPhase2Panels(article, docs, school, views) {
         const file = ev.target.files?.[0];
         if (!file) return;
         try {
+          ++stuSeq;
           const buf = await file.arrayBuffer();
           const parsed = parseStudentImportFile(buf, file.name, state.defaultClass);
           if (!parsed.rows.length) {
@@ -285,6 +344,7 @@ export function setupPhase2Panels(article, docs, school, views) {
         const birth = panel.querySelector('#smStuBirth')?.value.trim();
         const gender = panel.querySelector('#smStuGender')?.value || '';
         if (!fullName) return;
+        ++stuSeq;
         state.rows = await upsertStudents(ctx(), [{
           full_name: fullName,
           class_code: cls,
@@ -299,6 +359,7 @@ export function setupPhase2Panels(article, docs, school, views) {
       });
       panel.querySelectorAll('[data-del-student]').forEach(btn => {
         btn.addEventListener('click', async () => {
+          ++stuSeq;
           state.rows = await deleteStudent(ctx(), btn.dataset.delStudent);
           state.statusMsg = txt('Хонанда хориҷ шуд.', 'Ученик удалён.');
           await renderStudents({ refresh: false });
@@ -345,13 +406,19 @@ export function setupPhase2Panels(article, docs, school, views) {
     );
 
     let state = { rows: [], statusMsg: '' };
+    let wkSeq = 0;
     renderWorkload = async ({ refresh = true } = {}) => {
-      if (refresh) state.rows = await loadWorkloads(ctx());
+      const mySeq = ++wkSeq;
+      if (refresh) {
+        const loaded = await loadWorkloads(ctx());
+        if (mySeq !== wkSeq) return;
+        state.rows = loaded;
+      }
       const totalHrs = state.rows.reduce((s, r) => s + (Number(r.weekly_hours) || 0), 0);
       const l = getLang();
       const myName = ctx().actorName || '';
 
-      panel.innerHTML = `
+      setPanelHtml(panel, `
         <h2 tabindex="-1">${esc(txt('Соатҳои дарсӣ ва дараҷаи тахассусии омӯзгор', 'Учебные часы и квалификационная категория учителя'))}</h2>
         ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Меъёри 1 ставка = 18 соат/ҳафта. Ин маълумот барои муҳосиб дар ҳисоббаробаркунии маош истифода мешавад.', 'Норма 1 ставки = 18 ч/нед. Данные используются бухгалтером для расчёта зарплаты.'))}</p>
@@ -412,7 +479,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             </tbody>
           </table>
         </div>
-      `;
+      `);
 
       panel.querySelector('#smWkForm')?.addEventListener('submit', async ev => {
         ev.preventDefault();
@@ -425,6 +492,7 @@ export function setupPhase2Panels(article, docs, school, views) {
         const classes = (panel.querySelector('#smWkClasses')?.value || '').split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
         const lead = Boolean(panel.querySelector('#smWkLead')?.checked);
         const note = Boolean(panel.querySelector('#smWkNote')?.checked);
+        ++wkSeq;
         state.rows = await upsertWorkload(ctx(), {
           teacher_name: name, category: cat, weekly_hours: hrs, attestation_year: yr,
           subject: subj, class_codes: classes, class_leadership: lead, notebook_check: note,
@@ -435,6 +503,7 @@ export function setupPhase2Panels(article, docs, school, views) {
       });
       panel.querySelectorAll('[data-del-wk]').forEach(btn => {
         btn.addEventListener('click', async () => {
+          ++wkSeq;
           state.rows = await deleteWorkload(ctx(), btn.dataset.delWk);
           state.statusMsg = txt('Сабт хориҷ шуд.', 'Запись удалена.');
           await renderWorkload({ refresh: false });
@@ -461,10 +530,13 @@ export function setupPhase2Panels(article, docs, school, views) {
 
     const nowYm = new Date().toISOString().slice(0, 7);
     let state = { cfg: null, workloads: [], yearMonth: nowYm, statusMsg: '' };
+    let paySeq = 0;
 
     renderPayroll = async ({ refresh = true } = {}) => {
+      const mySeq = ++paySeq;
       if (refresh || !state.cfg) {
         const [cfg, wks] = await Promise.all([loadPayrollConfig(ctx()), loadWorkloads(ctx())]);
+        if (mySeq !== paySeq) return;
         state.cfg = cfg;
         state.workloads = wks;
       }
@@ -483,7 +555,7 @@ export function setupPhase2Panels(article, docs, school, views) {
         calCells.push(`<button type="button" class="sm-cal-day ${cls}" data-cal-date="${d.date}" title="${d.date}">${d.day}</button>`);
       }
 
-      panel.innerHTML = `
+      setPanelHtml(panel, `
         <h2 tabindex="-1">${esc(txt('Ҳисоббаробаркунии маош ва тақвими истироҳат', 'Расчёт заработной платы и календарь исключений'))}</h2>
         ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Тарифҳо, андоз ва рӯзҳои истироҳат/идро танзим кунед. Зер кардани сана дар тақвим онро аз рӯзҳои корӣ хориҷ мекунад.', 'Настройте тарифы, налоги и выходные/праздничные дни. Нажатие на дату исключает её из рабочих дней.'))}</p>
@@ -547,7 +619,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             </tbody>
           </table>
         </div>
-      `;
+      `);
 
       const collectCfgFromInputs = () => {
         const weekdays = [];
@@ -642,13 +714,17 @@ export function setupPhase2Panels(article, docs, school, views) {
       statusMsg: '',
     };
 
+    let grSeq = 0;
+
     renderGrades = async ({ refresh = true } = {}) => {
+      const mySeq = ++grSeq;
       if (refresh) {
         const [slice, fullYear, roster] = await Promise.all([
           loadQuarterGrades(ctx(), { yearStart: state.yearStart, period: state.period, classCode: state.classCode, subject: state.subject }),
           loadQuarterGrades(ctx(), { yearStart: state.yearStart }),
           loadStudents(ctx(), state.classCode),
         ]);
+        if (mySeq !== grSeq) return;
         state.allYearRows = fullYear;
         const byName = new Map(slice.map(r => [r.student_name.toLowerCase(), r]));
         for (const st of roster) {
@@ -674,7 +750,7 @@ export function setupPhase2Panels(article, docs, school, views) {
         return { period: p, quality_pct: pm.qualityPct, pass_pct: pm.passPct, assessed: pm.assessed };
       });
 
-      panel.innerHTML = `
+      setPanelHtml(panel, `
         <h2 tabindex="-1">${esc(txt('Баҳоҳои чорякии роҳбари синф ва сифат', 'Четвертные оценки классного руководителя'))}</h2>
         ${dbLockBannerHtml()}
         <p class="small">${esc(txt('Меъёри 10-холаи Тоҷикистон: сифат = баҳои 8–10, азхудкунӣ = баҳои 4–10.', '10-балльная шкала РТ: качество = 8–10 баллов, успеваемость = 4–10 баллов.'))}</p>
@@ -718,7 +794,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             </tbody>
           </table>
         </div>
-      `;
+      `);
 
       const syncScopeInputs = () => {
         state.period = panel.querySelector('#smGrPeriod')?.value || 'q1';
@@ -1114,7 +1190,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             ? txt('Директор ҳамаи кормандони мактабро идора мекунад: тасдиқ, қатъи дастгоҳ, рамзи нав ва хориҷкунӣ.', 'Директор управляет всеми сотрудниками школы: подтверждение, сброс устройств, пароль и удаление.')
             : txt('Шумо метавонед кормандони мактабро (ғайр аз директор) тасдиқ, қатъи дастгоҳ ё бозсозии рамз кунед.', 'Вы управляете сотрудниками школы (кроме директора): подтверждение, сброс устройств и пароля.');
 
-      panel.innerHTML = `
+      setPanelHtml(panel, `
         <h2 tabindex="-1">${esc(txt('Корбарон ва дастгоҳҳо', 'Пользователи и устройства'))}</h2>
         <p class="small">${esc(hierarchyNote)}</p>
         <div class="sm-p2-kpis">
@@ -1220,7 +1296,7 @@ export function setupPhase2Panels(article, docs, school, views) {
             </tbody>
           </table>
         </div>
-      `;
+      `);
 
       panel.querySelector('#smUsrSearch')?.addEventListener('input', ev => {
         state.search = ev.target.value;
