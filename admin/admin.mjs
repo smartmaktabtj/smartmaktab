@@ -2,6 +2,7 @@ import { createCloudClient } from '../shared/cloud-client.mjs';
 import { getCloudConfig } from '../shared/cloud-config.mjs';
 import { evaluateLicenseState } from '../shared/license-guard.mjs';
 import { FALLBACK_TAJIKISTAN_LOCATIONS } from '../shared/tajikistan-locations.mjs';
+import { setupAdminDocumentsPanel } from './admin-documents.mjs';
 import {
   POSITION_CATALOG,
   SUBSCRIPTION_PERIOD_PACKAGES,
@@ -115,6 +116,39 @@ const copy = {
     tabLicenses: 'Иҷозатномаҳо ва квотаҳо',
     tabPlans: 'Тарифҳои вазифаҳо ва реквизитҳо',
     tabPayments: 'Чекҳои пардохт (OCR)',
+    tabDocuments: 'Ҳуҷҷатҳо ва қолабҳо',
+    docsHint: 'Дар ин бахш барои ҳар як аз 24 вазифа категорияҳо, зеркатегорияҳо ва қолабҳои ҳуҷҷатҳоро созед ё файли .docx/.txt бор кунед. Тегҳои {{school.name}}, {{director.full_name}}, {{table.students}} ба таври худкор пур мешаванд.',
+    docCatSection: '1. Категорияи ҳуҷҷатҳо (бо интихоби 1 ё якчанд вазифа)',
+    docSubSection: '2. Зеркатегория (қисмат дар дохили категория)',
+    docTplSection: '3. Сохтани қолаб / вориди .docx ва таҳрири мини-Word',
+    docTitleTg: 'Ном (Тоҷикӣ)',
+    docTitleRu: 'Название (Русский)',
+    docDescTg: 'Тавсифи кӯтоҳ',
+    docIcon: 'Нишона (Иконка)',
+    docSort: 'Тартиб',
+    docPositionsLabel: 'Ба кадом вазифаҳо дастрас бошад:',
+    docPickSchool: 'Ҳамаи 20 мактабӣ',
+    docPickMaorif: 'Маориф (2)',
+    docPickRaesat: 'Раёсат (2)',
+    docPickClear: 'Пок кардан',
+    docSaveCat: 'Захира кардани категория',
+    docSaveSub: 'Захира кардани зеркатегория',
+    docSaveTpl: 'Захира ва нашри қолаб',
+    docParentCat: 'Категория',
+    docParentSub: 'Зеркатегория',
+    docLangFilter: 'Забони қолаб',
+    docSchoolTypeFilter: 'Навъи муассиса',
+    docShiftFilter: 'Баст (Смена)',
+    docEditMode: 'Реҷаи таҳрири корбар',
+    docEditFull: 'Таҳрири пурра (ҳамаи матн)',
+    docEditFields: 'Танҳо майдонҳои {{...}} (қулфшуда)',
+    docStatus: 'Ҳолат',
+    docStatusPublished: 'Нашршуда (ба корбарон намоён)',
+    docStatusDraft: 'Лоиҳа (пинҳон)',
+    docStrictNative: '🛡️ Танҳо дар барномаи Windows / Android кушода шавад',
+    docTplPosHint: 'Вазифаҳои хос барои ин қолаб (агар холӣ монад, аз категория гирифта мешавад):',
+    docImportFileLabel: 'Вориди тайёри Word (.docx) ё матн (.txt) ба редактор:',
+    docCatalogTreeTitle: 'Дарахти қолабҳои мавҷуда (Категория → Зеркатегория → Файлҳо)',
     orgsHint: 'Ин ҷо сохтори маъмуриро идора кунед: Раёсат (вилоят) → Шуъбаи маориф (шаҳр/ноҳия) → Мактаб. Барои тағйир тугмаи «Таҳрир» ва барои нест кардан «Нест кардан»-ро пахш кунед.',
     hierarchyTitle: 'Дарахти сохтори ҳудудӣ (Раёсат → Маориф → Мактаб)',
     addMaorifUnder: '+ Маорифи нав',
@@ -290,6 +324,39 @@ const copy = {
     tabLicenses: 'Лицензии и квоты',
     tabPlans: 'Тарифы должностей и реквизиты',
     tabPayments: 'Чеки оплаты (OCR)',
+    tabDocuments: 'Документы и шаблоны',
+    docsHint: 'Управляйте категориями, подкатегориями и шаблонами документов для всех 24 должностей. Загрузите готовый .docx/.txt или отредактируйте в мини-Word с авто-тегами.',
+    docCatSection: '1. Категория документов (1 или несколько должностей)',
+    docSubSection: '2. Подкатегория внутри категории',
+    docTplSection: '3. Шаблон документа / импорт .docx + Мини-Word',
+    docTitleTg: 'Название (Таджикский)',
+    docTitleRu: 'Название (Русский)',
+    docDescTg: 'Краткое описание',
+    docIcon: 'Иконка',
+    docSort: 'Порядок',
+    docPositionsLabel: 'Доступно для должностей:',
+    docPickSchool: 'Все 20 школьных',
+    docPickMaorif: 'Маориф (2)',
+    docPickRaesat: 'Раёсат (2)',
+    docPickClear: 'Сбросить',
+    docSaveCat: 'Сохранить категорию',
+    docSaveSub: 'Сохранить подкатегорию',
+    docSaveTpl: 'Сохранить и опубликовать шаблон',
+    docParentCat: 'Категория',
+    docParentSub: 'Подкатегория',
+    docLangFilter: 'Язык шаблона',
+    docSchoolTypeFilter: 'Тип учреждения',
+    docShiftFilter: 'Сменность',
+    docEditMode: 'Режим редактирования',
+    docEditFull: 'Полное редактирование',
+    docEditFields: 'Только поля {{...}}',
+    docStatus: 'Статус',
+    docStatusPublished: 'Опубликован',
+    docStatusDraft: 'Черновик',
+    docStrictNative: '🛡️ Только в приложении Windows / Android',
+    docTplPosHint: 'Особые должности для шаблона (если не выбрано — берутся из категории):',
+    docImportFileLabel: 'Импорт готового .docx или .txt в редактор:',
+    docCatalogTreeTitle: 'Дерево каталога (Категория → Подкатегория → Файлы)',
     orgsHint: 'Здесь настраивается иерархия: Управление (область) → Отдел образования (район/город) → Школа. Вы можете добавить, отредактировать или полностью удалить любую организацию.',
     hierarchyTitle: 'Дерево территориальной иерархии (Раёсат → Маориф → Школа)',
     addMaorifUnder: '+ Добавить Маориф',
@@ -455,6 +522,7 @@ let locations = [];
 let authUsers = [];
 let deviceSessions = [];
 let selectedExtraSet = new Set();
+let docsPanel = null;
 
 function normalizeDistrictInput(value) {
   const cleaned = String(value || '').trim();
@@ -575,6 +643,7 @@ function applyTranslations() {
   renderPositionControls();
   renderEditBanner();
   renderTables();
+  docsPanel?.rerenderLabels?.();
 }
 
 function renderRoleAccessOptions() {
@@ -732,7 +801,7 @@ async function refreshAll() {
       client.select('school_licenses', 'select=id,organization_id,status,plan_code,starts_at,expires_at,grace_days,max_accounts,max_positions_per_account,default_max_devices,notes,updated_at&order=updated_at.desc'),
       client.getPaymentPlans(),
       client.getRoleTariffs().catch(() => POSITION_CATALOG),
-      client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,ocr_payload,status,review_note,created_at&order=created_at.desc'),
+      client.select('payment_submissions', 'select=id,organization_id,submitted_by,provider_code,receipt_hash,amount_declared,currency,ocr_text,ocr_confidence,transaction_id,recipient_account,status_confirmed,plan_code,include_aliya,storage_pack_count,ocr_payload,status,review_note,created_at&order=created_at.desc'),
       client.select('user_device_sessions', 'select=id,user_id,organization_id,device_id,device_kind,device_label,is_active,first_seen_at,last_seen_at&order=last_seen_at.desc').catch(() => []),
       client.getPendingAccountVerifications(null).catch(() => []),
       client.getTajikistanLocations().catch(() => []),
@@ -757,6 +826,7 @@ async function refreshAll() {
     renderPositionControls();
     renderEditBanner();
     renderTables();
+    await docsPanel?.refresh?.();
   } catch (err) {
     setStatus(err.message, 'error');
   }
@@ -1531,8 +1601,10 @@ function renderTables() {
     const reqPkg = getSubscriptionPackage(reqMonths);
     const discInfo = reqPkg.discountPct > 0 ? ` (-${reqPkg.discountPct}%)` : '';
     const pkgInfo = ` · ${reqPkg.months} ${lang === 'ru' ? 'мес.' : 'моҳ'}${discInfo}`;
+    const packCnt = Number(p.storage_pack_count || p.ocr_payload?.storage_pack_count || 0);
+    const proInfo = packCnt > 0 ? ` · 📁Pro×${packCnt}` : '';
     const posStr = mainPos ? ` · ${mainPos}${extraCnt ? ` (+${extraCnt})` : ''}` : '';
-    td1.textContent = `${orgShortName(p.organization_id)} · ${p.provider_code} · ${p.amount_declared ?? '—'} ${p.currency}${posStr}${pkgInfo}`;
+    td1.textContent = `${orgShortName(p.organization_id)} · ${p.provider_code} · ${p.amount_declared ?? '—'} ${p.currency}${posStr}${pkgInfo}${proInfo}`;
 
     const td2 = document.createElement('td');
     const hashEl = document.createElement('small');
@@ -1904,5 +1976,10 @@ $('loginPassword')?.addEventListener('input', syncAdmLoginWarn);
 $('roleUserId')?.addEventListener('input', syncAdmRoleWarn);
 $('roleTempPassword')?.addEventListener('input', syncAdmRoleWarn);
 
+docsPanel = setupAdminDocumentsPanel({
+  client,
+  getLang: () => lang,
+  setStatus,
+});
 applyTranslations();
 showTab('orgs');

@@ -102,6 +102,7 @@ export async function submitReceiptForVerification({
   primaryPosition = null,
   extraPositions = [],
   includeAliya = false,
+  storagePackCount = 0,
   months = 1,
   config = getCloudConfig(),
   fetchImpl = globalThis.fetch,
@@ -133,6 +134,7 @@ export async function submitReceiptForVerification({
       primary_position: primaryPosition || undefined,
       extra_positions: Array.isArray(extraPositions) && extraPositions.length ? extraPositions : undefined,
       include_aliya: Boolean(includeAliya),
+      storage_pack_count: Math.max(0, Math.min(20, Number(storagePackCount) || 0)),
       months: [1, 3, 6, 9, 12].includes(Number(months)) ? Number(months) : 1,
     }),
   });

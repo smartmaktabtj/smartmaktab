@@ -5,6 +5,9 @@ import { cacheVerifiedLicense, clearCachedLicense, detectDeviceKind, getOrCreate
 import { DEFAULT_PAYMENT_TARIFF, parseReceiptText, runClientOcr, submitReceiptForVerification } from './ocr-receipt.mjs';
 import {
   ALIYA_ADDON_PRICE_TJS,
+  STORAGE_PACK_DRAFTS,
+  STORAGE_PACK_FOLDERS,
+  STORAGE_PACK_PRICE_TJS,
   POSITION_CATALOG,
   SUBSCRIPTION_PERIOD_PACKAGES,
   canPositionManageUsers,
@@ -367,9 +370,19 @@ export function setupCloudWorkspace(article, group, school) {
   aliyaToggle.style.cssText = 'width:18px;height:18px;flex-shrink:0;cursor:pointer;';
   const aliyaTxt = make('span');
   aliyaLabel.append(aliyaToggle, aliyaTxt);
+  const storagePackLabel = make('label');
+  storagePackLabel.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line,#d1d5db);border-radius:10px;margin:6px 0;font-size:13px;font-weight:600;flex-wrap:wrap;';
+  const storagePackTxt = make('span');
+  const storagePackSelect = make('select');
+  storagePackSelect.id = 'cloudStoragePackSelect';
+  storagePackSelect.style.cssText = 'border:1px solid #bcd3c5;border-radius:8px;padding:4px 8px;background:#fff;color:#0f172a;';
+  for (let i = 0; i <= 5; i += 1) {
+    storagePackSelect.append(new Option(i === 0 ? '0' : `+${i} (+${i * STORAGE_PACK_FOLDERS}/${i * STORAGE_PACK_DRAFTS} · +${i * STORAGE_PACK_PRICE_TJS} TJS)`, String(i)));
+  }
+  storagePackLabel.append(storagePackTxt, storagePackSelect);
   const tariffCalcLine = make('div', 'notice');
   tariffCalcLine.style.cssText = 'margin-top:8px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700;';
-  extraWrap.append(extraLbl, extraListBox, aliyaLabel, tariffCalcLine);
+  extraWrap.append(extraLbl, extraListBox, aliyaLabel, storagePackLabel, tariffCalcLine);
 
   const fileWrap = make('label', 'field');
   const fileLbl = make('span');
@@ -793,26 +806,29 @@ export function setupCloudWorkspace(article, group, school) {
     const primary = posSelect.value;
     const extras = [...selectedExtras].filter(code => code !== primary);
     const includeAliya = Boolean(aliyaToggle.checked);
+    const storagePackCount = Math.max(0, Number(storagePackSelect.value || 0));
     const months = Number(periodSelect.value || 1);
     const calc = computePositionTariffTotal({
       primaryPosition: primary,
       extraPositions: extras,
       tariffs: roleTariffs,
       includeAliya,
+      storagePackCount,
     });
     const pkgCalc = computeSubscriptionPackagePrice(calc.totalTjs, months);
     if (!manualAmountOverride) {
       amtInput.value = String(pkgCalc.totalTjs);
     }
     const aliyaPart = includeAliya ? ` + Алия (${calc.aliyaPrice} TJS)` : '';
+    const packPart = storagePackCount > 0 ? ` + Pro (${calc.storagePackPrice} TJS)` : '';
     const discPart = pkgCalc.discountPct > 0
       ? (tg()
         ? ` · ${pkgCalc.months} моҳ (-${pkgCalc.discountPct}%, сарфа ${pkgCalc.savedTjs} TJS)`
         : ` · ${pkgCalc.months} мес. (-${pkgCalc.discountPct}%, экономия ${pkgCalc.savedTjs} TJS)`)
       : (tg() ? ` · ${pkgCalc.months} моҳ` : ` · ${pkgCalc.months} мес.`);
     tariffCalcLine.textContent = tg()
-      ? `Тарофаи моҳона: ${calc.basePrice} + ${extras.length} иловагӣ (${calc.extrasPrice})${aliyaPart} = ${calc.totalTjs} TJS/моҳ${discPart} → Ҳамагӣ: ${pkgCalc.totalTjs} TJS`
-      : `Месячный тариф: ${calc.basePrice} + ${extras.length} доп. (${calc.extrasPrice})${aliyaPart} = ${calc.totalTjs} TJS/мес${discPart} → Итого: ${pkgCalc.totalTjs} TJS`;
+      ? `Тарофаи моҳона: ${calc.basePrice} + ${extras.length} иловагӣ (${calc.extrasPrice})${aliyaPart}${packPart} = ${calc.totalTjs} TJS/моҳ${discPart} → Ҳамагӣ: ${pkgCalc.totalTjs} TJS`
+      : `Месячный тариф: ${calc.basePrice} + ${extras.length} доп. (${calc.extrasPrice})${aliyaPart}${packPart} = ${calc.totalTjs} TJS/мес${discPart} → Итого: ${pkgCalc.totalTjs} TJS`;
   }
 
   function renderVerificationSection() {
@@ -1228,6 +1244,9 @@ export function setupCloudWorkspace(article, group, school) {
     aliyaTxt.textContent = tg()
       ? ` Функсияи Алия (+${ALIYA_ADDON_PRICE_TJS} сомонӣ / моҳ)`
       : ` Функция Алия (+${ALIYA_ADDON_PRICE_TJS} сомони / мес)`;
+    storagePackTxt.textContent = tg()
+      ? `📁 Бастаи Pro ҳуҷҷатҳо (+${STORAGE_PACK_FOLDERS} папка, +${STORAGE_PACK_DRAFTS} лоиҳа / +${STORAGE_PACK_PRICE_TJS} сомонӣ/моҳ)`
+      : `📁 Pro-пакет документов (+${STORAGE_PACK_FOLDERS} папок, +${STORAGE_PACK_DRAFTS} черновиков / +${STORAGE_PACK_PRICE_TJS} сомони/мес)`;
     for (const opt of provSelect.options) {
       const pair = providerLabels[opt.value];
       if (pair) opt.textContent = pair[tg() ? 0 : 1];
@@ -1316,6 +1335,11 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   aliyaToggle.addEventListener('change', () => {
+    manualAmountOverride = false;
+    updateTariffSummary();
+  });
+
+  storagePackSelect.addEventListener('change', () => {
     manualAmountOverride = false;
     updateTariffSummary();
   });
@@ -1426,6 +1450,7 @@ export function setupCloudWorkspace(article, group, school) {
         primaryPosition: posSelect.value || cabinetId || null,
         extraPositions: [...selectedExtras],
         includeAliya: Boolean(aliyaToggle.checked),
+        storagePackCount: Math.max(0, Number(storagePackSelect.value || 0)),
         months: Number(periodSelect.value || 1),
       });
       const declaredAmt = amtInput.value ? Number(amtInput.value) : null;
@@ -1434,6 +1459,7 @@ export function setupCloudWorkspace(article, group, school) {
         extraPositions: [...selectedExtras],
         tariffs: roleTariffs,
         includeAliya: Boolean(aliyaToggle.checked),
+        storagePackCount: Math.max(0, Number(storagePackSelect.value || 0)),
       });
       const pkgCalc = computeSubscriptionPackagePrice(calc.totalTjs, Number(periodSelect.value || 1));
       const expectedTotal = Number(pkgCalc?.totalTjs || 0);
@@ -1468,9 +1494,17 @@ export function setupCloudWorkspace(article, group, school) {
   });
 
   document.addEventListener('sm:open-account-verification', openCloudToVerification);
-  document.addEventListener('sm:open-payment-wizard', () => {
+  document.addEventListener('sm:open-payment-wizard', (ev) => {
     panelFocusMode = 'payment';
     panel.hidden = false;
+    if (ev?.detail?.preselectStoragePack) {
+      const packs = Math.max(1, Number(ev.detail.preselectStoragePack) || 1);
+      storagePackSelect.value = String(Math.min(5, packs));
+      manualAmountOverride = false;
+      payStep = 2;
+      syncPayWizardStep();
+      updateTariffSummary();
+    }
     renderLabels();
     openWorkspaceView(panel.id, trigger);
     try { (receiptForm.hidden ? payNoticeBox : receiptForm).scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}

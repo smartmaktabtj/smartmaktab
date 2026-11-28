@@ -3,6 +3,7 @@ import {initWorkspaceViews} from './workspace-view.mjs';
 import {setupSchoolForms} from './school-forms.mjs';
 import {setupCloudWorkspace} from './cloud-workspace-ui.mjs';
 import {setupPhase2Panels} from './phase2-panels.mjs';
+import {setupDocumentSidebar} from './doc-sidebar.mjs';
 import {createCloudClient} from './cloud-client.mjs';
 import {getCloudConfig} from './cloud-config.mjs';
 import {readCachedLicense} from './license-guard.mjs';
@@ -318,9 +319,9 @@ export function setupWorkspace({configured,school}){
   const right=document.createElement('span');
   if(isPaid){
    right.style.cssText='color:#16a34a;font-weight:600;';
-   right.textContent=expStr?label(`Активна · Следующая оплата: ${expStr}`,`Обуна фаъол · Пардохти навбатӣ: ${expStr}`):label('Оплата активна','Обуна фаъол');
-   profSubBar.style.cursor='default';
-   profSubBar.disabled=true;
+   right.textContent=expStr?label(`Активна · Следующая оплата: ${expStr} · +Pro`,`Обуна фаъол · Пардохти навбатӣ: ${expStr} · +Pro`):label('Оплата активна · +Pro','Обуна фаъол · +Pro');
+   profSubBar.style.cursor='pointer';
+   profSubBar.disabled=false;
   }else if(lic?.status==='expired'||lic?.status==='suspended'||(exp&&Date.parse(exp)<Date.now())){
    right.style.cssText='color:#dc2626;font-weight:600;';
    right.textContent=label('Срок истёк · Оплатить →','Муҳлати дастрасӣ ба охир расид · Пардохт →');
@@ -365,9 +366,15 @@ export function setupWorkspace({configured,school}){
   const element=$(id);
   if(element)drawer.append(wrapAccordion(element,null,openByDefault.has(id)));
  }
+ const homeLayout=document.createElement('div');homeLayout.id='smHomeLayout';homeLayout.className='sm-home-layout no-print';
+ const docSidebarHost=document.createElement('aside');docSidebarHost.id='smDocSidebar';docSidebarHost.className='sm-doc-sidebar';
+ const homeMain=document.createElement('div');homeMain.id='smHomeMain';homeMain.className='sm-home-main';
  const mainModules=document.createElement('section');mainModules.id='smMainModules';mainModules.className='sm-module-grid no-print';
+ const homeFolderBarHost=document.createElement('div');homeFolderBarHost.id='smHomeFolderBarHost';
  const formsBar=document.createElement('section');formsBar.id='roleFormsBar';formsBar.className='role-forms-bar no-print';
- article.prepend(drawer,mainModules,formsBar);
+ homeMain.append(mainModules,homeFolderBarHost,formsBar);
+ homeLayout.append(docSidebarHost,homeMain);
+ article.prepend(drawer,homeLayout);
  const teacher=!!$('teacherSubjects');if(teacher)drawer.append(wrapAccordion($('teacherSubjects'),null,true));
  const settingsFooter=document.createElement('div');
  settingsFooter.className='control';
@@ -389,6 +396,14 @@ export function setupWorkspace({configured,school}){
  const entries={directorPlanPanel:['План работы','Нақшаи кор','▤'],libraryPlanPanel:['План библиотеки','Нақшаи китобхона','▤'],raesatCoverage:['Полнота сведений','Пуррагии маълумот','▤']};
  for(const [id,values] of Object.entries(entries))views.shortcut(id,...values);
  setupPhase2Panels(article,mainModules,school,views);
+ setupDocumentSidebar({
+  layoutHost:homeLayout,
+  sidebarHost:docSidebarHost,
+  homeFolderBarHost,
+  cabinetId,
+  getSchool:school,
+  persistentStore,
+ });
 
  function sync(){
   const title=label('Профиль','Профил');

@@ -78,6 +78,7 @@ jobs:
           run_bt test:portable:browser
           run_bt test:phase2:browser
           run_bt test:verification:browser
+          run_bt test:document-library:browser
 
   android-java-compile:
     runs-on: ubuntu-24.04
