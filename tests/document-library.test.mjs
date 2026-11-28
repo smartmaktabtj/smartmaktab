@@ -66,6 +66,7 @@ before(async () => {
     '../supabase/migrations/20261128000500_stage1_fix_assign_membership_and_ctx.sql',
     '../supabase/migrations/20261129000100_stage2_5_cleanup_and_devices.sql',
     '../supabase/migrations/20261130000100_document_library_editor_storage.sql',
+    '../supabase/migrations/20261130000200_stage3_pdf_templates_support.sql',
   ]) {
     await db.exec(await read(m));
   }
@@ -199,6 +200,24 @@ test('Stage 3 DB: position-scoped document catalog, autofill, 20/50 quotas, +10 
   // Print audit records cleanly
   const printId = (await as(3, () => q("select public.log_document_print($1, $2, null, 'Нақшаи дарсӣ', 'windows') as id", [tplTeacherId, schoolId])))[0].id;
   assert.ok(printId);
+
+  // PDF & scanned PDF templates: super_admin publishes doc_format='pdf', user sees it in library, cannot save editable draft
+  const pdfTplId = (await as(1, () => q(
+    "select public.admin_upsert_document_template(null, $1, $2, array['school-teacher']::text[], 'Скан-фармоиш', 'Скан приказа', 'PDF only', 'portrait', '{\"top\":20,\"right\":15,\"bottom\":20,\"left\":30}'::jsonb, 'tg', 'all', 'all', 'fields_only', false, 'published', 30, '', '{}'::jsonb, 'pdf', 'templates/pdf1/v1.pdf', 102400) as id",
+    [catTeacherId, subTeacherId],
+  )))[0].id;
+  assert.ok(pdfTplId);
+
+  const libWithPdf = (await as(3, () => q("select public.get_position_document_library('school-teacher', $1) as res", [schoolId])))[0].res;
+  const pdfEntry = libWithPdf.templates.find(t => t.id === pdfTplId);
+  assert.equal(pdfEntry.doc_format, 'pdf');
+  assert.equal(pdfEntry.pdf_storage_path, 'templates/pdf1/v1.pdf');
+  assert.equal(pdfEntry.pdf_size_bytes, 102400);
+
+  await assert.rejects(
+    as(3, () => q("select public.save_user_document_draft($1, null, '', '', 'H4sIAAAAAAAAAytIzAAA', 100)", [pdfTplId])),
+    /pdf_readonly_cannot_save_draft/,
+  );
 });
 
 test('Document engine: XSS sanitizer, rich .docx parser, autofill tables/fields_only, and gzip round-trip', async () => {

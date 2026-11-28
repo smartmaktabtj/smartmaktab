@@ -406,8 +406,9 @@ test('Stage 2 browser: Director "Корбарон" module manages users, devices
       return Boolean(btn && /Фаъол/i.test(btn.textContent || ''));
     }, teacherMemId);
 
-    // Delete user -> row disappears
+    // Delete user -> confirm via in-app centered modal -> row disappears
     await page.locator(`[data-usr-delete="${teacherUid}"]`).click();
+    await page.locator('.sm-dlg-backdrop .sm-dlg-btn.danger').click();
     await page.waitForFunction(() => !(document.querySelector('#smUsersPanel tbody')?.textContent || '').includes('Алиева Мадина'));
 
     assert.ok(rpcCalls.some(([k, b]) => k === 'admin-users' && b.action === 'manager_reset_password' && b.user_id === teacherUid));

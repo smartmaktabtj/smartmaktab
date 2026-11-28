@@ -93,8 +93,11 @@ export function printCabinetSheet(button){
  const sheet=button.closest('.print-card');if(!sheet)return;
  const clear=()=>{document.body.classList.remove('sm-isolated-print');sheet.classList.remove('sm-target-print');};
  if(!offlineViewer){
+  const prevTitle=document.title;
+  document.title=' ';
+  const restore=()=>{document.title=prevTitle;clear();};
   document.body.classList.add('sm-isolated-print');sheet.classList.add('sm-target-print');
-  window.addEventListener('afterprint',clear,{once:true});window.print();return;
+  window.addEventListener('afterprint',restore,{once:true});window.print();setTimeout(restore,1500);return;
  }
  const expanded=document.body.classList.toggle('sm-print-preview');
  document.body.classList.toggle('sm-isolated-print',expanded);sheet.classList.toggle('sm-target-print',expanded);

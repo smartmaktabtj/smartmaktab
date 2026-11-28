@@ -2,6 +2,7 @@ import { createCloudClient } from '../shared/cloud-client.mjs';
 import { getCloudConfig } from '../shared/cloud-config.mjs';
 import { evaluateLicenseState } from '../shared/license-guard.mjs';
 import { FALLBACK_TAJIKISTAN_LOCATIONS } from '../shared/tajikistan-locations.mjs';
+import { smConfirm } from '../shared/sm-dialog.mjs';
 import { setupAdminDocumentsPanel } from './admin-documents.mjs';
 import {
   POSITION_CATALOG,
@@ -139,6 +140,9 @@ const copy = {
     docLangFilter: 'Забони қолаб',
     docSchoolTypeFilter: 'Навъи муассиса',
     docShiftFilter: 'Баст (Смена)',
+    docTplFormat: 'Шакли ҳуҷҷат',
+    docFormatWord: 'Ҳуҷҷати Word (таҳрир ва пуркунӣ)',
+    docFormatPdf: 'PDF / Скан PDF (танҳо хондан ва чоп)',
     docEditMode: 'Реҷаи таҳрири корбар',
     docEditFull: 'Таҳрири пурра (ҳамаи матн)',
     docEditFields: 'Танҳо майдонҳои {{...}} (қулфшуда)',
@@ -147,7 +151,7 @@ const copy = {
     docStatusDraft: 'Лоиҳа (пинҳон)',
     docStrictNative: '🛡️ Танҳо дар барномаи Windows / Android кушода шавад',
     docTplPosHint: 'Вазифаҳои хос барои ин қолаб (агар холӣ монад, аз категория гирифта мешавад):',
-    docImportFileLabel: 'Вориди тайёри Word (.docx) ё матн (.txt) ба редактор:',
+    docImportFileLabel: 'Вориди файли омода (.docx, .txt ё .pdf / скан то 15 МБ):',
     docCatalogTreeTitle: 'Дарахти қолабҳои мавҷуда (Категория → Зеркатегория → Файлҳо)',
     orgsHint: 'Ин ҷо сохтори маъмуриро идора кунед: Раёсат (вилоят) → Шуъбаи маориф (шаҳр/ноҳия) → Мактаб. Барои тағйир тугмаи «Таҳрир» ва барои нест кардан «Нест кардан»-ро пахш кунед.',
     hierarchyTitle: 'Дарахти сохтори ҳудудӣ (Раёсат → Маориф → Мактаб)',
@@ -347,6 +351,9 @@ const copy = {
     docLangFilter: 'Язык шаблона',
     docSchoolTypeFilter: 'Тип учреждения',
     docShiftFilter: 'Сменность',
+    docTplFormat: 'Формат документа',
+    docFormatWord: 'Word-документ (редактируемый)',
+    docFormatPdf: 'PDF / Скан PDF (только просмотр и печать)',
     docEditMode: 'Режим редактирования',
     docEditFull: 'Полное редактирование',
     docEditFields: 'Только поля {{...}}',
@@ -355,7 +362,7 @@ const copy = {
     docStatusDraft: 'Черновик',
     docStrictNative: '🛡️ Только в приложении Windows / Android',
     docTplPosHint: 'Особые должности для шаблона (если не выбрано — берутся из категории):',
-    docImportFileLabel: 'Импорт готового .docx или .txt в редактор:',
+    docImportFileLabel: 'Импорт готового .docx, .txt или PDF / скана (до 15 МБ):',
     docCatalogTreeTitle: 'Дерево каталога (Категория → Подкатегория → Файлы)',
     orgsHint: 'Здесь настраивается иерархия: Управление (область) → Отдел образования (район/город) → Школа. Вы можете добавить, отредактировать или полностью удалить любую организацию.',
     hierarchyTitle: 'Дерево территориальной иерархии (Раёсат → Маориф → Школа)',
@@ -1222,7 +1229,14 @@ function renderTables() {
     delBtn.textContent = t('deleteOrg');
     delBtn.addEventListener('click', async () => {
       const loc = [o.region_name, o.district_name].filter(Boolean).join(' · ') || '—';
-      if (!globalThis.confirm(t('confirmDeleteOrg').replace('{name}', o.name).replace('{loc}', loc))) return;
+      const ok = await smConfirm({
+        title: t('deleteOrg'),
+        message: t('confirmDeleteOrg').replace('{name}', o.name).replace('{loc}', loc),
+        confirmLabel: t('deleteOrg'),
+        cancelLabel: t('cancelEdit'),
+        danger: true,
+      });
+      if (!ok) return;
       delBtn.disabled = true;
       try {
         await client.adminDeleteOrganization(o.id, false);
@@ -1231,7 +1245,14 @@ function renderTables() {
         await refreshAll();
       } catch (err) {
         if (String(err.message || '').includes('organization_has_data')) {
-          if (globalThis.confirm(t('confirmForceDelete').replace('{name}', o.name))) {
+          const okForce = await smConfirm({
+            title: t('deleteOrg'),
+            message: t('confirmForceDelete').replace('{name}', o.name),
+            confirmLabel: t('deleteOrg'),
+            cancelLabel: t('cancelEdit'),
+            danger: true,
+          });
+          if (okForce) {
             try {
               await client.adminDeleteOrganization(o.id, true);
               setStatus(t('deletedOrg'));

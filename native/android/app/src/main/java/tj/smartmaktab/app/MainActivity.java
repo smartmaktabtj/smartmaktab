@@ -121,11 +121,11 @@ public final class MainActivity extends Activity {
      String html=obj.optString("html","<p></p>").replaceAll("(?is)<\\s*script[^>]*>.*?<\\s*/\\s*script\\s*>","");
      String orient="landscape".equalsIgnoreCase(obj.optString("pageOrientation","portrait"))?"landscape":"portrait";
      JSONObject m=obj.optJSONObject("pageMarginsMm");
-     int top=m!=null?Math.max(5,Math.min(50,m.optInt("top",20))):20;
-     int right=m!=null?Math.max(5,Math.min(50,m.optInt("right",15))):15;
-     int bottom=m!=null?Math.max(5,Math.min(50,m.optInt("bottom",20))):20;
-     int left=m!=null?Math.max(5,Math.min(50,m.optInt("left",30))):30;
-     String doc="<!doctype html><html><head><meta charset='utf-8'><style>@page{size:A4 "+orient+";margin:"+top+"mm "+right+"mm "+bottom+"mm "+left+"mm;}body{margin:0;font-family:serif;font-size:14pt;line-height:1.35;color:#111;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #334155;padding:4pt 6pt;}hr.sm-page-break{border:0;height:0;page-break-before:always;break-before:page;}</style></head><body>"+html+"</body></html>";
+     int top=m!=null?Math.max(0,Math.min(50,m.optInt("top",20))):20;
+     int right=m!=null?Math.max(0,Math.min(50,m.optInt("right",15))):15;
+     int bottom=m!=null?Math.max(0,Math.min(50,m.optInt("bottom",20))):20;
+     int left=m!=null?Math.max(0,Math.min(50,m.optInt("left",30))):30;
+     String doc="<!doctype html><html><head><meta charset='utf-8'><style>@page{size:A4 "+orient+";margin:0mm;}body{margin:0;padding:"+top+"mm "+right+"mm "+bottom+"mm "+left+"mm;font-family:serif;font-size:14pt;line-height:1.35;color:#111;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #334155;padding:4pt 6pt;}img.sm-pdf-page-img{display:block;width:100%;height:auto;page-break-after:always;break-after:page;}img.sm-pdf-page-img:last-child{page-break-after:auto;break-after:auto;}hr.sm-page-break{border:0;height:0;page-break-before:always;break-before:page;}</style></head><body>"+html+"</body></html>";
      WebView pw=new WebView(MainActivity.this);
      pw.getSettings().setJavaScriptEnabled(false);
      pw.setWebViewClient(new WebViewClient(){

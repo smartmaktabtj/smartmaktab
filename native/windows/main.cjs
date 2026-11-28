@@ -303,10 +303,11 @@ function startDesktopApp() {
 
         const orient = payload?.pageOrientation === 'landscape' ? 'landscape' : 'portrait';
         const m = payload?.pageMarginsMm || {};
-        const top = Math.max(5, Math.min(50, Number(m.top) || 20));
-        const right = Math.max(5, Math.min(50, Number(m.right) || 15));
-        const bottom = Math.max(5, Math.min(50, Number(m.bottom) || 20));
-        const left = Math.max(5, Math.min(50, Number(m.left) || 30));
+        const numOr = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+        const top = Math.max(0, Math.min(50, numOr(m.top, 20)));
+        const right = Math.max(0, Math.min(50, numOr(m.right, 15)));
+        const bottom = Math.max(0, Math.min(50, numOr(m.bottom, 20)));
+        const left = Math.max(0, Math.min(50, numOr(m.left, 30)));
         const safeHtml = String(payload?.html || '<p></p>')
           .replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
 
@@ -321,13 +322,14 @@ function startDesktopApp() {
           },
         });
         try {
-          const docHtml = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 ${orient};margin:${top}mm ${right}mm ${bottom}mm ${left}mm}body{margin:0;font-family:'Times New Roman',Georgia,serif;font-size:14pt;line-height:1.35;color:#111}table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:4pt 6pt}hr.sm-page-break{border:0;height:0;page-break-before:always;break-before:page}</style></head><body>${safeHtml}</body></html>`;
+          const docHtml = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 ${orient};margin:0mm}body{margin:0;padding:${top}mm ${right}mm ${bottom}mm ${left}mm;font-family:'Times New Roman',Georgia,serif;font-size:14pt;line-height:1.35;color:#111}table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:4pt 6pt}img.sm-pdf-page-img{display:block;width:100%;height:auto;page-break-after:always;break-after:page}img.sm-pdf-page-img:last-child{page-break-after:auto;break-after:auto}hr.sm-page-break{border:0;height:0;page-break-before:always;break-before:page}</style></head><body>${safeHtml}</body></html>`;
           await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`);
           const printResult = await new Promise((resolve) => {
             printWin.webContents.print(
               {
                 silent: true,
                 printBackground: true,
+                margins: { marginType: 'none' },
                 deviceName: selectedPrinter.name,
                 landscape: orient === 'landscape',
               },
