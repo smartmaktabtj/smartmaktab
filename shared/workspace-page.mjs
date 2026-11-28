@@ -302,21 +302,6 @@ export function setupWorkspace({configured,school}){
   return det;
  }
  drawer.append(wrapAccordion(profCard.card,label('Личные данные и профиль','Маълумоти шахсӣ ва профил')));
-
- function wrapAccordion(el){
-  if(!el)return null;
-  const det=document.createElement('details');
-  det.className='sm-prof-accordion';
-  det.style.cssText='margin:8px 0;border:1px solid var(--line,#d1d5db);border-radius:10px;padding:8px 12px;';
-  const titleEl=el.querySelector('h2,h3,h4,.eyebrow');
-  const sum=document.createElement('summary');
-  sum.style.cssText='cursor:pointer;font-weight:600;font-size:14px;list-style:none;display:flex;align-items:center;justify-content:space-between;';
-  sum.textContent=(titleEl?.textContent||el.id).trim();
-  const arrow=document.createElement('span');arrow.textContent='▾';arrow.style.opacity='0.6';
-  sum.append(arrow);
-  det.append(sum,el);
-  return det;
- }
  const ids=['directorPersonnel','institutionPicker','directorInstitution','directorCourses','directorProfilePanel','teacherWorkplaces','teacherProfilePanel','libraryProfilePanel'];
  for(const id of ids){const element=$(id);if(element)drawer.append(wrapAccordion(element));}
  const mainModules=document.createElement('section');mainModules.id='smMainModules';mainModules.className='sm-module-grid no-print';
