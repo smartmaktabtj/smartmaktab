@@ -24,7 +24,7 @@ function startAdminStaticServer() {
   const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
   const server = http.createServer(async (req, res) => {
     const cleanPath = (req.url || '/').split('?')[0];
-    if (!/^\/(?:admin|shared)\/[a-zA-Z0-9._-]+$/.test(cleanPath)) {
+    if (!/^\/(?:admin|shared)(?:\/[a-zA-Z0-9._-]+)+$/.test(cleanPath) || cleanPath.includes('..')) {
       res.writeHead(404).end('Not found');
       return;
     }

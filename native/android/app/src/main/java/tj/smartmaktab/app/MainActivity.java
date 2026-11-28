@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.*;
+import android.print.*;
 import android.provider.DocumentsContract;
 import android.util.Base64;
 import android.util.TypedValue;
@@ -44,6 +45,7 @@ public final class MainActivity extends Activity {
 
  @Override public void onCreate(Bundle saved){
   super.onCreate(saved);
+  getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
   if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("smartmaktab_updates","SmartMaktab",NotificationManager.IMPORTANCE_DEFAULT));
   smartDb=new SmartMaktabDb(this);
   FrameLayout holder=new FrameLayout(this);holder.setBackgroundColor(Color.rgb(16,40,33));view=new WebView(this);holder.addView(view,new FrameLayout.LayoutParams(-1,-1));setContentView(holder);
@@ -98,12 +100,50 @@ public final class MainActivity extends Activity {
    @Override public void onPermissionRequestCanceled(PermissionRequest req){if(media==req){media=null;mediaResources=null;}}
   });
   view.addJavascriptInterface(new SqliteBridge(),"SmartMaktabSqlite");
+  view.addJavascriptInterface(new NativeDocumentBridge(),"SmartMaktabNative");
   if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER))WebViewCompat.addWebMessageListener(view,"SmartMaktabAndroid",Collections.singleton(LIVE_ORIGIN),(w,msg,origin,main,reply)->{
    if(!main||!ownOrigin(origin)||!own(Uri.parse(w.getUrl())))return; handle(msg.getData(),reply);
   });
   String resumeRoute=smartDb.getResumeRoute();
   view.loadUrl(LIVE_HOME+(resumeRoute!=null?resumeRoute:""));
   requestInitialPermissions();
+ }
+
+ private final class NativeDocumentBridge {
+  private WebView activePrintWebView;
+  @JavascriptInterface public boolean isAndroidApp(){return true;}
+  @JavascriptInterface public void printProtected(String payloadJson){
+   if(!trustedOrigin||isDestroyed()||isFinishing())return;
+   runOnUiThread(()->{
+    try{
+     JSONObject obj=new JSONObject(payloadJson);
+     String title=obj.optString("title","SmartMaktab");
+     String html=obj.optString("html","<p></p>").replaceAll("(?is)<\\s*script[^>]*>.*?<\\s*/\\s*script\\s*>","");
+     String orient="landscape".equalsIgnoreCase(obj.optString("pageOrientation","portrait"))?"landscape":"portrait";
+     JSONObject m=obj.optJSONObject("pageMarginsMm");
+     int top=m!=null?Math.max(5,Math.min(50,m.optInt("top",20))):20;
+     int right=m!=null?Math.max(5,Math.min(50,m.optInt("right",15))):15;
+     int bottom=m!=null?Math.max(5,Math.min(50,m.optInt("bottom",20))):20;
+     int left=m!=null?Math.max(5,Math.min(50,m.optInt("left",30))):30;
+     String doc="<!doctype html><html><head><meta charset='utf-8'><style>@page{size:A4 "+orient+";margin:"+top+"mm "+right+"mm "+bottom+"mm "+left+"mm;}body{margin:0;font-family:serif;font-size:14pt;line-height:1.35;color:#111;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #334155;padding:4pt 6pt;}hr.sm-page-break{border:0;height:0;page-break-before:always;break-before:page;}</style></head><body>"+html+"</body></html>";
+     WebView pw=new WebView(MainActivity.this);
+     pw.getSettings().setJavaScriptEnabled(false);
+     pw.setWebViewClient(new WebViewClient(){
+      @Override public void onPageFinished(WebView w,String url){
+       PrintManager pm=(PrintManager)getSystemService(Context.PRINT_SERVICE);
+       if(pm!=null){
+        PrintAttributes.Builder pb=new PrintAttributes.Builder().setMediaSize("landscape".equals(orient)?PrintAttributes.MediaSize.ISO_A4.asLandscape():PrintAttributes.MediaSize.ISO_A4);
+        pm.print(title,w.createPrintDocumentAdapter(title),pb.build());
+       }
+      }
+     });
+     activePrintWebView=pw;
+     pw.loadDataWithBaseURL(null,doc,"text/html","UTF-8",null);
+    }catch(Exception ignored){
+     windowsToast("Хато ҳангоми чопи ҳуҷҷат");
+    }
+   });
+  }
  }
 
  private final class SqliteBridge {

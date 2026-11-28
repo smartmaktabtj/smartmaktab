@@ -1,4 +1,9 @@
 export const ALIYA_ADDON_PRICE_TJS = 30;
+export const STORAGE_PACK_PRICE_TJS = 10;
+export const STORAGE_PACK_FOLDERS = 20;
+export const STORAGE_PACK_DRAFTS = 50;
+export const BASE_DOC_FOLDERS_LIMIT = 20;
+export const BASE_DOC_DRAFTS_LIMIT = 50;
 export const LOGIN_EMAIL_DOMAIN = 'login.smartmaktab.tj';
 
 export const POSITION_COMPAT_GROUPS = Object.freeze({
@@ -267,7 +272,7 @@ export function computePositionTariffTotal(arg1 = {}, arg2 = [], arg3 = []) {
   const opts = typeof arg1 === 'string'
     ? { primaryPosition: arg1, extraPositions: arg2, tariffs: arg3 }
     : (arg1 || {});
-  const { primaryPosition = null, extraPositions = [], tariffs = [], includeAliya = false } = opts;
+  const { primaryPosition = null, extraPositions = [], tariffs = [], includeAliya = false, storagePackCount = 0 } = opts;
   const tMap = new Map((tariffs || []).map(t => [t.position_code || t.id, t]));
   const getBase = code => {
     const row = tMap.get(code);
@@ -294,11 +299,15 @@ export function computePositionTariffTotal(arg1 = {}, arg2 = [], arg3 = []) {
   const basePrice = Math.round(base * 100) / 100;
   const extrasPrice = Math.round(extrasSum * 100) / 100;
   const aliyaPrice = includeAliya ? ALIYA_ADDON_PRICE_TJS : 0;
-  const totalTjs = Math.round((basePrice + extrasPrice + aliyaPrice) * 100) / 100;
+  const packCount = Math.max(0, Math.min(20, Number(storagePackCount) || 0));
+  const storagePackPrice = packCount * STORAGE_PACK_PRICE_TJS;
+  const totalTjs = Math.round((basePrice + extrasPrice + aliyaPrice + storagePackPrice) * 100) / 100;
   return {
     basePrice,
     extrasPrice,
     aliyaPrice,
+    storagePackCount: packCount,
+    storagePackPrice,
     baseTjs: basePrice,
     extraTjs: extrasPrice,
     totalTjs,

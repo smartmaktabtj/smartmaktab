@@ -86,6 +86,8 @@ Deno.serve(async (req: Request) => {
       ? body.extra_positions.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0).map((x: string) => x.trim().toLowerCase())
       : [];
     const includeAliya = body?.include_aliya === true;
+    const rawPack = Number(body?.storage_pack_count ?? 0);
+    const storagePackCount = Number.isFinite(rawPack) ? Math.max(0, Math.min(20, Math.round(rawPack))) : 0;
     const rawMonths = Number(body?.months ?? 1);
     const months = [1, 3, 6, 9, 12].includes(rawMonths) ? rawMonths : 1;
     const currency = typeof body?.currency === 'string' ? body.currency.trim() : 'TJS';
@@ -161,6 +163,7 @@ Deno.serve(async (req: Request) => {
       p_extra_positions: extraPositions,
       p_include_aliya: includeAliya,
       p_months: months,
+      p_storage_pack_count: storagePackCount,
     });
 
     if (error) {

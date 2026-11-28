@@ -124,6 +124,9 @@ function create() {
     },
   });
   mainWindow = win;
+  try {
+    win.setContentProtection(true);
+  } catch {}
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
   });
@@ -261,6 +264,82 @@ function startDesktopApp() {
           return true;
         }
         return false;
+      });
+
+      const VIRTUAL_PRINTER_RE = /(pdf|xps|onenote|fax|send to|document writer|snagit|cutepdf|foxit|nitro|dopdf|bullzip|primopdf|microsoft print)/i;
+      ipcMain.handle('sm:print-protected', async (event, payload) => {
+        if (!own(event.senderFrame?.url) || !own(event.sender.getURL())) {
+          return { ok: false, error: 'forbidden' };
+        }
+        const hostWin = BrowserWindow.fromWebContents(event.sender);
+        if (!hostWin || hostWin.isDestroyed()) return { ok: false, error: 'no_window' };
+
+        const printers = await event.sender.getPrintersAsync().catch(() => []);
+        const physical = (Array.isArray(printers) ? printers : []).filter(
+          (p) => p?.name && !VIRTUAL_PRINTER_RE.test(`${p.name} ${p.displayName || ''} ${p.description || ''}`),
+        );
+        if (!physical.length) {
+          return {
+            ok: false,
+            error: 'Принтери физикӣ ёфт нашуд. Чопи виртуалӣ (PDF/XPS) дар SmartMaktab манъ аст.',
+          };
+        }
+
+        let selectedPrinter = physical.find((p) => p.isDefault) || physical[0];
+        if (physical.length > 1) {
+          const pick = await dialog.showMessageBox(hostWin, {
+            type: 'question',
+            title: 'Интихоби принтери физикӣ — SmartMaktab',
+            message: 'Принтерро барои чопи ҳуҷҷат интихоб кунед (чоп ба PDF манъ аст):',
+            buttons: [...physical.map((p) => p.displayName || p.name), 'Бекор кардан'],
+            cancelId: physical.length,
+            defaultId: Math.max(0, physical.findIndex((p) => p.name === selectedPrinter.name)),
+          });
+          if (pick.response >= physical.length) {
+            return { ok: false, cancelled: true };
+          }
+          selectedPrinter = physical[pick.response];
+        }
+
+        const orient = payload?.pageOrientation === 'landscape' ? 'landscape' : 'portrait';
+        const m = payload?.pageMarginsMm || {};
+        const top = Math.max(5, Math.min(50, Number(m.top) || 20));
+        const right = Math.max(5, Math.min(50, Number(m.right) || 15));
+        const bottom = Math.max(5, Math.min(50, Number(m.bottom) || 20));
+        const left = Math.max(5, Math.min(50, Number(m.left) || 30));
+        const safeHtml = String(payload?.html || '<p></p>')
+          .replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
+
+        const printWin = new BrowserWindow({
+          show: false,
+          parent: hostWin,
+          webPreferences: {
+            contextIsolation: true,
+            sandbox: true,
+            nodeIntegration: false,
+            javascript: false,
+          },
+        });
+        try {
+          const docHtml = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 ${orient};margin:${top}mm ${right}mm ${bottom}mm ${left}mm}body{margin:0;font-family:'Times New Roman',Georgia,serif;font-size:14pt;line-height:1.35;color:#111}table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:4pt 6pt}hr.sm-page-break{border:0;height:0;page-break-before:always;break-before:page}</style></head><body>${safeHtml}</body></html>`;
+          await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`);
+          const printResult = await new Promise((resolve) => {
+            printWin.webContents.print(
+              {
+                silent: true,
+                printBackground: true,
+                deviceName: selectedPrinter.name,
+                landscape: orient === 'landscape',
+              },
+              (success, failureReason) => {
+                resolve(success ? { ok: true, printer: selectedPrinter.name } : { ok: false, error: failureReason || 'print_failed' });
+              },
+            );
+          });
+          return printResult;
+        } finally {
+          if (!printWin.isDestroyed()) printWin.destroy();
+        }
       });
 
       create();
